@@ -6,7 +6,7 @@ import { loadConfig } from '../../core/config.js';
 import { resolve } from '../../core/resolver.js';
 import { PathTree } from '../../core/path-tree.js';
 import { SecretRef } from '../../core/types.js';
-import { LocalProvider } from '../../providers/local.js';
+import { createProvider } from '../../providers/index.js';
 
 export default class SecretGet extends Command {
     static override description = 'Get a secret value from an environment';
@@ -39,7 +39,7 @@ export default class SecretGet extends Command {
         const config = loadConfig(cwd);
         const configDir =
             flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
-        const provider = new LocalProvider(configDir);
+        const provider = createProvider(config.provider, configDir);
         const secret = await provider.get(args.env, value.path);
         this.log(secret);
     }

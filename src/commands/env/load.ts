@@ -6,7 +6,7 @@ import { loadEnvironment, saveEnvironment } from '../../core/environment.js';
 import { loadConfig } from '../../core/config.js';
 import { PathTree } from '../../core/path-tree.js';
 import { SecretRef } from '../../core/types.js';
-import { LocalProvider } from '../../providers/local.js';
+import { createProvider } from '../../providers/index.js';
 
 export default class EnvLoad extends Command {
     static override description = 'Load KEY=VALUE pairs from a file into an environment';
@@ -44,12 +44,14 @@ export default class EnvLoad extends Command {
 
         const def = await loadEnvironment(cwd, args.env);
         const tree = PathTree.fromJSON(def.values);
-        const provider = flags.secrets
-            ? new LocalProvider(
-                  flags['config-dir'] ??
-                      path.join(os.homedir(), '.config', 'keyshelf', loadConfig(cwd).name)
-              )
-            : null;
+
+        let provider = null;
+        if (flags.secrets) {
+            const config = loadConfig(cwd);
+            const configDir =
+                flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
+            provider = createProvider(config.provider, configDir);
+        }
 
         for (const [key, value] of entries) {
             const fullPath = flags.prefix ? `${flags.prefix}/${key}` : key;

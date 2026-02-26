@@ -7,7 +7,8 @@ import { loadConfig } from '../../core/config.js';
 import { resolve } from '../../core/resolver.js';
 import { PathTree } from '../../core/path-tree.js';
 import { SecretRef } from '../../core/types.js';
-import { LocalProvider } from '../../providers/local.js';
+import { SecretProvider } from '../../providers/provider.js';
+import { createProvider } from '../../providers/index.js';
 
 export default class EnvPrint extends Command {
     static override description = 'Print resolved environment config';
@@ -41,7 +42,8 @@ export default class EnvPrint extends Command {
         const config = loadConfig(cwd);
         const configDirPath =
             flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
-        const output = await replaceSecrets(resolved.values, args.env, configDirPath, flags.reveal);
+        const provider = createProvider(config.provider, configDirPath);
+        const output = await replaceSecrets(resolved.values, args.env, provider, flags.reveal);
 
         switch (flags.format) {
             case 'json':
@@ -61,11 +63,10 @@ export default class EnvPrint extends Command {
 async function replaceSecrets(
     values: Record<string, unknown>,
     env: string,
-    configDir: string,
+    provider: SecretProvider,
     reveal: boolean
 ): Promise<Record<string, unknown>> {
     const result: Record<string, unknown> = {};
-    const provider = new LocalProvider(configDir);
 
     for (const [key, value] of Object.entries(values)) {
         if (value instanceof SecretRef) {
@@ -78,7 +79,7 @@ async function replaceSecrets(
             result[key] = await replaceSecrets(
                 value as Record<string, unknown>,
                 env,
-                configDir,
+                provider,
                 reveal
             );
         } else {

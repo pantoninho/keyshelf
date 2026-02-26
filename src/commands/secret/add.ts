@@ -5,7 +5,7 @@ import { loadEnvironment, saveEnvironment } from '../../core/environment.js';
 import { loadConfig } from '../../core/config.js';
 import { PathTree } from '../../core/path-tree.js';
 import { SecretRef } from '../../core/types.js';
-import { LocalProvider } from '../../providers/local.js';
+import { createProvider } from '../../providers/index.js';
 
 export default class SecretAdd extends Command {
     static override description = 'Add a secret to an environment';
@@ -30,7 +30,7 @@ export default class SecretAdd extends Command {
         const config = loadConfig(cwd);
         const configDir =
             flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
-        const provider = new LocalProvider(configDir);
+        const provider = createProvider(config.provider, configDir);
 
         await provider.set(args.env, args.path, args.value);
 
