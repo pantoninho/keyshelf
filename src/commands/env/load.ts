@@ -2,10 +2,10 @@ import { Args, Command, Flags } from '@oclif/core';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import yamlLib from 'js-yaml';
 import { loadEnvironment, saveEnvironment } from '../../core/environment.js';
+import { loadConfig } from '../../core/config.js';
 import { PathTree } from '../../core/path-tree.js';
-import { SecretRef, KeyshelfConfig } from '../../core/types.js';
+import { SecretRef } from '../../core/types.js';
 import { LocalProvider } from '../../providers/local.js';
 
 export default class EnvLoad extends Command {
@@ -45,7 +45,10 @@ export default class EnvLoad extends Command {
         const def = await loadEnvironment(cwd, args.env);
         const tree = PathTree.fromJSON(def.values);
         const provider = flags.secrets
-            ? new LocalProvider(flags['config-dir'] ?? defaultConfigDir(cwd))
+            ? new LocalProvider(
+                  flags['config-dir'] ??
+                      path.join(os.homedir(), '.config', 'keyshelf', loadConfig(cwd).name)
+              )
             : null;
 
         for (const [key, value] of entries) {
@@ -77,8 +80,10 @@ function parseEnvFile(content: string): [string, string][] {
         const key = trimmed.slice(0, eqIndex).trim();
         let value = trimmed.slice(eqIndex + 1).trim();
 
-        if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
+        if (
+            (value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))
+        ) {
             value = value.slice(1, -1);
         }
 
@@ -86,10 +91,4 @@ function parseEnvFile(content: string): [string, string][] {
     }
 
     return entries;
-}
-
-function defaultConfigDir(cwd: string): string {
-    const configPath = path.join(cwd, 'keyshelf.yml');
-    const config = yamlLib.load(fs.readFileSync(configPath, 'utf-8')) as KeyshelfConfig;
-    return path.join(os.homedir(), '.config', 'keyshelf', config.name);
 }

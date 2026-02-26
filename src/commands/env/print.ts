@@ -1,12 +1,12 @@
 import { Args, Command, Flags } from '@oclif/core';
 import path from 'node:path';
 import os from 'node:os';
-import fs from 'node:fs';
 import yamlLib from 'js-yaml';
 import { loadEnvironment } from '../../core/environment.js';
+import { loadConfig } from '../../core/config.js';
 import { resolve } from '../../core/resolver.js';
 import { PathTree } from '../../core/path-tree.js';
-import { SecretRef, KeyshelfConfig } from '../../core/types.js';
+import { SecretRef } from '../../core/types.js';
 import { LocalProvider } from '../../providers/local.js';
 
 export default class EnvPrint extends Command {
@@ -38,13 +38,10 @@ export default class EnvPrint extends Command {
         const cwd = process.cwd();
 
         const resolved = await resolve(args.env, (name) => loadEnvironment(cwd, name));
-        const configDirPath = flags['config-dir'] ?? defaultConfigDir(cwd);
-        const output = await replaceSecrets(
-            resolved.values,
-            args.env,
-            configDirPath,
-            flags.reveal
-        );
+        const config = loadConfig(cwd);
+        const configDirPath =
+            flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
+        const output = await replaceSecrets(resolved.values, args.env, configDirPath, flags.reveal);
 
         switch (flags.format) {
             case 'json':
@@ -92,10 +89,7 @@ async function replaceSecrets(
     return result;
 }
 
-function flattenToEnv(
-    obj: Record<string, unknown>,
-    prefix = ''
-): string[] {
+function flattenToEnv(obj: Record<string, unknown>, prefix = ''): string[] {
     const lines: string[] = [];
     for (const [key, value] of Object.entries(obj)) {
         const envKey = prefix ? `${prefix}_${key}` : key;
@@ -106,10 +100,4 @@ function flattenToEnv(
         }
     }
     return lines;
-}
-
-function defaultConfigDir(cwd: string): string {
-    const configPath = path.join(cwd, 'keyshelf.yml');
-    const config = yamlLib.load(fs.readFileSync(configPath, 'utf-8')) as KeyshelfConfig;
-    return path.join(os.homedir(), '.config', 'keyshelf', config.name);
 }

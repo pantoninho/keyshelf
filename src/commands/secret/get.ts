@@ -1,12 +1,11 @@
 import { Args, Command, Flags } from '@oclif/core';
 import path from 'node:path';
 import os from 'node:os';
-import yaml from 'js-yaml';
-import fs from 'node:fs';
 import { loadEnvironment } from '../../core/environment.js';
+import { loadConfig } from '../../core/config.js';
 import { resolve } from '../../core/resolver.js';
 import { PathTree } from '../../core/path-tree.js';
-import { SecretRef, KeyshelfConfig } from '../../core/types.js';
+import { SecretRef } from '../../core/types.js';
 import { LocalProvider } from '../../providers/local.js';
 
 export default class SecretGet extends Command {
@@ -35,14 +34,11 @@ export default class SecretGet extends Command {
             this.error(`Secret "${args.path}" not found in environment "${args.env}"`);
         }
 
-        const provider = new LocalProvider(flags['config-dir'] ?? defaultConfigDir(cwd));
+        const config = loadConfig(cwd);
+        const configDir =
+            flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
+        const provider = new LocalProvider(configDir);
         const secret = await provider.get(args.env, value.path);
         this.log(secret);
     }
-}
-
-function defaultConfigDir(cwd: string): string {
-    const configPath = path.join(cwd, 'keyshelf.yml');
-    const config = yaml.load(fs.readFileSync(configPath, 'utf-8')) as KeyshelfConfig;
-    return path.join(os.homedir(), '.config', 'keyshelf', config.name);
 }
