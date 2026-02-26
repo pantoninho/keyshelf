@@ -4,4 +4,5 @@ export interface SecretProvider {
     set(env: string, path: string, value: string): Promise<void>;
     delete(env: string, path: string): Promise<void>;
     list(env: string, prefix?: string): Promise<string[]>;
+    ref(env: string, path: string): string;
 }

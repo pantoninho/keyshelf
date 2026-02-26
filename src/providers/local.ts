@@ -12,6 +12,10 @@ export class LocalProvider implements SecretProvider {
         this.filePath = path.join(configDir, 'secrets.json');
     }
 
+    ref(_env: string, secretPath: string): string {
+        return secretPath;
+    }
+
     async get(env: string, secretPath: string): Promise<string> {
         const store = this.read();
         const value = store[env]?.[secretPath];

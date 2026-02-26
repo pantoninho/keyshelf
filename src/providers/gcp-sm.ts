@@ -13,6 +13,10 @@ export class GcpSmProvider implements SecretProvider {
         this.client = new SecretManagerServiceClient();
     }
 
+    ref(env: string, secretPath: string): string {
+        return buildSecretId(env, secretPath);
+    }
+
     async get(env: string, secretPath: string): Promise<string> {
         const secretId = buildSecretId(env, secretPath);
         const name = `projects/${this.project}/secrets/${secretId}/versions/latest`;

@@ -47,7 +47,7 @@ describe('env:print command', () => {
         expect(output).toContain('port: 5432');
     });
 
-    it('masks secret values by default', async () => {
+    it('shows secret refs by default', async () => {
         const provider = new LocalProvider(configDir);
         await provider.set('dev', 'database/password', 's3cret');
         await saveEnvironment(tmpDir, 'dev', {
@@ -63,7 +63,8 @@ describe('env:print command', () => {
         await EnvPrint.run(['dev', '--config-dir', configDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-        expect(output).toContain('********');
+        expect(output).toContain('database/password');
+        expect(output).not.toContain('********');
         expect(output).not.toContain('s3cret');
     });
 
@@ -86,7 +87,58 @@ describe('env:print command', () => {
         expect(output).toContain('s3cret');
     });
 
-    it('--format json outputs JSON', async () => {
+    it('--format json outputs split config/secrets format', async () => {
+        const provider = new LocalProvider(configDir);
+        await provider.set('dev', 'database/password', 's3cret');
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: {
+                database: {
+                    host: 'localhost',
+                    port: 5432,
+                    password: new SecretRef('database/password')
+                }
+            }
+        });
+
+        await EnvPrint.run(['dev', '--format', 'json', '--config-dir', configDir]);
+
+        const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        const parsed = JSON.parse(output);
+        expect(parsed).toEqual({
+            config: {
+                'database/host': 'localhost',
+                'database/port': 5432
+            },
+            secrets: {
+                'database/password': 'database/password'
+            }
+        });
+    });
+
+    it('--format json --reveal outputs hierarchical with resolved values', async () => {
+        const provider = new LocalProvider(configDir);
+        await provider.set('dev', 'database/password', 's3cret');
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: {
+                database: {
+                    host: 'localhost',
+                    password: new SecretRef('database/password')
+                }
+            }
+        });
+
+        await EnvPrint.run(['dev', '--format', 'json', '--reveal', '--config-dir', configDir]);
+
+        const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        const parsed = JSON.parse(output);
+        expect(parsed).toEqual({
+            database: { host: 'localhost', password: 's3cret' }
+        });
+    });
+
+    it('--format json with config-only values outputs empty secrets', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
             values: { key: 'val' }
@@ -96,7 +148,10 @@ describe('env:print command', () => {
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         const parsed = JSON.parse(output);
-        expect(parsed).toEqual({ key: 'val' });
+        expect(parsed).toEqual({
+            config: { key: 'val' },
+            secrets: {}
+        });
     });
 
     it('--format env outputs KEY=VALUE pairs', async () => {
@@ -110,6 +165,25 @@ describe('env:print command', () => {
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         expect(output).toContain('DATABASE_HOST=localhost');
         expect(output).toContain('DATABASE_PORT=5432');
+    });
+
+    it('--format env without --reveal shows refs', async () => {
+        const provider = new LocalProvider(configDir);
+        await provider.set('dev', 'api/key', 'secret-key');
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: {
+                database: { host: 'localhost' },
+                api: { key: new SecretRef('api/key') }
+            }
+        });
+
+        await EnvPrint.run(['dev', '--format', 'env', '--config-dir', configDir]);
+
+        const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        expect(output).toContain('DATABASE_HOST=localhost');
+        expect(output).toContain('API_KEY=api/key');
+        expect(output).not.toContain('secret-key');
     });
 
     it('includes inherited values from imports', async () => {

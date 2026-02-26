@@ -83,6 +83,18 @@ describe('LocalProvider', () => {
         expect(await provider.get('dev', 'key')).toBe('new');
     });
 
+    describe('ref', () => {
+        it('returns the keyshelf path', () => {
+            const provider = new LocalProvider(tmpDir);
+            expect(provider.ref('dev', 'database/password')).toBe('database/password');
+        });
+
+        it('ignores environment', () => {
+            const provider = new LocalProvider(tmpDir);
+            expect(provider.ref('prod', 'api/key')).toBe('api/key');
+        });
+    });
+
     it('data persists across provider instances', async () => {
         const provider1 = new LocalProvider(tmpDir);
         await provider1.set('dev', 'key', 'persisted');

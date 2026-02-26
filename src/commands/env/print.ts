@@ -5,7 +5,6 @@ import yamlLib from 'js-yaml';
 import { loadEnvironment } from '../../core/environment.js';
 import { loadConfig } from '../../core/config.js';
 import { resolve } from '../../core/resolver.js';
-import { PathTree } from '../../core/path-tree.js';
 import { SecretRef } from '../../core/types.js';
 import { SecretProvider } from '../../providers/provider.js';
 import { createProvider } from '../../providers/index.js';
@@ -43,7 +42,22 @@ export default class EnvPrint extends Command {
         const configDirPath =
             flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
         const provider = createProvider(config.provider, configDirPath);
-        const output = await replaceSecrets(resolved.values, args.env, provider, flags.reveal);
+
+        if (flags.format === 'json' && !flags.reveal) {
+            const split = {
+                config: flattenConfig(resolved.values),
+                secrets: extractSecretRefs(resolved.values, args.env, provider)
+            };
+            this.log(JSON.stringify(split, null, 2));
+            return;
+        }
+
+        const output = await replaceSecrets(
+            resolved.values,
+            args.env,
+            provider,
+            flags.reveal ? 'reveal' : 'ref'
+        );
 
         switch (flags.format) {
             case 'json':
@@ -64,26 +78,66 @@ async function replaceSecrets(
     values: Record<string, unknown>,
     env: string,
     provider: SecretProvider,
-    reveal: boolean
+    mode: 'reveal' | 'ref'
 ): Promise<Record<string, unknown>> {
     const result: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(values)) {
         if (value instanceof SecretRef) {
-            if (reveal) {
+            if (mode === 'reveal') {
                 result[key] = await provider.get(env, value.path);
             } else {
-                result[key] = '********';
+                result[key] = provider.ref(env, value.path);
             }
         } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
             result[key] = await replaceSecrets(
                 value as Record<string, unknown>,
                 env,
                 provider,
-                reveal
+                mode
             );
         } else {
             result[key] = value;
+        }
+    }
+
+    return result;
+}
+
+function flattenConfig(values: Record<string, unknown>, prefix = ''): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(values)) {
+        const fullPath = prefix ? `${prefix}/${key}` : key;
+        if (value instanceof SecretRef) {
+            continue;
+        } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            Object.assign(result, flattenConfig(value as Record<string, unknown>, fullPath));
+        } else {
+            result[fullPath] = value;
+        }
+    }
+
+    return result;
+}
+
+function extractSecretRefs(
+    values: Record<string, unknown>,
+    env: string,
+    provider: SecretProvider,
+    prefix = ''
+): Record<string, string> {
+    const result: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(values)) {
+        const fullPath = prefix ? `${prefix}/${key}` : key;
+        if (value instanceof SecretRef) {
+            result[fullPath] = provider.ref(env, value.path);
+        } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            Object.assign(
+                result,
+                extractSecretRefs(value as Record<string, unknown>, env, provider, fullPath)
+            );
         }
     }
 

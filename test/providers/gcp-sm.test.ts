@@ -150,6 +150,16 @@ describe('GcpSmProvider', () => {
             expect(paths).toEqual([]);
         });
     });
+
+    describe('ref', () => {
+        it('returns the GCP secret ID', () => {
+            expect(provider.ref('prod', 'database/password')).toBe('prod__database__password');
+        });
+
+        it('handles deeply nested paths', () => {
+            expect(provider.ref('dev', 'a/b/c/d')).toBe('dev__a__b__c__d');
+        });
+    });
 });
 
 describe('buildSecretId', () => {
