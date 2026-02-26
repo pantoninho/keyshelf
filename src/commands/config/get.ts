@@ -23,7 +23,9 @@ export default class ConfigGet extends Command {
         const value = tree.get(args.path);
 
         if (value === undefined) {
-            this.error(`Path "${args.path}" not found in environment "${args.env}"`);
+            this.error(
+                `Path "${args.path}" not found in environment "${args.env}". Use "keyshelf config:list ${args.env}" to see available paths.`
+            );
         }
 
         if (typeof value === 'object' && value !== null) {

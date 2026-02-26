@@ -20,7 +20,9 @@ export default class ConfigRm extends Command {
         const tree = PathTree.fromJSON(def.values);
 
         if (tree.get(args.path) === undefined) {
-            this.error(`Path "${args.path}" not found in environment "${args.env}"`);
+            this.error(
+                `Path "${args.path}" not found in environment "${args.env}". Use "keyshelf config:list ${args.env}" to see available paths.`
+            );
         }
 
         tree.delete(args.path);

@@ -30,7 +30,7 @@ export default class EnvCreate extends Command {
         const envPath = path.join(cwd, '.keyshelf', 'environments', `${args.name}.yml`);
 
         if (fs.existsSync(envPath)) {
-            this.error(`Environment "${args.name}" already exists`);
+            this.error(`Environment "${args.name}" already exists at ${envPath}.`);
         }
 
         await saveEnvironment(cwd, args.name, {

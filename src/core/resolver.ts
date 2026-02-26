@@ -23,7 +23,9 @@ async function resolveRecursive(
     visited: Set<string>
 ): Promise<PathTree> {
     if (visited.has(envName)) {
-        throw new Error(`Circular import detected: "${envName}" was already visited`);
+        throw new Error(
+            `Circular import detected: "${envName}" was already visited. Check your import chain for cycles.`
+        );
     }
     visited.add(envName);
 

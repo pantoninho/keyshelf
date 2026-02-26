@@ -20,7 +20,9 @@ export async function loadEnvironment(
         return parseEnvironment(content);
     } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-            throw new Error(`Environment "${name}" not found at ${filePath}`);
+            throw new Error(
+                `Environment "${name}" not found. Run "keyshelf env:create ${name}" to create it.`
+            );
         }
         throw err;
     }
@@ -42,9 +44,7 @@ export async function listEnvironments(projectRoot: string): Promise<string[]> {
     const dir = path.join(projectRoot, ENVIRONMENTS_DIR);
     try {
         const files = await fs.readdir(dir);
-        return files
-            .filter((f) => f.endsWith('.yml'))
-            .map((f) => f.replace(/\.yml$/, ''));
+        return files.filter((f) => f.endsWith('.yml')).map((f) => f.replace(/\.yml$/, ''));
     } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
             return [];

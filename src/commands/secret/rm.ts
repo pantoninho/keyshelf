@@ -30,7 +30,9 @@ export default class SecretRm extends Command {
         const value = tree.get(args.path);
 
         if (!(value instanceof SecretRef)) {
-            this.error(`Secret "${args.path}" not found in environment "${args.env}"`);
+            this.error(
+                `Secret "${args.path}" not found in environment "${args.env}". Use "keyshelf secret:list ${args.env}" to see available secrets.`
+            );
         }
 
         const config = loadConfig(cwd);
