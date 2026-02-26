@@ -23,9 +23,8 @@ describe('createProvider', () => {
         expect(value).toBe('secret123');
     });
 
-    it('throws for gcp-sm (not yet implemented)', () => {
-        expect(() => createProvider({ adapter: 'gcp-sm', project: 'my-project' }, tmpDir)).toThrow(
-            /not yet implemented/
-        );
+    it('creates a gcp-sm provider', () => {
+        const provider = createProvider({ adapter: 'gcp-sm', project: 'my-project' }, tmpDir);
+        expect(provider).toBeDefined();
     });
 });

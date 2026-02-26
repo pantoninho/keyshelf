@@ -47,6 +47,7 @@
         "vitest": "^4.0.18"
     },
     "dependencies": {
+        "@google-cloud/secret-manager": "^6.1.1",
         "@oclif/core": "^4.8.1",
         "js-yaml": "^4.1.1"
     }
