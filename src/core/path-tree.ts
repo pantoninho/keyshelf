@@ -117,7 +117,12 @@ export class PathTree {
 }
 
 function isTreeNode(value: unknown): value is TreeNode {
-    return value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof SecretRef);
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        !(value instanceof SecretRef)
+    );
 }
 
 /** RFC 7396 JSON Merge Patch. */

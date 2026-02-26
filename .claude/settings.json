@@ -1,19 +1,19 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cat | jq -r '.tool_input.file_path' | xargs npx prettier --write"
-          },
-          {
-            "type": "command",
-            "command": "cat | jq -r '.tool_input.file_path' | xargs npx eslint --fix"
-          }
+    "hooks": {
+        "PostToolUse": [
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "cat | jq -r '.tool_input.file_path' | xargs npx prettier --write"
+                    },
+                    {
+                        "type": "command",
+                        "command": "cat | jq -r '.tool_input.file_path' | xargs npx eslint --fix"
+                    }
+                ]
+            }
         ]
-      }
-    ]
-  }
+    }
 }
