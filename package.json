@@ -1,22 +1,35 @@
 {
-  "name": "keyshelf",
-  "version": "0.0.1",
-  "description": "CLI tool for managing hierarchical config values and secrets across environments",
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "engines": {
-    "node": ">=20"
-  },
-  "scripts": {
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": ["config", "secrets", "cli", "yaml"],
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "@types/node": "^25.3.1",
-    "typescript": "^5.9.3"
-  }
+    "name": "keyshelf",
+    "version": "0.0.1",
+    "description": "CLI tool for managing hierarchical config values and secrets across environments",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "engines": {
+        "node": ">=20"
+    },
+    "scripts": {
+        "build": "tsc",
+        "lint": "eslint src/",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "config",
+        "secrets",
+        "cli",
+        "yaml"
+    ],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "@eslint/js": "^9.39.3",
+        "@types/node": "^25.3.1",
+        "eslint": "^9.39.3",
+        "eslint-config-prettier": "^10.1.8",
+        "prettier": "^3.8.1",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.56.1"
+    }
 }
