@@ -70,5 +70,25 @@ describe('config validation', () => {
 
         expect(() => loadConfig(tmpDir)).toThrow(/unknown adapter "aws-sm"/i);
         expect(() => loadConfig(tmpDir)).toThrow(/local/);
+        expect(() => loadConfig(tmpDir)).toThrow(/gcp-sm/);
+    });
+
+    it('loads valid gcp-sm config with project field', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'test', provider: { adapter: 'gcp-sm', project: 'my-gcp-project' } })
+        );
+
+        const config = loadConfig(tmpDir);
+        expect(config.provider).toEqual({ adapter: 'gcp-sm', project: 'my-gcp-project' });
+    });
+
+    it('gcp-sm without project field shows specific error', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'test', provider: { adapter: 'gcp-sm' } })
+        );
+
+        expect(() => loadConfig(tmpDir)).toThrow(/gcp-sm.*requires field "provider\.project"/i);
     });
 });

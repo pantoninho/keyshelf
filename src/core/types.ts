@@ -9,10 +9,11 @@ export interface EnvironmentDefinition {
     values: Record<string, unknown>;
 }
 
+/** Discriminated union for adapter-specific provider configuration. */
+export type ProviderConfig = { adapter: 'local' } | { adapter: 'gcp-sm'; project: string };
+
 /** Project-level configuration from keyshelf.yml. */
 export interface KeyshelfConfig {
     name: string;
-    provider: {
-        adapter: string;
-    };
+    provider: ProviderConfig;
 }

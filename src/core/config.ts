@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
-import { KeyshelfConfig } from './types.js';
+import { KeyshelfConfig, ProviderConfig } from './types.js';
 
-const KNOWN_ADAPTERS = ['local'];
+const KNOWN_ADAPTERS = ['local', 'gcp-sm'];
 
 /** Load and validate keyshelf.yml from a project root directory. */
 export function loadConfig(projectRoot: string): KeyshelfConfig {
@@ -54,5 +54,22 @@ export function loadConfig(projectRoot: string): KeyshelfConfig {
         );
     }
 
-    return { name: obj.name, provider: { adapter: provider.adapter } };
+    let providerConfig: ProviderConfig;
+    switch (provider.adapter) {
+        case 'local':
+            providerConfig = { adapter: 'local' };
+            break;
+        case 'gcp-sm':
+            if (!provider.project || typeof provider.project !== 'string') {
+                throw new Error(
+                    'Invalid keyshelf.yml: "gcp-sm" adapter requires field "provider.project".'
+                );
+            }
+            providerConfig = { adapter: 'gcp-sm', project: provider.project };
+            break;
+        default:
+            throw new Error('unreachable');
+    }
+
+    return { name: obj.name, provider: providerConfig };
 }
