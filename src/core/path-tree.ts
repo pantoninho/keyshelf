@@ -1,4 +1,17 @@
+import { SecretRef } from './types.js';
+
 type TreeNode = Record<string, unknown>;
+
+function deepClone(obj: unknown): unknown {
+    if (obj instanceof SecretRef) return new SecretRef(obj.path);
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(deepClone);
+    const result: TreeNode = {};
+    for (const [key, value] of Object.entries(obj)) {
+        result[key] = deepClone(value);
+    }
+    return result;
+}
 
 /** A tree structure addressed by slash-delimited paths. */
 export class PathTree {
@@ -57,18 +70,18 @@ export class PathTree {
 
     /** Return the internal nested object. */
     toJSON(): TreeNode {
-        return structuredClone(this.data);
+        return deepClone(this.data) as TreeNode;
     }
 
     /** Merge another PathTree into this one using JSON Merge Patch semantics. Returns a new tree. */
     merge(other: PathTree): PathTree {
-        const merged = jsonMergePatch(structuredClone(this.data), other.data);
+        const merged = jsonMergePatch(deepClone(this.data), other.data);
         return new PathTree(merged as TreeNode);
     }
 
     /** Construct a PathTree from a nested object. */
     static fromJSON(obj: Record<string, unknown>): PathTree {
-        return new PathTree(structuredClone(obj));
+        return new PathTree(deepClone(obj) as TreeNode);
     }
 
     private deleteRecursive(node: TreeNode, segments: string[], index: number): boolean {
@@ -94,7 +107,7 @@ export class PathTree {
     private collectPaths(node: TreeNode, prefix: string, paths: string[]): void {
         for (const [key, value] of Object.entries(node)) {
             const fullPath = prefix ? `${prefix}/${key}` : key;
-            if (value !== null && typeof value === 'object' && !(value instanceof Array)) {
+            if (isTreeNode(value)) {
                 this.collectPaths(value as TreeNode, fullPath, paths);
             } else {
                 paths.push(fullPath);
@@ -103,13 +116,17 @@ export class PathTree {
     }
 }
 
+function isTreeNode(value: unknown): value is TreeNode {
+    return value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof SecretRef);
+}
+
 /** RFC 7396 JSON Merge Patch. */
 function jsonMergePatch(target: unknown, patch: unknown): unknown {
-    if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
+    if (!isTreeNode(patch)) {
         return patch;
     }
 
-    if (target === null || typeof target !== 'object' || Array.isArray(target)) {
+    if (!isTreeNode(target)) {
         target = {};
     }
 
