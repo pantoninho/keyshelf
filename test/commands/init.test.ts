@@ -54,4 +54,16 @@ describe('init command', () => {
         const config = yaml.load(content) as Record<string, unknown>;
         expect(config.provider).toEqual({ adapter: 'local' });
     });
+
+    it('--adapter gcp-sm with --project creates gcp-sm config', async () => {
+        await Init.run(['--adapter', 'gcp-sm', '--project', 'my-gcp-project']);
+
+        const content = fs.readFileSync(path.join(tmpDir, 'keyshelf.yml'), 'utf-8');
+        const config = yaml.load(content) as Record<string, unknown>;
+        expect(config.provider).toEqual({ adapter: 'gcp-sm', project: 'my-gcp-project' });
+    });
+
+    it('--adapter gcp-sm without --project errors', async () => {
+        await expect(Init.run(['--adapter', 'gcp-sm'])).rejects.toThrow(/--project is required/);
+    });
 });

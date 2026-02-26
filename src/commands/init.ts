@@ -9,7 +9,15 @@ export default class Init extends Command {
     static override examples = ['<%= config.bin %> init', '<%= config.bin %> init --force'];
 
     static override flags = {
-        force: Flags.boolean({ char: 'f', description: 'Overwrite existing keyshelf.yml' })
+        force: Flags.boolean({ char: 'f', description: 'Overwrite existing keyshelf.yml' }),
+        adapter: Flags.string({
+            description: 'Secret provider adapter',
+            options: ['local', 'gcp-sm'],
+            default: 'local'
+        }),
+        project: Flags.string({
+            description: 'GCP project ID (required for gcp-sm adapter)'
+        })
     };
 
     async run(): Promise<void> {
@@ -21,9 +29,21 @@ export default class Init extends Command {
             this.error('keyshelf.yml already exists (use --force to overwrite)');
         }
 
+        let provider: Record<string, string>;
+        switch (flags.adapter) {
+            case 'gcp-sm':
+                if (!flags.project) {
+                    this.error('--project is required when using the gcp-sm adapter');
+                }
+                provider = { adapter: 'gcp-sm', project: flags.project };
+                break;
+            default:
+                provider = { adapter: 'local' };
+        }
+
         const config = {
             name: path.basename(cwd),
-            provider: { adapter: 'local' }
+            provider
         };
 
         fs.writeFileSync(configPath, yaml.dump(config), 'utf-8');
