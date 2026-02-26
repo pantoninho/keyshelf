@@ -4,8 +4,8 @@ import { SecretRef, EnvironmentDefinition } from './types.js';
 const secretType = new yaml.Type('!secret', {
     kind: 'scalar',
     instanceOf: SecretRef,
-    represent(ref: SecretRef) {
-        return ref.path;
+    represent(ref: object) {
+        return (ref as SecretRef).path;
     },
     construct(data: string) {
         return new SecretRef(data);
