@@ -1,0 +1,73 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  cache: npm
+
+            - run: npm ci
+
+            - run: npm run build
+
+            - run: npm run lint
+
+            - run: npm run format:check
+
+            - run: npm test -- --coverage
+
+            - name: Upload coverage to Codacy
+              uses: codacy/codacy-coverage-reporter-action@v1
+              with:
+                  project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+                  coverage-reports: coverage/lcov.info
+
+    publish:
+        needs: test
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  cache: npm
+                  registry-url: https://registry.npmjs.org
+
+            - run: npm ci
+
+            - run: npm run build
+
+            - name: Check if version is already published
+              id: check
+              run: |
+                  LOCAL=$(node -p "require('./package.json').version")
+                  REMOTE=$(npm view keyshelf version 2>/dev/null || echo "0.0.0")
+                  if [ "$LOCAL" = "$REMOTE" ]; then
+                    echo "skip=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "skip=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Publish to npm
+              if: steps.check.outputs.skip == 'false'
+              run: npm publish --provenance
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

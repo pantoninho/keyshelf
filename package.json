@@ -28,6 +28,10 @@
     ],
     "author": "",
     "license": "ISC",
+    "files": [
+        "dist",
+        "bin"
+    ],
     "oclif": {
         "bin": "keyshelf",
         "dirname": "keyshelf",
