@@ -1,0 +1,22 @@
+{
+  "name": "keyshelf",
+  "version": "0.0.1",
+  "description": "CLI tool for managing hierarchical config values and secrets across environments",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["config", "secrets", "cli", "yaml"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.3.1",
+    "typescript": "^5.9.3"
+  }
+}
