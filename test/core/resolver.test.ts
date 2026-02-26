@@ -122,10 +122,6 @@ describe('resolver', () => {
 
         const result = await resolve('dev', load);
 
-        expect(result.secretRefs.sort()).toEqual([
-            'api/key',
-            'db/password',
-            'smtp/password'
-        ]);
+        expect(result.secretRefs.sort()).toEqual(['api/key', 'db/password', 'smtp/password']);
     });
 });
