@@ -186,6 +186,22 @@ describe('env:print command', () => {
         expect(output).not.toContain('secret-key');
     });
 
+    it('uses env-level provider over global config', async () => {
+        const envConfigDir = path.join(tmpDir, '.env-config');
+        const provider = new LocalProvider(envConfigDir);
+        await provider.set('dev', 'api/key', 'env-secret');
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { api: { key: new SecretRef('api/key') } },
+            provider: { adapter: 'local' }
+        });
+
+        await EnvPrint.run(['dev', '--reveal', '--config-dir', envConfigDir]);
+
+        const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        expect(output).toContain('env-secret');
+    });
+
     it('includes inherited values from imports', async () => {
         await saveEnvironment(tmpDir, 'base', {
             imports: [],

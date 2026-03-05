@@ -76,6 +76,48 @@ describe('YAML parser', () => {
         });
     });
 
+    describe('provider', () => {
+        it('parses environment with provider block', () => {
+            const result = parseEnvironment(
+                'provider:\n  adapter: gcp-sm\n  project: my-project\nvalues:\n  key: val'
+            );
+            expect(result.provider).toEqual({ adapter: 'gcp-sm', project: 'my-project' });
+        });
+
+        it('parses environment without provider block', () => {
+            const result = parseEnvironment('values:\n  key: val');
+            expect(result.provider).toBeUndefined();
+        });
+
+        it('serializes provider block', () => {
+            const yaml = serializeEnvironment({
+                imports: [],
+                values: { key: 'val' },
+                provider: { adapter: 'gcp-sm', project: 'my-project' }
+            });
+            expect(yaml).toContain('adapter: gcp-sm');
+            expect(yaml).toContain('project: my-project');
+        });
+
+        it('omits provider key when provider is undefined', () => {
+            const yaml = serializeEnvironment({
+                imports: [],
+                values: { key: 'val' }
+            });
+            expect(yaml).not.toContain('provider');
+        });
+
+        it('round-trips provider block', () => {
+            const original = serializeEnvironment({
+                imports: [],
+                values: { key: 'val' },
+                provider: { adapter: 'gcp-sm', project: 'my-project' }
+            });
+            const reparsed = parseEnvironment(original);
+            expect(reparsed.provider).toEqual({ adapter: 'gcp-sm', project: 'my-project' });
+        });
+    });
+
     describe('round-trip', () => {
         it('parse then serialize preserves !secret refs', () => {
             const original = 'values:\n  password: !secret database/password\n';

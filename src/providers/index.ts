@@ -1,4 +1,4 @@
-import { ProviderConfig } from '../core/types.js';
+import { ProviderConfig, EnvironmentDefinition, KeyshelfConfig } from '../core/types.js';
 import { SecretProvider } from './provider.js';
 import { LocalProvider } from './local.js';
 import { GcpSmProvider } from './gcp-sm.js';
@@ -11,4 +11,14 @@ export function createProvider(config: ProviderConfig, configDir: string): Secre
         case 'gcp-sm':
             return new GcpSmProvider(config.project);
     }
+}
+
+/** Resolve the provider for an environment, preferring env-level over global config. */
+export function resolveProvider(
+    envDef: EnvironmentDefinition,
+    globalConfig: KeyshelfConfig,
+    configDir: string
+): SecretProvider {
+    const providerConfig = envDef.provider ?? globalConfig.provider;
+    return createProvider(providerConfig, configDir);
 }

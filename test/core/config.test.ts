@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig, parseProviderConfig } from '../../src/core/config.js';
 
 describe('config validation', () => {
     let tmpDir: string;
@@ -90,5 +90,36 @@ describe('config validation', () => {
         );
 
         expect(() => loadConfig(tmpDir)).toThrow(/gcp-sm.*requires field "provider\.project"/i);
+    });
+});
+
+describe('parseProviderConfig', () => {
+    it('parses local adapter', () => {
+        expect(parseProviderConfig({ adapter: 'local' }, 'test')).toEqual({ adapter: 'local' });
+    });
+
+    it('parses gcp-sm adapter with project', () => {
+        expect(parseProviderConfig({ adapter: 'gcp-sm', project: 'my-project' }, 'test')).toEqual({
+            adapter: 'gcp-sm',
+            project: 'my-project'
+        });
+    });
+
+    it('uses context in error messages for missing adapter', () => {
+        expect(() => parseProviderConfig({}, 'environment file')).toThrow(
+            /Invalid environment file.*missing required field "provider\.adapter"/
+        );
+    });
+
+    it('uses context in error messages for unknown adapter', () => {
+        expect(() => parseProviderConfig({ adapter: 'aws-sm' }, 'environment file')).toThrow(
+            /Invalid environment file.*unknown adapter "aws-sm"/
+        );
+    });
+
+    it('uses context in error messages for missing gcp-sm project', () => {
+        expect(() => parseProviderConfig({ adapter: 'gcp-sm' }, 'environment file')).toThrow(
+            /Invalid environment file.*gcp-sm.*requires field "provider\.project"/
+        );
     });
 });

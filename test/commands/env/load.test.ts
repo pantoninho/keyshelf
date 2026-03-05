@@ -95,6 +95,36 @@ describe('env:load command', () => {
         expect(await provider.get('dev', 'DB_PASS')).toBe('s3cret');
     });
 
+    it('preserves env-level provider after loading values', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: {},
+            provider: { adapter: 'local' }
+        });
+        const envFile = path.join(tmpDir, '.env');
+        fs.writeFileSync(envFile, 'KEY=val\n');
+
+        await EnvLoad.run(['dev', envFile]);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.provider).toEqual({ adapter: 'local' });
+    });
+
+    it('preserves env-level provider after loading secrets', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: {},
+            provider: { adapter: 'local' }
+        });
+        const envFile = path.join(tmpDir, '.env');
+        fs.writeFileSync(envFile, 'API_KEY=sk_123\n');
+
+        await EnvLoad.run(['dev', envFile, '--secrets', '--config-dir', configDir]);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.provider).toEqual({ adapter: 'local' });
+    });
+
     it('errors if env file not found', async () => {
         await saveEnvironment(tmpDir, 'dev', { imports: [], values: {} });
         await expect(EnvLoad.run(['dev', '/nonexistent/.env'])).rejects.toThrow();

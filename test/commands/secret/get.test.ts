@@ -62,6 +62,20 @@ describe('secret:get command', () => {
         expect(logSpy).toHaveBeenCalledWith('inherited-secret');
     });
 
+    it('uses env-level provider over global config', async () => {
+        const envConfigDir = path.join(tmpDir, '.env-config');
+        const provider = new LocalProvider(envConfigDir);
+        await provider.set('dev', 'database/password', 'env-secret');
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { password: new SecretRef('database/password') } },
+            provider: { adapter: 'local' }
+        });
+
+        await SecretGet.run(['dev', 'database/password', '--config-dir', envConfigDir]);
+        expect(logSpy).toHaveBeenCalledWith('env-secret');
+    });
+
     it('errors if secret path not found', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],

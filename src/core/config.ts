@@ -5,6 +5,36 @@ import { KeyshelfConfig, ProviderConfig } from './types.js';
 
 const KNOWN_ADAPTERS = ['local', 'gcp-sm'];
 
+/** Parse and validate a raw provider object into a ProviderConfig. */
+export function parseProviderConfig(
+    provider: Record<string, unknown>,
+    context: string
+): ProviderConfig {
+    if (!provider.adapter || typeof provider.adapter !== 'string') {
+        throw new Error(`Invalid ${context}: missing required field "provider.adapter".`);
+    }
+
+    if (!KNOWN_ADAPTERS.includes(provider.adapter)) {
+        throw new Error(
+            `Invalid ${context}: unknown adapter "${provider.adapter}". Available adapters: ${KNOWN_ADAPTERS.join(', ')}.`
+        );
+    }
+
+    switch (provider.adapter) {
+        case 'local':
+            return { adapter: 'local' };
+        case 'gcp-sm':
+            if (!provider.project || typeof provider.project !== 'string') {
+                throw new Error(
+                    `Invalid ${context}: "gcp-sm" adapter requires field "provider.project".`
+                );
+            }
+            return { adapter: 'gcp-sm', project: provider.project };
+        default:
+            throw new Error('unreachable');
+    }
+}
+
 /** Load and validate keyshelf.yml from a project root directory. */
 export function loadConfig(projectRoot: string): KeyshelfConfig {
     const configPath = path.join(projectRoot, 'keyshelf.yml');
@@ -43,33 +73,7 @@ export function loadConfig(projectRoot: string): KeyshelfConfig {
     }
 
     const provider = obj.provider as Record<string, unknown>;
-
-    if (!provider.adapter || typeof provider.adapter !== 'string') {
-        throw new Error('Invalid keyshelf.yml: missing required field "provider.adapter".');
-    }
-
-    if (!KNOWN_ADAPTERS.includes(provider.adapter)) {
-        throw new Error(
-            `Invalid keyshelf.yml: unknown adapter "${provider.adapter}". Available adapters: ${KNOWN_ADAPTERS.join(', ')}.`
-        );
-    }
-
-    let providerConfig: ProviderConfig;
-    switch (provider.adapter) {
-        case 'local':
-            providerConfig = { adapter: 'local' };
-            break;
-        case 'gcp-sm':
-            if (!provider.project || typeof provider.project !== 'string') {
-                throw new Error(
-                    'Invalid keyshelf.yml: "gcp-sm" adapter requires field "provider.project".'
-                );
-            }
-            providerConfig = { adapter: 'gcp-sm', project: provider.project };
-            break;
-        default:
-            throw new Error('unreachable');
-    }
+    const providerConfig = parseProviderConfig(provider, 'keyshelf.yml');
 
     return { name: obj.name, provider: providerConfig };
 }

@@ -5,7 +5,7 @@ import { loadEnvironment, saveEnvironment } from '../../core/environment.js';
 import { loadConfig } from '../../core/config.js';
 import { PathTree } from '../../core/path-tree.js';
 import { SecretRef } from '../../core/types.js';
-import { createProvider } from '../../providers/index.js';
+import { resolveProvider } from '../../providers/index.js';
 
 export default class SecretAdd extends Command {
     static override description = 'Add a secret to an environment';
@@ -30,13 +30,17 @@ export default class SecretAdd extends Command {
         const config = loadConfig(cwd);
         const configDir =
             flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
-        const provider = createProvider(config.provider, configDir);
+        const provider = resolveProvider(def, config, configDir);
 
         await provider.set(args.env, args.path, args.value);
 
         const tree = PathTree.fromJSON(def.values);
         tree.set(args.path, new SecretRef(args.path));
-        await saveEnvironment(cwd, args.env, { imports: def.imports, values: tree.toJSON() });
+        await saveEnvironment(cwd, args.env, {
+            imports: def.imports,
+            values: tree.toJSON(),
+            provider: def.provider
+        });
 
         this.log(`Secret set at ${args.path}`);
     }

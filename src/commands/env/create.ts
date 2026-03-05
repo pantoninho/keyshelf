@@ -2,13 +2,15 @@ import { Args, Command, Flags } from '@oclif/core';
 import fs from 'node:fs';
 import path from 'node:path';
 import { saveEnvironment } from '../../core/environment.js';
+import { EnvironmentDefinition, ProviderConfig } from '../../core/types.js';
 
 export default class EnvCreate extends Command {
     static override description = 'Create a new environment';
 
     static override examples = [
         '<%= config.bin %> env:create dev',
-        '<%= config.bin %> env:create staging --import base --import shared'
+        '<%= config.bin %> env:create staging --import base --import shared',
+        '<%= config.bin %> env:create production --adapter gcp-sm --project myapp-prod'
     ];
 
     static override args = {
@@ -21,6 +23,13 @@ export default class EnvCreate extends Command {
             description: 'Import another environment',
             multiple: true,
             default: []
+        }),
+        adapter: Flags.string({
+            description: 'Secret provider adapter for this environment',
+            options: ['local', 'gcp-sm']
+        }),
+        project: Flags.string({
+            description: 'GCP project ID (required for gcp-sm adapter)'
         })
     };
 
@@ -33,10 +42,27 @@ export default class EnvCreate extends Command {
             this.error(`Environment "${args.name}" already exists at ${envPath}.`);
         }
 
-        await saveEnvironment(cwd, args.name, {
+        let provider: ProviderConfig | undefined;
+        if (flags.adapter) {
+            switch (flags.adapter) {
+                case 'gcp-sm':
+                    if (!flags.project) {
+                        this.error('--project is required when using the gcp-sm adapter');
+                    }
+                    provider = { adapter: 'gcp-sm', project: flags.project };
+                    break;
+                default:
+                    provider = { adapter: 'local' };
+            }
+        }
+
+        const def: EnvironmentDefinition = {
             imports: flags.import,
-            values: {}
-        });
+            values: {},
+            provider
+        };
+
+        await saveEnvironment(cwd, args.name, def);
 
         this.log(`Created environment "${args.name}"`);
     }

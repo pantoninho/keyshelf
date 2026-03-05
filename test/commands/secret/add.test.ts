@@ -72,6 +72,19 @@ describe('secret:add command', () => {
         expect(def.values.key).toBeInstanceOf(SecretRef);
     });
 
+    it('preserves env-level provider after adding a secret', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: {},
+            provider: { adapter: 'local' }
+        });
+
+        await SecretAdd.run(['dev', 'database/password', 's3cret', '--config-dir', configDir]);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.provider).toEqual({ adapter: 'local' });
+    });
+
     it('errors if environment does not exist', async () => {
         await expect(
             SecretAdd.run(['nope', 'key', 'val', '--config-dir', configDir])

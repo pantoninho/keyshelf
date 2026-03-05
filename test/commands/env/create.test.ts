@@ -43,6 +43,33 @@ describe('env:create command', () => {
         expect(def.imports).toEqual(['base', 'shared']);
     });
 
+    it('creates environment with --adapter local', async () => {
+        await Create.run(['dev', '--adapter', 'local']);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.provider).toEqual({ adapter: 'local' });
+    });
+
+    it('creates environment with --adapter gcp-sm --project', async () => {
+        await Create.run(['prod', '--adapter', 'gcp-sm', '--project', 'myapp-prod']);
+
+        const def = await loadEnvironment(tmpDir, 'prod');
+        expect(def.provider).toEqual({ adapter: 'gcp-sm', project: 'myapp-prod' });
+    });
+
+    it('errors if gcp-sm adapter without --project', async () => {
+        await expect(Create.run(['prod', '--adapter', 'gcp-sm'])).rejects.toThrow(
+            /--project is required/
+        );
+    });
+
+    it('creates environment without provider when no --adapter flag', async () => {
+        await Create.run(['dev']);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.provider).toBeUndefined();
+    });
+
     it('errors if environment already exists', async () => {
         await Create.run(['dev']);
         await expect(Create.run(['dev'])).rejects.toThrow(/already exists/);

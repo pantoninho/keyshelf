@@ -1,5 +1,6 @@
 import yaml from 'js-yaml';
-import { SecretRef, EnvironmentDefinition } from './types.js';
+import { SecretRef, EnvironmentDefinition, ProviderConfig } from './types.js';
+import { parseProviderConfig } from './config.js';
 
 const secretType = new yaml.Type('!secret', {
     kind: 'scalar',
@@ -19,7 +20,13 @@ export function parseEnvironment(content: string): EnvironmentDefinition {
     const doc = yaml.load(content, { schema: SCHEMA }) as Record<string, unknown>;
     const imports = (doc.imports as string[] | undefined) ?? [];
     const values = (doc.values as Record<string, unknown>) ?? {};
-    return { imports, values };
+
+    let provider: ProviderConfig | undefined;
+    if (doc.provider && typeof doc.provider === 'object' && !Array.isArray(doc.provider)) {
+        provider = parseProviderConfig(doc.provider as Record<string, unknown>, 'environment file');
+    }
+
+    return { imports, values, provider };
 }
 
 /** Serialize an EnvironmentDefinition to YAML with !secret tags preserved. */
@@ -27,6 +34,9 @@ export function serializeEnvironment(def: EnvironmentDefinition): string {
     const doc: Record<string, unknown> = {};
     if (def.imports.length > 0) {
         doc.imports = def.imports;
+    }
+    if (def.provider) {
+        doc.provider = def.provider;
     }
     doc.values = def.values;
     return yaml.dump(doc, { schema: SCHEMA });

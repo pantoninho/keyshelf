@@ -7,7 +7,7 @@ import { loadConfig } from '../../core/config.js';
 import { resolve } from '../../core/resolver.js';
 import { SecretRef } from '../../core/types.js';
 import { SecretProvider } from '../../providers/provider.js';
-import { createProvider } from '../../providers/index.js';
+import { resolveProvider } from '../../providers/index.js';
 
 export default class EnvPrint extends Command {
     static override description = 'Print resolved environment config';
@@ -37,11 +37,12 @@ export default class EnvPrint extends Command {
         const { args, flags } = await this.parse(EnvPrint);
         const cwd = process.cwd();
 
+        const envDef = await loadEnvironment(cwd, args.env);
         const resolved = await resolve(args.env, (name) => loadEnvironment(cwd, name));
         const config = loadConfig(cwd);
         const configDirPath =
             flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
-        const provider = createProvider(config.provider, configDirPath);
+        const provider = resolveProvider(envDef, config, configDirPath);
 
         if (flags.format === 'json' && !flags.reveal) {
             const split = {

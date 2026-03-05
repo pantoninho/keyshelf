@@ -62,6 +62,21 @@ describe('secret:rm command', () => {
         expect(def.values).toEqual({ database: { host: 'localhost' } });
     });
 
+    it('preserves env-level provider after removing a secret', async () => {
+        const provider = new LocalProvider(configDir);
+        await provider.set('dev', 'database/password', 's3cret');
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { password: new SecretRef('database/password') } },
+            provider: { adapter: 'local' }
+        });
+
+        await SecretRm.run(['dev', 'database/password', '--config-dir', configDir]);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.provider).toEqual({ adapter: 'local' });
+    });
+
     it('errors if secret not found', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],

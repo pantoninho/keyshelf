@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { createProvider } from '../../src/providers/index.js';
+import { createProvider, resolveProvider } from '../../src/providers/index.js';
+import { LocalProvider } from '../../src/providers/local.js';
+import { GcpSmProvider } from '../../src/providers/gcp-sm.js';
 
 describe('createProvider', () => {
     let tmpDir: string;
@@ -26,5 +28,46 @@ describe('createProvider', () => {
     it('creates a gcp-sm provider', () => {
         const provider = createProvider({ adapter: 'gcp-sm', project: 'my-project' }, tmpDir);
         expect(provider).toBeDefined();
+    });
+});
+
+describe('resolveProvider', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-resolve-'));
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('uses env-level provider when defined', () => {
+        const envDef = {
+            imports: [],
+            values: {},
+            provider: { adapter: 'gcp-sm' as const, project: 'env-project' }
+        };
+        const globalConfig = {
+            name: 'test',
+            provider: { adapter: 'local' as const }
+        };
+
+        const provider = resolveProvider(envDef, globalConfig, tmpDir);
+        expect(provider).toBeInstanceOf(GcpSmProvider);
+    });
+
+    it('falls back to global config when env has no provider', () => {
+        const envDef = {
+            imports: [],
+            values: {}
+        };
+        const globalConfig = {
+            name: 'test',
+            provider: { adapter: 'local' as const }
+        };
+
+        const provider = resolveProvider(envDef, globalConfig, tmpDir);
+        expect(provider).toBeInstanceOf(LocalProvider);
     });
 });

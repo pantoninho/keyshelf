@@ -7,6 +7,7 @@ export class SecretRef {
 export interface EnvironmentDefinition {
     imports: string[];
     values: Record<string, unknown>;
+    provider?: ProviderConfig;
 }
 
 /** Discriminated union for adapter-specific provider configuration. */
