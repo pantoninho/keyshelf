@@ -54,6 +54,19 @@ describe('config:rm command', () => {
         await expect(ConfigRm.run(['dev', 'missing/key'])).rejects.toThrow(/missing\/key/);
     });
 
+    it('preserves env-level provider after removing a config value', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { host: 'localhost' } },
+            provider: { adapter: 'gcp-sm', project: 'my-gcp-project' }
+        });
+
+        await ConfigRm.run(['dev', 'database/host']);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.provider).toEqual({ adapter: 'gcp-sm', project: 'my-gcp-project' });
+    });
+
     it('does not affect imported values', async () => {
         await saveEnvironment(tmpDir, 'base', {
             imports: [],

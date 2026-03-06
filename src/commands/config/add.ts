@@ -21,7 +21,11 @@ export default class ConfigAdd extends Command {
         const tree = PathTree.fromJSON(def.values);
         tree.set(args.path, args.value);
 
-        await saveEnvironment(cwd, args.env, { imports: def.imports, values: tree.toJSON() });
+        await saveEnvironment(cwd, args.env, {
+            imports: def.imports,
+            values: tree.toJSON(),
+            provider: def.provider
+        });
         this.log(`Set ${args.path} = ${args.value}`);
     }
 }

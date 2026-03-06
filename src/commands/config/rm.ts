@@ -26,7 +26,11 @@ export default class ConfigRm extends Command {
         }
 
         tree.delete(args.path);
-        await saveEnvironment(cwd, args.env, { imports: def.imports, values: tree.toJSON() });
+        await saveEnvironment(cwd, args.env, {
+            imports: def.imports,
+            values: tree.toJSON(),
+            provider: def.provider
+        });
 
         this.log(`Removed ${args.path}`);
     }

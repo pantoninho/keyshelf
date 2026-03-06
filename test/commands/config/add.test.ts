@@ -49,6 +49,19 @@ describe('config:add command', () => {
         expect(def.values).toEqual({ database: { host: 'localhost', port: '5432' } });
     });
 
+    it('preserves env-level provider after adding a config value', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: {},
+            provider: { adapter: 'gcp-sm', project: 'my-gcp-project' }
+        });
+
+        await ConfigAdd.run(['dev', 'database/host', 'localhost']);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.provider).toEqual({ adapter: 'gcp-sm', project: 'my-gcp-project' });
+    });
+
     it('errors if environment does not exist', async () => {
         await expect(ConfigAdd.run(['nope', 'key', 'val'])).rejects.toThrow(/nope/);
     });
