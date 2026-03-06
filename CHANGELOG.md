@@ -1,3 +1,11 @@
+## [1.0.1](https://github.com/pantoninho/keyshelf/compare/v1.0.0...v1.0.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* ignore auto-generated CHANGELOG.md in Prettier check ([a7759d8](https://github.com/pantoninho/keyshelf/commit/a7759d817ac0d8e7367cc80c656398fe9d74101d))
+* preserve provider block in config:add and config:rm ([ce753f6](https://github.com/pantoninho/keyshelf/commit/ce753f61f5fb4642e8f912cbaee94543d54a62d4))
+
 # 1.0.0 (2026-03-06)
 
 
