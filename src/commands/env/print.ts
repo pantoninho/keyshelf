@@ -5,6 +5,7 @@ import yamlLib from 'js-yaml';
 import { loadEnvironment } from '../../core/environment.js';
 import { loadConfig } from '../../core/config.js';
 import { resolve } from '../../core/resolver.js';
+import { replaceSecrets } from '../../core/env-vars.js';
 import { SecretRef } from '../../core/types.js';
 import { SecretProvider } from '../../providers/provider.js';
 import { resolveProvider } from '../../providers/index.js';
@@ -73,36 +74,6 @@ export default class EnvPrint extends Command {
                 this.log(yamlLib.dump(output).trimEnd());
         }
     }
-}
-
-async function replaceSecrets(
-    values: Record<string, unknown>,
-    env: string,
-    provider: SecretProvider,
-    mode: 'reveal' | 'ref'
-): Promise<Record<string, unknown>> {
-    const result: Record<string, unknown> = {};
-
-    for (const [key, value] of Object.entries(values)) {
-        if (value instanceof SecretRef) {
-            if (mode === 'reveal') {
-                result[key] = await provider.get(env, value.path);
-            } else {
-                result[key] = provider.ref(env, value.path);
-            }
-        } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-            result[key] = await replaceSecrets(
-                value as Record<string, unknown>,
-                env,
-                provider,
-                mode
-            );
-        } else {
-            result[key] = value;
-        }
-    }
-
-    return result;
 }
 
 function flattenConfig(values: Record<string, unknown>, prefix = ''): Record<string, unknown> {
