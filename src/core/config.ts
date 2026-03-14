@@ -3,7 +3,7 @@ import path from 'node:path';
 import yaml from 'js-yaml';
 import { KeyshelfConfig, ProviderConfig } from './types.js';
 
-const KNOWN_ADAPTERS = ['local', 'gcp-sm'];
+const KNOWN_ADAPTERS = ['local', 'gcp-sm', 'aws-sm'];
 
 /** Parse and validate a raw provider object into a ProviderConfig. */
 export function parseProviderConfig(
@@ -30,6 +30,24 @@ export function parseProviderConfig(
                 );
             }
             return { adapter: 'gcp-sm', project: provider.project };
+        case 'aws-sm': {
+            if (provider.region !== undefined && typeof provider.region !== 'string') {
+                throw new Error(
+                    `Invalid ${context}: "aws-sm" field "provider.region" must be a string.`
+                );
+            }
+            if (provider.profile !== undefined && typeof provider.profile !== 'string') {
+                throw new Error(
+                    `Invalid ${context}: "aws-sm" field "provider.profile" must be a string.`
+                );
+            }
+            const awsConfig: { adapter: 'aws-sm'; region?: string; profile?: string } = {
+                adapter: 'aws-sm'
+            };
+            if (provider.region !== undefined) awsConfig.region = provider.region as string;
+            if (provider.profile !== undefined) awsConfig.profile = provider.profile as string;
+            return awsConfig;
+        }
         default:
             throw new Error('unreachable');
     }

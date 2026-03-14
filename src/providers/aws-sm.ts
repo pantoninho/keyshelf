@@ -1,0 +1,132 @@
+import {
+    SecretsManagerClient,
+    SecretsManagerClientConfig,
+    GetSecretValueCommand,
+    PutSecretValueCommand,
+    CreateSecretCommand,
+    DeleteSecretCommand,
+    ListSecretsCommand
+} from '@aws-sdk/client-secrets-manager';
+import { fromIni } from '@aws-sdk/credential-providers';
+import { SecretProvider } from './provider.js';
+
+type AwsSmConfig = {
+    region?: string;
+    profile?: string;
+};
+
+/** Stores secrets in AWS Secrets Manager using configurable credentials. */
+export class AwsSmProvider implements SecretProvider {
+    private readonly client: SecretsManagerClient;
+
+    constructor(config: AwsSmConfig) {
+        const clientConfig: SecretsManagerClientConfig = {};
+        if (config.region) clientConfig.region = config.region;
+        if (config.profile) clientConfig.credentials = fromIni({ profile: config.profile });
+        this.client = new SecretsManagerClient(clientConfig);
+    }
+
+    ref(env: string, secretPath: string): string {
+        return buildSecretName(env, secretPath);
+    }
+
+    async get(env: string, secretPath: string): Promise<string> {
+        try {
+            const response = await this.client.send(
+                new GetSecretValueCommand({ SecretId: buildSecretName(env, secretPath) })
+            );
+            if (response.SecretString === undefined) {
+                throw new Error(
+                    `Secret "${secretPath}" in environment "${env}" is a binary secret, which is not supported.`
+                );
+            }
+            return response.SecretString;
+        } catch (err: unknown) {
+            if (isNotFoundError(err)) {
+                throw new Error(`Secret "${secretPath}" not found in environment "${env}"`);
+            }
+            throw err;
+        }
+    }
+
+    async set(env: string, secretPath: string, value: string): Promise<void> {
+        const secretId = buildSecretName(env, secretPath);
+
+        try {
+            await this.client.send(
+                new PutSecretValueCommand({ SecretId: secretId, SecretString: value })
+            );
+        } catch (err: unknown) {
+            if (!isNotFoundError(err)) throw err;
+            await this.client.send(
+                new CreateSecretCommand({ Name: secretId, SecretString: value })
+            );
+        }
+    }
+
+    async delete(env: string, secretPath: string): Promise<void> {
+        try {
+            await this.client.send(
+                new DeleteSecretCommand({
+                    SecretId: buildSecretName(env, secretPath),
+                    ForceDeleteWithoutRecovery: true
+                })
+            );
+        } catch (err: unknown) {
+            if (isNotFoundError(err)) {
+                throw new Error(`Secret "${secretPath}" not found in environment "${env}"`);
+            }
+            throw err;
+        }
+    }
+
+    async list(env: string, prefix?: string): Promise<string[]> {
+        const envPrefix = `keyshelf/${env}/`;
+        const paths: string[] = [];
+        let nextToken: string | undefined;
+
+        do {
+            const response = await this.client.send(
+                new ListSecretsCommand({
+                    Filters: [{ Key: 'name', Values: [envPrefix] }],
+                    NextToken: nextToken
+                })
+            );
+
+            for (const secret of response.SecretList ?? []) {
+                if (!secret.Name?.startsWith(envPrefix)) continue;
+                const secretPath = secret.Name.slice(envPrefix.length);
+                if (!secretPath) continue;
+                if (!prefix || secretPath === prefix || secretPath.startsWith(prefix + '/')) {
+                    paths.push(secretPath);
+                }
+            }
+
+            nextToken = response.NextToken;
+        } while (nextToken);
+
+        return paths;
+    }
+}
+
+/**
+ * Build the AWS Secrets Manager secret name for a given env and path.
+ * @param env - Environment name (must not contain `/`)
+ * @param secretPath - `/`-delimited path to the secret
+ * @returns The full secret name: `keyshelf/<env>/<secretPath>`
+ */
+export function buildSecretName(env: string, secretPath: string): string {
+    if (env.includes('/')) {
+        throw new Error(`env must not contain "/": got "${env}"`);
+    }
+    return `keyshelf/${env}/${secretPath}`;
+}
+
+function isNotFoundError(err: unknown): boolean {
+    return (
+        typeof err === 'object' &&
+        err !== null &&
+        'name' in err &&
+        (err as { name: string }).name === 'ResourceNotFoundException'
+    );
+}

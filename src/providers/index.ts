@@ -2,6 +2,7 @@ import { ProviderConfig, EnvironmentDefinition, KeyshelfConfig } from '../core/t
 import { SecretProvider } from './provider.js';
 import { LocalProvider } from './local.js';
 import { GcpSmProvider } from './gcp-sm.js';
+import { AwsSmProvider } from './aws-sm.js';
 
 /** Create a SecretProvider from adapter configuration. */
 export function createProvider(config: ProviderConfig, configDir: string): SecretProvider {
@@ -10,6 +11,8 @@ export function createProvider(config: ProviderConfig, configDir: string): Secre
             return new LocalProvider(configDir);
         case 'gcp-sm':
             return new GcpSmProvider(config.project);
+        case 'aws-sm':
+            return new AwsSmProvider({ region: config.region, profile: config.profile });
     }
 }
 

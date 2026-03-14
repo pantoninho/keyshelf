@@ -65,10 +65,10 @@ describe('config validation', () => {
     it('unknown adapter name shows available adapters', () => {
         fs.writeFileSync(
             path.join(tmpDir, 'keyshelf.yml'),
-            yaml.dump({ name: 'test', provider: { adapter: 'aws-sm' } })
+            yaml.dump({ name: 'test', provider: { adapter: 'vault' } })
         );
 
-        expect(() => loadConfig(tmpDir)).toThrow(/unknown adapter "aws-sm"/i);
+        expect(() => loadConfig(tmpDir)).toThrow(/unknown adapter "vault"/i);
         expect(() => loadConfig(tmpDir)).toThrow(/local/);
         expect(() => loadConfig(tmpDir)).toThrow(/gcp-sm/);
     });
@@ -112,8 +112,8 @@ describe('parseProviderConfig', () => {
     });
 
     it('uses context in error messages for unknown adapter', () => {
-        expect(() => parseProviderConfig({ adapter: 'aws-sm' }, 'environment file')).toThrow(
-            /Invalid environment file.*unknown adapter "aws-sm"/
+        expect(() => parseProviderConfig({ adapter: 'vault' }, 'environment file')).toThrow(
+            /Invalid environment file.*unknown adapter "vault"/
         );
     });
 
