@@ -5,6 +5,7 @@ import os from 'node:os';
 import { createProvider, resolveProvider } from '../../src/providers/index.js';
 import { LocalProvider } from '../../src/providers/local.js';
 import { GcpSmProvider } from '../../src/providers/gcp-sm.js';
+import { AwsSmProvider } from '../../src/providers/aws-sm.js';
 
 describe('createProvider', () => {
     let tmpDir: string;
@@ -28,6 +29,14 @@ describe('createProvider', () => {
     it('creates a gcp-sm provider', () => {
         const provider = createProvider({ adapter: 'gcp-sm', project: 'my-project' }, tmpDir);
         expect(provider).toBeDefined();
+    });
+
+    it('creates an aws-sm provider', () => {
+        const provider = createProvider(
+            { adapter: 'aws-sm', region: 'us-east-1', profile: 'dev' },
+            tmpDir
+        );
+        expect(provider).toBeInstanceOf(AwsSmProvider);
     });
 });
 

@@ -11,7 +11,10 @@ export interface EnvironmentDefinition {
 }
 
 /** Discriminated union for adapter-specific provider configuration. */
-export type ProviderConfig = { adapter: 'local' } | { adapter: 'gcp-sm'; project: string };
+export type ProviderConfig =
+    | { adapter: 'local' }
+    | { adapter: 'gcp-sm'; project: string }
+    | { adapter: 'aws-sm'; region?: string; profile?: string };
 
 /** Project-level configuration from keyshelf.yml. */
 export interface KeyshelfConfig {

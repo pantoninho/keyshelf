@@ -12,11 +12,17 @@ export default class Init extends Command {
         force: Flags.boolean({ char: 'f', description: 'Overwrite existing keyshelf.yml' }),
         adapter: Flags.string({
             description: 'Secret provider adapter',
-            options: ['local', 'gcp-sm'],
+            options: ['local', 'gcp-sm', 'aws-sm'],
             default: 'local'
         }),
         project: Flags.string({
             description: 'GCP project ID (required for gcp-sm adapter)'
+        }),
+        region: Flags.string({
+            description: 'AWS region (optional for aws-sm adapter)'
+        }),
+        profile: Flags.string({
+            description: 'AWS profile name (optional for aws-sm adapter)'
         })
     };
 
@@ -36,6 +42,13 @@ export default class Init extends Command {
                     this.error('--project is required when using the gcp-sm adapter');
                 }
                 provider = { adapter: 'gcp-sm', project: flags.project };
+                break;
+            case 'aws-sm':
+                provider = {
+                    adapter: 'aws-sm',
+                    ...(flags.region && { region: flags.region }),
+                    ...(flags.profile && { profile: flags.profile })
+                };
                 break;
             default:
                 provider = { adapter: 'local' };

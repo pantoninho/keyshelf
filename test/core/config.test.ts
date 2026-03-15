@@ -65,10 +65,10 @@ describe('config validation', () => {
     it('unknown adapter name shows available adapters', () => {
         fs.writeFileSync(
             path.join(tmpDir, 'keyshelf.yml'),
-            yaml.dump({ name: 'test', provider: { adapter: 'aws-sm' } })
+            yaml.dump({ name: 'test', provider: { adapter: 'vault' } })
         );
 
-        expect(() => loadConfig(tmpDir)).toThrow(/unknown adapter "aws-sm"/i);
+        expect(() => loadConfig(tmpDir)).toThrow(/unknown adapter "vault"/i);
         expect(() => loadConfig(tmpDir)).toThrow(/local/);
         expect(() => loadConfig(tmpDir)).toThrow(/gcp-sm/);
     });
@@ -91,6 +91,51 @@ describe('config validation', () => {
 
         expect(() => loadConfig(tmpDir)).toThrow(/gcp-sm.*requires field "provider\.project"/i);
     });
+
+    it('loads valid aws-sm config with region and profile', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({
+                name: 'test',
+                provider: { adapter: 'aws-sm', region: 'us-east-1', profile: 'dev' }
+            })
+        );
+
+        const config = loadConfig(tmpDir);
+        expect(config.provider).toEqual({
+            adapter: 'aws-sm',
+            region: 'us-east-1',
+            profile: 'dev'
+        });
+    });
+
+    it('loads valid aws-sm config without optional fields', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'test', provider: { adapter: 'aws-sm' } })
+        );
+
+        const config = loadConfig(tmpDir);
+        expect(config.provider).toEqual({ adapter: 'aws-sm' });
+    });
+
+    it('aws-sm rejects non-string region', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'test', provider: { adapter: 'aws-sm', region: 123 } })
+        );
+
+        expect(() => loadConfig(tmpDir)).toThrow(/provider\.region.*must be a string/);
+    });
+
+    it('aws-sm rejects non-string profile', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'test', provider: { adapter: 'aws-sm', profile: true } })
+        );
+
+        expect(() => loadConfig(tmpDir)).toThrow(/provider\.profile.*must be a string/);
+    });
 });
 
 describe('parseProviderConfig', () => {
@@ -112,8 +157,8 @@ describe('parseProviderConfig', () => {
     });
 
     it('uses context in error messages for unknown adapter', () => {
-        expect(() => parseProviderConfig({ adapter: 'aws-sm' }, 'environment file')).toThrow(
-            /Invalid environment file.*unknown adapter "aws-sm"/
+        expect(() => parseProviderConfig({ adapter: 'vault' }, 'environment file')).toThrow(
+            /Invalid environment file.*unknown adapter "vault"/
         );
     });
 
