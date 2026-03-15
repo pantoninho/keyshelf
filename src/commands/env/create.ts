@@ -33,9 +33,6 @@ export default class EnvCreate extends Command {
         }),
         region: Flags.string({
             description: 'AWS region (optional for aws-sm adapter)'
-        }),
-        profile: Flags.string({
-            description: 'AWS profile name (optional for aws-sm adapter)'
         })
     };
 
@@ -60,8 +57,7 @@ export default class EnvCreate extends Command {
                 case 'aws-sm':
                     provider = {
                         adapter: 'aws-sm',
-                        ...(flags.region && { region: flags.region }),
-                        ...(flags.profile && { profile: flags.profile })
+                        ...(flags.region && { region: flags.region })
                     };
                     break;
                 default:

@@ -36,16 +36,10 @@ export function parseProviderConfig(
                     `Invalid ${context}: "aws-sm" field "provider.region" must be a string.`
                 );
             }
-            if (provider.profile !== undefined && typeof provider.profile !== 'string') {
-                throw new Error(
-                    `Invalid ${context}: "aws-sm" field "provider.profile" must be a string.`
-                );
-            }
-            const awsConfig: { adapter: 'aws-sm'; region?: string; profile?: string } = {
+            const awsConfig: { adapter: 'aws-sm'; region?: string } = {
                 adapter: 'aws-sm'
             };
             if (provider.region !== undefined) awsConfig.region = provider.region as string;
-            if (provider.profile !== undefined) awsConfig.profile = provider.profile as string;
             return awsConfig;
         }
         default:

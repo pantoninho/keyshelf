@@ -71,22 +71,10 @@ describe('env:create command', () => {
     });
 
     it('creates environment with --adapter aws-sm and optional flags', async () => {
-        await Create.run([
-            'prod',
-            '--adapter',
-            'aws-sm',
-            '--region',
-            'eu-west-1',
-            '--profile',
-            'production'
-        ]);
+        await Create.run(['prod', '--adapter', 'aws-sm', '--region', 'eu-west-1']);
 
         const def = await loadEnvironment(tmpDir, 'prod');
-        expect(def.provider).toEqual({
-            adapter: 'aws-sm',
-            region: 'eu-west-1',
-            profile: 'production'
-        });
+        expect(def.provider).toEqual({ adapter: 'aws-sm', region: 'eu-west-1' });
     });
 
     it('creates environment with --adapter aws-sm without optional flags', async () => {

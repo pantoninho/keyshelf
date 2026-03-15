@@ -68,15 +68,11 @@ describe('init command', () => {
     });
 
     it('--adapter aws-sm creates aws-sm config', async () => {
-        await Init.run(['--adapter', 'aws-sm', '--region', 'us-east-1', '--profile', 'dev']);
+        await Init.run(['--adapter', 'aws-sm', '--region', 'us-east-1']);
 
         const content = fs.readFileSync(path.join(tmpDir, 'keyshelf.yml'), 'utf-8');
         const config = yaml.load(content) as Record<string, unknown>;
-        expect(config.provider).toEqual({
-            adapter: 'aws-sm',
-            region: 'us-east-1',
-            profile: 'dev'
-        });
+        expect(config.provider).toEqual({ adapter: 'aws-sm', region: 'us-east-1' });
     });
 
     it('--adapter aws-sm works without optional flags', async () => {

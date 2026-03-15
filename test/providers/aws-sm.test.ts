@@ -24,10 +24,6 @@ vi.mock('@aws-sdk/client-secrets-manager', () => ({
     }
 }));
 
-vi.mock('@aws-sdk/credential-providers', () => ({
-    fromIni: vi.fn(() => 'mocked-credentials')
-}));
-
 describe('AwsSmProvider', () => {
     let provider: AwsSmProvider;
 

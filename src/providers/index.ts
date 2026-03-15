@@ -18,8 +18,7 @@ export function createProvider(
         case 'aws-sm':
             return new AwsSmProvider({
                 name: projectName,
-                region: config.region,
-                profile: config.profile
+                region: config.region
             });
     }
 }
