@@ -16,11 +16,7 @@ export function createProvider(
         case 'gcp-sm':
             return new GcpSmProvider(projectName, config.project);
         case 'aws-sm':
-            return new AwsSmProvider({
-                name: projectName,
-                region: config.region,
-                profile: config.profile
-            });
+            return new AwsSmProvider({ name: projectName, profile: config.profile });
     }
 }
 

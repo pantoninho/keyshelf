@@ -92,21 +92,14 @@ describe('config validation', () => {
         expect(() => loadConfig(tmpDir)).toThrow(/gcp-sm.*requires field "provider\.project"/i);
     });
 
-    it('loads valid aws-sm config with region and profile', () => {
+    it('loads valid aws-sm config with profile', () => {
         fs.writeFileSync(
             path.join(tmpDir, 'keyshelf.yml'),
-            yaml.dump({
-                name: 'test',
-                provider: { adapter: 'aws-sm', region: 'us-east-1', profile: 'dev' }
-            })
+            yaml.dump({ name: 'test', provider: { adapter: 'aws-sm', profile: 'dev' } })
         );
 
         const config = loadConfig(tmpDir);
-        expect(config.provider).toEqual({
-            adapter: 'aws-sm',
-            region: 'us-east-1',
-            profile: 'dev'
-        });
+        expect(config.provider).toEqual({ adapter: 'aws-sm', profile: 'dev' });
     });
 
     it('loads valid aws-sm config without optional fields', () => {
@@ -117,15 +110,6 @@ describe('config validation', () => {
 
         const config = loadConfig(tmpDir);
         expect(config.provider).toEqual({ adapter: 'aws-sm' });
-    });
-
-    it('aws-sm rejects non-string region', () => {
-        fs.writeFileSync(
-            path.join(tmpDir, 'keyshelf.yml'),
-            yaml.dump({ name: 'test', provider: { adapter: 'aws-sm', region: 123 } })
-        );
-
-        expect(() => loadConfig(tmpDir)).toThrow(/provider\.region.*must be a string/);
     });
 
     it('aws-sm rejects non-string profile', () => {
