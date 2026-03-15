@@ -1,12 +1,6 @@
 import { Command, Flags } from '@oclif/core';
-import path from 'node:path';
-import os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { loadEnvironment } from '../core/environment.js';
-import { loadConfig } from '../core/config.js';
-import { resolve } from '../core/resolver.js';
-import { replaceSecrets, flattenToEnvRecord } from '../core/env-vars.js';
-import { resolveProvider } from '../providers/index.js';
+import { resolveEnv } from '../core/resolve-env.js';
 
 export default class Run extends Command {
     static override description =
@@ -32,16 +26,12 @@ export default class Run extends Command {
             this.error('No command specified. Provide a command after "--".');
         }
 
-        const cwd = process.cwd();
-        const envDef = await loadEnvironment(cwd, flags.env);
-        const resolved = await resolve(flags.env, (name) => loadEnvironment(cwd, name));
-        const config = loadConfig(cwd);
-        const configDirPath =
-            flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
-        const provider = resolveProvider(envDef, config, configDirPath);
-
-        const replaced = await replaceSecrets(resolved.values, flags.env, provider, 'reveal');
-        const envRecord = flattenToEnvRecord(replaced);
+        const projectDir = process.cwd();
+        const envRecord = await resolveEnv({
+            env: flags.env,
+            projectDir,
+            configDir: flags['config-dir']
+        });
 
         const [cmd, ...args] = command;
         const result = spawnSync(cmd, args, {
