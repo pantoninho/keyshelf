@@ -1,6 +1,5 @@
 import {
     SecretsManagerClient,
-    SecretsManagerClientConfig,
     GetSecretValueCommand,
     PutSecretValueCommand,
     CreateSecretCommand,
@@ -12,7 +11,6 @@ import { SecretProvider } from './provider.js';
 
 type AwsSmConfig = {
     name: string;
-    region?: string;
     profile?: string;
 };
 
@@ -26,10 +24,8 @@ export class AwsSmProvider implements SecretProvider {
             throw new Error(`project name must not contain "/": got "${config.name}"`);
         }
         this.name = config.name;
-        const clientConfig: SecretsManagerClientConfig = {};
-        if (config.region) clientConfig.region = config.region;
-        if (config.profile) clientConfig.credentials = fromIni({ profile: config.profile });
-        this.client = new SecretsManagerClient(clientConfig);
+        const credentials = config.profile ? fromIni({ profile: config.profile }) : undefined;
+        this.client = new SecretsManagerClient(credentials ? { credentials } : {});
     }
 
     ref(env: string, secretPath: string): string {
