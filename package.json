@@ -5,6 +5,16 @@
     "type": "module",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        },
+        "./preload": {
+            "import": "./dist/preload.js",
+            "types": "./dist/preload.d.ts"
+        }
+    },
     "bin": {
         "keyshelf": "./bin/run.js"
     },
