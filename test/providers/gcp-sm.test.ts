@@ -28,7 +28,7 @@ describe('GcpSmProvider', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        provider = new GcpSmProvider('my-project');
+        provider = new GcpSmProvider('myapp', 'my-project');
     });
 
     describe('get', () => {
@@ -40,7 +40,7 @@ describe('GcpSmProvider', () => {
             const value = await provider.get('dev', 'db/password');
 
             expect(mockClient.accessSecretVersion).toHaveBeenCalledWith({
-                name: 'projects/my-project/secrets/dev__db__password/versions/latest'
+                name: 'projects/my-project/secrets/myapp__dev__db__password/versions/latest'
             });
             expect(value).toBe('s3cret');
         });
@@ -68,11 +68,11 @@ describe('GcpSmProvider', () => {
             await provider.set('dev', 'db/password', 'newvalue');
 
             expect(mockClient.getSecret).toHaveBeenCalledWith({
-                name: 'projects/my-project/secrets/dev__db__password'
+                name: 'projects/my-project/secrets/myapp__dev__db__password'
             });
             expect(mockClient.createSecret).not.toHaveBeenCalled();
             expect(mockClient.addSecretVersion).toHaveBeenCalledWith({
-                parent: 'projects/my-project/secrets/dev__db__password',
+                parent: 'projects/my-project/secrets/myapp__dev__db__password',
                 payload: { data: Buffer.from('newvalue', 'utf-8') }
             });
         });
@@ -86,7 +86,7 @@ describe('GcpSmProvider', () => {
 
             expect(mockClient.createSecret).toHaveBeenCalledWith({
                 parent: 'projects/my-project',
-                secretId: 'dev__db__password',
+                secretId: 'myapp__dev__db__password',
                 secret: { replication: { automatic: {} } }
             });
             expect(mockClient.addSecretVersion).toHaveBeenCalled();
@@ -100,7 +100,7 @@ describe('GcpSmProvider', () => {
             await provider.delete('dev', 'db/password');
 
             expect(mockClient.deleteSecret).toHaveBeenCalledWith({
-                name: 'projects/my-project/secrets/dev__db__password'
+                name: 'projects/my-project/secrets/myapp__dev__db__password'
             });
         });
 
@@ -117,9 +117,9 @@ describe('GcpSmProvider', () => {
         it('returns paths for matching environment', async () => {
             mockClient.listSecrets.mockResolvedValue([
                 [
-                    { name: 'projects/my-project/secrets/dev__db__password' },
-                    { name: 'projects/my-project/secrets/dev__db__host' },
-                    { name: 'projects/my-project/secrets/staging__db__password' }
+                    { name: 'projects/my-project/secrets/myapp__dev__db__password' },
+                    { name: 'projects/my-project/secrets/myapp__dev__db__host' },
+                    { name: 'projects/my-project/secrets/myapp__staging__db__password' }
                 ]
             ]);
 
@@ -131,9 +131,9 @@ describe('GcpSmProvider', () => {
         it('filters by prefix', async () => {
             mockClient.listSecrets.mockResolvedValue([
                 [
-                    { name: 'projects/my-project/secrets/dev__db__password' },
-                    { name: 'projects/my-project/secrets/dev__db__host' },
-                    { name: 'projects/my-project/secrets/dev__cache__url' }
+                    { name: 'projects/my-project/secrets/myapp__dev__db__password' },
+                    { name: 'projects/my-project/secrets/myapp__dev__db__host' },
+                    { name: 'projects/my-project/secrets/myapp__dev__cache__url' }
                 ]
             ]);
 
@@ -152,27 +152,92 @@ describe('GcpSmProvider', () => {
     });
 
     describe('ref', () => {
-        it('returns the GCP secret ID', () => {
-            expect(provider.ref('prod', 'database/password')).toBe('prod__database__password');
+        it('returns the GCP secret ID with project name', () => {
+            expect(provider.ref('prod', 'database/password')).toBe(
+                'myapp__prod__database__password'
+            );
         });
 
         it('handles deeply nested paths', () => {
-            expect(provider.ref('dev', 'a/b/c/d')).toBe('dev__a__b__c__d');
+            expect(provider.ref('dev', 'a/b/c/d')).toBe('myapp__dev__a__b__c__d');
+        });
+    });
+
+    describe('project isolation', () => {
+        let providerA: GcpSmProvider;
+        let providerB: GcpSmProvider;
+
+        beforeEach(() => {
+            providerA = new GcpSmProvider('project-a', 'my-project');
+            providerB = new GcpSmProvider('project-b', 'my-project');
+        });
+
+        it('produces different keys for different project names', () => {
+            expect(providerA.ref('dev', 'db/password')).toBe('project-a__dev__db__password');
+            expect(providerB.ref('dev', 'db/password')).toBe('project-b__dev__db__password');
+        });
+
+        it('sends project-scoped key on get', async () => {
+            mockClient.accessSecretVersion.mockResolvedValue([
+                { payload: { data: Buffer.from('val') } }
+            ]);
+
+            await providerA.get('dev', 'db/password');
+
+            expect(mockClient.accessSecretVersion).toHaveBeenCalledWith({
+                name: 'projects/my-project/secrets/project-a__dev__db__password/versions/latest'
+            });
+        });
+
+        it('sends project-scoped key on set', async () => {
+            mockClient.getSecret.mockResolvedValue([{}]);
+            mockClient.addSecretVersion.mockResolvedValue([{}]);
+
+            await providerB.set('dev', 'db/password', 'val');
+
+            expect(mockClient.getSecret).toHaveBeenCalledWith({
+                name: 'projects/my-project/secrets/project-b__dev__db__password'
+            });
+        });
+
+        it('sends project-scoped key on delete', async () => {
+            mockClient.deleteSecret.mockResolvedValue([{}]);
+
+            await providerA.delete('dev', 'db/password');
+
+            expect(mockClient.deleteSecret).toHaveBeenCalledWith({
+                name: 'projects/my-project/secrets/project-a__dev__db__password'
+            });
+        });
+
+        it('scopes list filter by project name', async () => {
+            mockClient.listSecrets.mockResolvedValue([
+                [
+                    { name: 'projects/my-project/secrets/project-a__dev__db__password' },
+                    { name: 'projects/my-project/secrets/project-b__dev__db__password' }
+                ]
+            ]);
+
+            const paths = await providerA.list('dev');
+
+            expect(paths).toEqual(['db/password']);
         });
     });
 });
 
 describe('buildSecretId', () => {
-    it('encodes env and path with double underscores', () => {
-        expect(buildSecretId('dev', 'db/password')).toBe('dev__db__password');
+    it('encodes name, env and path with double underscores', () => {
+        expect(buildSecretId('myapp', 'dev', 'db/password')).toBe('myapp__dev__db__password');
     });
 
     it('handles deeply nested paths', () => {
-        expect(buildSecretId('prod', 'a/b/c/d')).toBe('prod__a__b__c__d');
+        expect(buildSecretId('myapp', 'prod', 'a/b/c/d')).toBe('myapp__prod__a__b__c__d');
     });
 
     it('throws when secret ID exceeds 255 characters', () => {
         const longPath = 'a'.repeat(300);
-        expect(() => buildSecretId('dev', longPath)).toThrow(/exceeds GCP's 255-character limit/);
+        expect(() => buildSecretId('myapp', 'dev', longPath)).toThrow(
+            /exceeds GCP's 255-character limit/
+        );
     });
 });

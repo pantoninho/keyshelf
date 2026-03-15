@@ -5,14 +5,22 @@ import { GcpSmProvider } from './gcp-sm.js';
 import { AwsSmProvider } from './aws-sm.js';
 
 /** Create a SecretProvider from adapter configuration. */
-export function createProvider(config: ProviderConfig, configDir: string): SecretProvider {
+export function createProvider(
+    config: ProviderConfig,
+    configDir: string,
+    projectName: string
+): SecretProvider {
     switch (config.adapter) {
         case 'local':
             return new LocalProvider(configDir);
         case 'gcp-sm':
-            return new GcpSmProvider(config.project);
+            return new GcpSmProvider(projectName, config.project);
         case 'aws-sm':
-            return new AwsSmProvider({ region: config.region, profile: config.profile });
+            return new AwsSmProvider({
+                name: projectName,
+                region: config.region,
+                profile: config.profile
+            });
     }
 }
 
@@ -23,5 +31,5 @@ export function resolveProvider(
     configDir: string
 ): SecretProvider {
     const providerConfig = envDef.provider ?? globalConfig.provider;
-    return createProvider(providerConfig, configDir);
+    return createProvider(providerConfig, configDir, globalConfig.name);
 }

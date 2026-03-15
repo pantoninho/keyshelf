@@ -11,6 +11,7 @@ import { fromIni } from '@aws-sdk/credential-providers';
 import { SecretProvider } from './provider.js';
 
 type AwsSmConfig = {
+    name: string;
     region?: string;
     profile?: string;
 };
@@ -18,8 +19,13 @@ type AwsSmConfig = {
 /** Stores secrets in AWS Secrets Manager using configurable credentials. */
 export class AwsSmProvider implements SecretProvider {
     private readonly client: SecretsManagerClient;
+    private readonly name: string;
 
     constructor(config: AwsSmConfig) {
+        if (config.name.includes('/')) {
+            throw new Error(`project name must not contain "/": got "${config.name}"`);
+        }
+        this.name = config.name;
         const clientConfig: SecretsManagerClientConfig = {};
         if (config.region) clientConfig.region = config.region;
         if (config.profile) clientConfig.credentials = fromIni({ profile: config.profile });
@@ -27,13 +33,13 @@ export class AwsSmProvider implements SecretProvider {
     }
 
     ref(env: string, secretPath: string): string {
-        return buildSecretName(env, secretPath);
+        return buildSecretName(this.name, env, secretPath);
     }
 
     async get(env: string, secretPath: string): Promise<string> {
         try {
             const response = await this.client.send(
-                new GetSecretValueCommand({ SecretId: buildSecretName(env, secretPath) })
+                new GetSecretValueCommand({ SecretId: buildSecretName(this.name, env, secretPath) })
             );
             if (response.SecretString === undefined) {
                 throw new Error(
@@ -50,7 +56,7 @@ export class AwsSmProvider implements SecretProvider {
     }
 
     async set(env: string, secretPath: string, value: string): Promise<void> {
-        const secretId = buildSecretName(env, secretPath);
+        const secretId = buildSecretName(this.name, env, secretPath);
 
         try {
             await this.client.send(
@@ -68,7 +74,7 @@ export class AwsSmProvider implements SecretProvider {
         try {
             await this.client.send(
                 new DeleteSecretCommand({
-                    SecretId: buildSecretName(env, secretPath),
+                    SecretId: buildSecretName(this.name, env, secretPath),
                     ForceDeleteWithoutRecovery: true
                 })
             );
@@ -81,7 +87,7 @@ export class AwsSmProvider implements SecretProvider {
     }
 
     async list(env: string, prefix?: string): Promise<string[]> {
-        const envPrefix = `keyshelf/${env}/`;
+        const envPrefix = `keyshelf/${this.name}/${env}/`;
         const paths: string[] = [];
         let nextToken: string | undefined;
 
@@ -111,15 +117,19 @@ export class AwsSmProvider implements SecretProvider {
 
 /**
  * Build the AWS Secrets Manager secret name for a given env and path.
+ * @param name - Project name (must not contain `/`)
  * @param env - Environment name (must not contain `/`)
  * @param secretPath - `/`-delimited path to the secret
- * @returns The full secret name: `keyshelf/<env>/<secretPath>`
+ * @returns The full secret name: `keyshelf/<name>/<env>/<secretPath>`
  */
-export function buildSecretName(env: string, secretPath: string): string {
+export function buildSecretName(name: string, env: string, secretPath: string): string {
+    if (name.includes('/')) {
+        throw new Error(`name must not contain "/": got "${name}"`);
+    }
     if (env.includes('/')) {
         throw new Error(`env must not contain "/": got "${env}"`);
     }
-    return `keyshelf/${env}/${secretPath}`;
+    return `keyshelf/${name}/${env}/${secretPath}`;
 }
 
 function isNotFoundError(err: unknown): boolean {

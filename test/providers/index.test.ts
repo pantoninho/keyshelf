@@ -19,7 +19,7 @@ describe('createProvider', () => {
     });
 
     it('creates a working local provider', async () => {
-        const provider = createProvider({ adapter: 'local' }, tmpDir);
+        const provider = createProvider({ adapter: 'local' }, tmpDir, 'myapp');
 
         await provider.set('dev', 'db/pass', 'secret123');
         const value = await provider.get('dev', 'db/pass');
@@ -27,14 +27,19 @@ describe('createProvider', () => {
     });
 
     it('creates a gcp-sm provider', () => {
-        const provider = createProvider({ adapter: 'gcp-sm', project: 'my-project' }, tmpDir);
-        expect(provider).toBeDefined();
+        const provider = createProvider(
+            { adapter: 'gcp-sm', project: 'my-project' },
+            tmpDir,
+            'myapp'
+        );
+        expect(provider).toBeInstanceOf(GcpSmProvider);
     });
 
     it('creates an aws-sm provider', () => {
         const provider = createProvider(
             { adapter: 'aws-sm', region: 'us-east-1', profile: 'dev' },
-            tmpDir
+            tmpDir,
+            'myapp'
         );
         expect(provider).toBeInstanceOf(AwsSmProvider);
     });
