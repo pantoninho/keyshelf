@@ -5,6 +5,7 @@ import { loadConfig } from './config.js';
 import { resolve } from './resolver.js';
 import { replaceSecrets, flattenToEnvRecord } from './env-vars.js';
 import { resolveProvider } from '../providers/index.js';
+import { EnvironmentDefinition } from './types.js';
 
 interface ResolveEnvOptions {
     env: string;
@@ -22,8 +23,17 @@ interface ResolveEnvOptions {
  */
 export async function resolveEnv(options: ResolveEnvOptions): Promise<Record<string, string>> {
     const { env, projectDir } = options;
-    const envDef = await loadEnvironment(projectDir, env);
-    const resolved = await resolve(env, (name) => loadEnvironment(projectDir, name));
+    const cache = new Map<string, EnvironmentDefinition>();
+    const loadFn = async (name: string) => {
+        const cached = cache.get(name);
+        if (cached) return cached;
+        const def = await loadEnvironment(projectDir, name);
+        cache.set(name, def);
+        return def;
+    };
+
+    const envDef = await loadFn(env);
+    const resolved = await resolve(env, loadFn);
     const config = loadConfig(projectDir);
     const configDir =
         options.configDir ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);

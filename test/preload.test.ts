@@ -33,6 +33,20 @@ describe('keyshelf/preload', () => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
+    function runPreload(script: string, env: Record<string, string | undefined>) {
+        const result = spawnSync(
+            'node',
+            ['--import', `file://${PRELOAD_PATH}`, '--input-type=module'],
+            { input: script, env: { ...process.env, ...env } }
+        );
+        if (result.error) throw result.error;
+        return {
+            status: result.status,
+            stderr: result.stderr?.toString() ?? '',
+            output: fs.existsSync(outFile) ? fs.readFileSync(outFile, 'utf-8') : ''
+        };
+    }
+
     it('injects resolved config values into process.env', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
@@ -40,23 +54,13 @@ describe('keyshelf/preload', () => {
         });
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.DATABASE_HOST + ":" + process.env.DATABASE_PORT)`;
-        const result = spawnSync(
-            'node',
-            ['--import', `file://${PRELOAD_PATH}`, '--input-type=module'],
-            {
-                input: script,
-                env: {
-                    ...process.env,
-                    KEYSHELF_ENV: 'dev',
-                    KEYSHELF_PROJECT_DIR: tmpDir
-                }
-            }
-        );
+        const result = runPreload(script, {
+            KEYSHELF_ENV: 'dev',
+            KEYSHELF_PROJECT_DIR: tmpDir
+        });
 
-        if (result.error) throw result.error;
-        expect(result.status, result.stderr?.toString()).toBe(0);
-        const output = fs.readFileSync(outFile, 'utf-8');
-        expect(output).toBe('localhost:5432');
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.output).toBe('localhost:5432');
     });
 
     it('injects resolved secret values into process.env', async () => {
@@ -71,44 +75,24 @@ describe('keyshelf/preload', () => {
         });
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.API_KEY + "|" + process.env.API_URL)`;
-        const result = spawnSync(
-            'node',
-            ['--import', `file://${PRELOAD_PATH}`, '--input-type=module'],
-            {
-                input: script,
-                env: {
-                    ...process.env,
-                    KEYSHELF_ENV: 'prod',
-                    KEYSHELF_PROJECT_DIR: tmpDir,
-                    KEYSHELF_CONFIG_DIR: configDir
-                }
-            }
-        );
+        const result = runPreload(script, {
+            KEYSHELF_ENV: 'prod',
+            KEYSHELF_PROJECT_DIR: tmpDir,
+            KEYSHELF_CONFIG_DIR: configDir
+        });
 
-        if (result.error) throw result.error;
-        expect(result.status, result.stderr?.toString()).toBe(0);
-        const output = fs.readFileSync(outFile, 'utf-8');
-        expect(output).toBe('super-secret-key|https://api.example.com');
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.output).toBe('super-secret-key|https://api.example.com');
     });
 
     it('throws a clear error when KEYSHELF_ENV is not set', async () => {
-        const result = spawnSync(
-            'node',
-            ['--import', `file://${PRELOAD_PATH}`, '--input-type=module'],
-            {
-                input: 'console.log("should not reach")',
-                env: {
-                    ...process.env,
-                    KEYSHELF_ENV: undefined,
-                    KEYSHELF_PROJECT_DIR: tmpDir
-                }
-            }
-        );
+        const result = runPreload('console.log("should not reach")', {
+            KEYSHELF_ENV: undefined,
+            KEYSHELF_PROJECT_DIR: tmpDir
+        });
 
         expect(result.status).not.toBe(0);
-        expect(result.stderr?.toString()).toMatch(
-            /KEYSHELF_ENV is required when using keyshelf\/preload/
-        );
+        expect(result.stderr).toMatch(/KEYSHELF_ENV is required when using keyshelf\/preload/);
     });
 
     it('merges inherited values from imported environments', async () => {
@@ -122,22 +106,12 @@ describe('keyshelf/preload', () => {
         });
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.SHARED + "|" + process.env.LOCAL)`;
-        const result = spawnSync(
-            'node',
-            ['--import', `file://${PRELOAD_PATH}`, '--input-type=module'],
-            {
-                input: script,
-                env: {
-                    ...process.env,
-                    KEYSHELF_ENV: 'dev',
-                    KEYSHELF_PROJECT_DIR: tmpDir
-                }
-            }
-        );
+        const result = runPreload(script, {
+            KEYSHELF_ENV: 'dev',
+            KEYSHELF_PROJECT_DIR: tmpDir
+        });
 
-        if (result.error) throw result.error;
-        expect(result.status, result.stderr?.toString()).toBe(0);
-        const output = fs.readFileSync(outFile, 'utf-8');
-        expect(output).toBe('from-base|from-dev');
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.output).toBe('from-base|from-dev');
     });
 });
