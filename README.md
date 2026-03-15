@@ -3,7 +3,7 @@
 CLI tool for managing hierarchical config values and secrets across multiple environments.
 
 - Config values live in version-controlled YAML files
-- Secret values live in external providers (local filesystem, with more planned)
+- Secret values live in pluggable providers (local filesystem, GCP Secret Manager, AWS Secrets Manager)
 - YAML files reference secrets via `!secret` tags (safe to commit)
 - Environments compose via imports with JSON Merge Patch semantics
 
@@ -179,7 +179,70 @@ my-project/
       prod.yml                          # prod overrides (imports base)
 ```
 
-Secrets are stored outside the repo in `~/.config/keyshelf/<project>/secrets.json` (local provider).
+Secrets are stored outside the repo by the configured provider (see [Providers](#providers)).
+
+## Providers
+
+Providers are pluggable backends for storing secret values. The provider is configured in `keyshelf.yml` and can be overridden per environment.
+
+### Local (`local`)
+
+Stores secrets as JSON on the local filesystem at `~/.config/keyshelf/<project>/secrets.json`. Good for development and single-machine setups. No external dependencies.
+
+```yaml
+provider:
+    adapter: local
+```
+
+### GCP Secret Manager (`gcp-sm`)
+
+Stores secrets in [Google Cloud Secret Manager](https://cloud.google.com/secret-manager). Uses Application Default Credentials (ADC) for authentication — run `gcloud auth application-default login` or set `GOOGLE_APPLICATION_CREDENTIALS` before use. Requires `@google-cloud/secret-manager` as a peer dependency.
+
+```yaml
+provider:
+    adapter: gcp-sm
+    project: my-gcp-project-id
+```
+
+Secrets are stored with IDs in the format `<env>__<path>` (slashes replaced with `__`), subject to GCP's 255-character limit.
+
+### AWS Secrets Manager (`aws-sm`)
+
+Stores secrets in [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/). Uses the standard AWS credential chain — configure via `~/.aws/credentials`, environment variables, or an IAM role. Optionally specify a region and/or named profile. Requires `@aws-sdk/client-secrets-manager` as a peer dependency.
+
+```yaml
+provider:
+    adapter: aws-sm
+    region: us-east-1 # optional, falls back to AWS SDK defaults
+    profile: my-profile # optional, uses a named profile from ~/.aws/credentials
+```
+
+Secrets are stored with names in the format `keyshelf/<env>/<path>`.
+
+### Per-environment providers
+
+Environments can override the global provider. This is useful when dev secrets are local but production secrets live in a cloud provider:
+
+```yaml
+# .keyshelf/environments/dev.yml
+imports:
+    - base
+values:
+    database:
+        host: localhost
+provider:
+    adapter: local
+
+# .keyshelf/environments/prod.yml
+imports:
+    - base
+values:
+    database:
+        host: db.prod.example.com
+provider:
+    adapter: gcp-sm
+    project: my-gcp-project-id
+```
 
 ## Configuration
 
@@ -192,7 +255,7 @@ provider:
 ```
 
 - **name**: Project identifier, used to scope secret storage
-- **provider.adapter**: Secret storage backend (`local` stores secrets on the local filesystem)
+- **provider.adapter**: Secret storage backend (see [Providers](#providers))
 
 ## Development
 
