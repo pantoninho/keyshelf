@@ -121,6 +121,14 @@ describe('AwsSmProvider', () => {
                 /Secret "db\/password" not found in environment "dev"/
             );
         });
+
+        it('re-throws non-NOT_FOUND errors', async () => {
+            mockSend.mockRejectedValue(new Error('AccessDeniedException'));
+
+            await expect(provider.delete('dev', 'db/password')).rejects.toThrow(
+                'AccessDeniedException'
+            );
+        });
     });
 
     describe('list', () => {

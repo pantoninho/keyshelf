@@ -66,4 +66,24 @@ describe('init command', () => {
     it('--adapter gcp-sm without --project errors', async () => {
         await expect(Init.run(['--adapter', 'gcp-sm'])).rejects.toThrow(/--project is required/);
     });
+
+    it('--adapter aws-sm creates aws-sm config', async () => {
+        await Init.run(['--adapter', 'aws-sm', '--region', 'us-east-1', '--profile', 'dev']);
+
+        const content = fs.readFileSync(path.join(tmpDir, 'keyshelf.yml'), 'utf-8');
+        const config = yaml.load(content) as Record<string, unknown>;
+        expect(config.provider).toEqual({
+            adapter: 'aws-sm',
+            region: 'us-east-1',
+            profile: 'dev'
+        });
+    });
+
+    it('--adapter aws-sm works without optional flags', async () => {
+        await Init.run(['--adapter', 'aws-sm']);
+
+        const content = fs.readFileSync(path.join(tmpDir, 'keyshelf.yml'), 'utf-8');
+        const config = yaml.load(content) as Record<string, unknown>;
+        expect(config.provider).toEqual({ adapter: 'aws-sm' });
+    });
 });
