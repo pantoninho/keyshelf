@@ -7,18 +7,20 @@ const MAX_SECRET_ID_LENGTH = 255;
 export class GcpSmProvider implements SecretProvider {
     private readonly client: SecretManagerServiceClient;
     private readonly project: string;
+    private readonly name: string;
 
-    constructor(project: string) {
+    constructor(name: string, project: string) {
+        this.name = name;
         this.project = project;
         this.client = new SecretManagerServiceClient();
     }
 
     ref(env: string, secretPath: string): string {
-        return buildSecretId(env, secretPath);
+        return buildSecretId(this.name, env, secretPath);
     }
 
     async get(env: string, secretPath: string): Promise<string> {
-        const secretId = buildSecretId(env, secretPath);
+        const secretId = buildSecretId(this.name, env, secretPath);
         const name = `projects/${this.project}/secrets/${secretId}/versions/latest`;
 
         try {
@@ -33,7 +35,7 @@ export class GcpSmProvider implements SecretProvider {
     }
 
     async set(env: string, secretPath: string, value: string): Promise<void> {
-        const secretId = buildSecretId(env, secretPath);
+        const secretId = buildSecretId(this.name, env, secretPath);
         const parent = `projects/${this.project}`;
         const secretName = `${parent}/secrets/${secretId}`;
 
@@ -58,7 +60,7 @@ export class GcpSmProvider implements SecretProvider {
     }
 
     async delete(env: string, secretPath: string): Promise<void> {
-        const secretId = buildSecretId(env, secretPath);
+        const secretId = buildSecretId(this.name, env, secretPath);
         const name = `projects/${this.project}/secrets/${secretId}`;
 
         try {
@@ -73,7 +75,7 @@ export class GcpSmProvider implements SecretProvider {
 
     async list(env: string, prefix?: string): Promise<string[]> {
         const parent = `projects/${this.project}`;
-        const envPrefix = `${env}__`;
+        const envPrefix = `${this.name}__${env}__`;
         const paths: string[] = [];
 
         const [secrets] = await this.client.listSecrets({ parent });
@@ -91,9 +93,9 @@ export class GcpSmProvider implements SecretProvider {
     }
 }
 
-/** Encode env + path into a GCP-safe secret ID. */
-export function buildSecretId(env: string, secretPath: string): string {
-    const id = `${env}__${secretPath.replaceAll('/', '__')}`;
+/** Encode project name, env and path into a GCP-safe secret ID. */
+export function buildSecretId(name: string, env: string, secretPath: string): string {
+    const id = `${name}__${env}__${secretPath.replaceAll('/', '__')}`;
     if (id.length > MAX_SECRET_ID_LENGTH) {
         throw new Error(
             `Secret ID exceeds GCP's ${MAX_SECRET_ID_LENGTH}-character limit: "${id}" (${id.length} chars).`

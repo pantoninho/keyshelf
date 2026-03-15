@@ -33,7 +33,7 @@ describe('AwsSmProvider', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        provider = new AwsSmProvider({});
+        provider = new AwsSmProvider({ name: 'myapp' });
     });
 
     describe('get', () => {
@@ -44,7 +44,7 @@ describe('AwsSmProvider', () => {
 
             expect(mockSend).toHaveBeenCalledOnce();
             const cmd = mockSend.mock.calls[0][0];
-            expect(cmd.input).toEqual({ SecretId: 'keyshelf/dev/db/password' });
+            expect(cmd.input).toEqual({ SecretId: 'keyshelf/myapp/dev/db/password' });
             expect(value).toBe('s3cret');
         });
 
@@ -80,7 +80,7 @@ describe('AwsSmProvider', () => {
             expect(mockSend).toHaveBeenCalledOnce();
             const cmd = mockSend.mock.calls[0][0];
             expect(cmd.input).toEqual({
-                SecretId: 'keyshelf/dev/db/password',
+                SecretId: 'keyshelf/myapp/dev/db/password',
                 SecretString: 'newvalue'
             });
         });
@@ -94,7 +94,7 @@ describe('AwsSmProvider', () => {
             expect(mockSend).toHaveBeenCalledTimes(2);
             const createCmd = mockSend.mock.calls[1][0];
             expect(createCmd.input).toEqual({
-                Name: 'keyshelf/dev/db/password',
+                Name: 'keyshelf/myapp/dev/db/password',
                 SecretString: 'newvalue'
             });
         });
@@ -109,7 +109,7 @@ describe('AwsSmProvider', () => {
             expect(mockSend).toHaveBeenCalledOnce();
             const cmd = mockSend.mock.calls[0][0];
             expect(cmd.input).toEqual({
-                SecretId: 'keyshelf/dev/db/password',
+                SecretId: 'keyshelf/myapp/dev/db/password',
                 ForceDeleteWithoutRecovery: true
             });
         });
@@ -135,9 +135,9 @@ describe('AwsSmProvider', () => {
         it('returns paths filtered by env prefix', async () => {
             mockSend.mockResolvedValue({
                 SecretList: [
-                    { Name: 'keyshelf/dev/db/password' },
-                    { Name: 'keyshelf/dev/db/host' },
-                    { Name: 'keyshelf/staging/db/password' }
+                    { Name: 'keyshelf/myapp/dev/db/password' },
+                    { Name: 'keyshelf/myapp/dev/db/host' },
+                    { Name: 'keyshelf/myapp/staging/db/password' }
                 ],
                 NextToken: undefined
             });
@@ -150,9 +150,9 @@ describe('AwsSmProvider', () => {
         it('filters by path prefix', async () => {
             mockSend.mockResolvedValue({
                 SecretList: [
-                    { Name: 'keyshelf/dev/db/password' },
-                    { Name: 'keyshelf/dev/db/host' },
-                    { Name: 'keyshelf/dev/cache/url' }
+                    { Name: 'keyshelf/myapp/dev/db/password' },
+                    { Name: 'keyshelf/myapp/dev/db/host' },
+                    { Name: 'keyshelf/myapp/dev/cache/url' }
                 ],
                 NextToken: undefined
             });
@@ -165,11 +165,11 @@ describe('AwsSmProvider', () => {
         it('paginates through multiple pages', async () => {
             mockSend
                 .mockResolvedValueOnce({
-                    SecretList: [{ Name: 'keyshelf/dev/db/password' }],
+                    SecretList: [{ Name: 'keyshelf/myapp/dev/db/password' }],
                     NextToken: 'page2token'
                 })
                 .mockResolvedValueOnce({
-                    SecretList: [{ Name: 'keyshelf/dev/db/host' }],
+                    SecretList: [{ Name: 'keyshelf/myapp/dev/db/host' }],
                     NextToken: undefined
                 });
 
@@ -189,28 +189,104 @@ describe('AwsSmProvider', () => {
     });
 
     describe('ref', () => {
-        it('returns keyshelf/<env>/<path>', () => {
+        it('returns keyshelf/<name>/<env>/<path>', () => {
             expect(provider.ref('prod', 'database/password')).toBe(
-                'keyshelf/prod/database/password'
+                'keyshelf/myapp/prod/database/password'
             );
         });
 
         it('handles deeply nested paths', () => {
-            expect(provider.ref('dev', 'a/b/c/d')).toBe('keyshelf/dev/a/b/c/d');
+            expect(provider.ref('dev', 'a/b/c/d')).toBe('keyshelf/myapp/dev/a/b/c/d');
+        });
+    });
+
+    describe('project isolation', () => {
+        let providerA: AwsSmProvider;
+        let providerB: AwsSmProvider;
+
+        beforeEach(() => {
+            providerA = new AwsSmProvider({ name: 'project-a' });
+            providerB = new AwsSmProvider({ name: 'project-b' });
+        });
+
+        it('produces different keys for different project names', () => {
+            expect(providerA.ref('dev', 'db/password')).toBe('keyshelf/project-a/dev/db/password');
+            expect(providerB.ref('dev', 'db/password')).toBe('keyshelf/project-b/dev/db/password');
+        });
+
+        it('sends project-scoped key on get', async () => {
+            mockSend.mockResolvedValue({ SecretString: 'val' });
+
+            await providerA.get('dev', 'db/password');
+
+            const cmd = mockSend.mock.calls[0][0];
+            expect(cmd.input).toEqual({ SecretId: 'keyshelf/project-a/dev/db/password' });
+        });
+
+        it('sends project-scoped key on set', async () => {
+            mockSend.mockResolvedValue({});
+
+            await providerB.set('dev', 'db/password', 'val');
+
+            const cmd = mockSend.mock.calls[0][0];
+            expect(cmd.input).toEqual({
+                SecretId: 'keyshelf/project-b/dev/db/password',
+                SecretString: 'val'
+            });
+        });
+
+        it('sends project-scoped key on delete', async () => {
+            mockSend.mockResolvedValue({});
+
+            await providerA.delete('dev', 'db/password');
+
+            const cmd = mockSend.mock.calls[0][0];
+            expect(cmd.input).toEqual({
+                SecretId: 'keyshelf/project-a/dev/db/password',
+                ForceDeleteWithoutRecovery: true
+            });
+        });
+
+        it('scopes list filter by project name', async () => {
+            mockSend.mockResolvedValue({
+                SecretList: [
+                    { Name: 'keyshelf/project-a/dev/db/password' },
+                    { Name: 'keyshelf/project-b/dev/db/password' }
+                ],
+                NextToken: undefined
+            });
+
+            const paths = await providerA.list('dev');
+
+            expect(paths).toEqual(['db/password']);
+        });
+    });
+
+    describe('constructor validation', () => {
+        it('throws when project name contains a slash', () => {
+            expect(() => new AwsSmProvider({ name: 'bad/name' })).toThrow(
+                /project name must not contain "\/"/
+            );
         });
     });
 });
 
 describe('buildSecretName', () => {
-    it('returns keyshelf/<env>/<path>', () => {
-        expect(buildSecretName('dev', 'db/password')).toBe('keyshelf/dev/db/password');
+    it('returns keyshelf/<name>/<env>/<path>', () => {
+        expect(buildSecretName('myapp', 'dev', 'db/password')).toBe(
+            'keyshelf/myapp/dev/db/password'
+        );
     });
 
     it('handles deeply nested paths', () => {
-        expect(buildSecretName('prod', 'a/b/c/d')).toBe('keyshelf/prod/a/b/c/d');
+        expect(buildSecretName('myapp', 'prod', 'a/b/c/d')).toBe('keyshelf/myapp/prod/a/b/c/d');
+    });
+
+    it('throws when name contains a slash', () => {
+        expect(() => buildSecretName('bad/name', 'dev', 'db/password')).toThrow(/name/);
     });
 
     it('throws when env contains a slash', () => {
-        expect(() => buildSecretName('dev/bad', 'db/password')).toThrow(/env/);
+        expect(() => buildSecretName('myapp', 'dev/bad', 'db/password')).toThrow(/env/);
     });
 });
