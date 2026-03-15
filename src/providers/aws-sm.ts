@@ -7,13 +7,11 @@ import {
     DeleteSecretCommand,
     ListSecretsCommand
 } from '@aws-sdk/client-secrets-manager';
-import { fromIni } from '@aws-sdk/credential-providers';
 import { SecretProvider } from './provider.js';
 
 type AwsSmConfig = {
     name: string;
     region?: string;
-    profile?: string;
 };
 
 /** Stores secrets in AWS Secrets Manager using configurable credentials. */
@@ -28,7 +26,6 @@ export class AwsSmProvider implements SecretProvider {
         this.name = config.name;
         const clientConfig: SecretsManagerClientConfig = {};
         if (config.region) clientConfig.region = config.region;
-        if (config.profile) clientConfig.credentials = fromIni({ profile: config.profile });
         this.client = new SecretsManagerClient(clientConfig);
     }
 

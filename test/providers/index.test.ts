@@ -37,7 +37,7 @@ describe('createProvider', () => {
 
     it('creates an aws-sm provider', () => {
         const provider = createProvider(
-            { adapter: 'aws-sm', region: 'us-east-1', profile: 'dev' },
+            { adapter: 'aws-sm', region: 'us-east-1' },
             tmpDir,
             'myapp'
         );
