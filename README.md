@@ -208,16 +208,14 @@ Secrets are stored with IDs in the format `<env>__<path>` (slashes replaced with
 
 ### AWS Secrets Manager (`aws-sm`)
 
-Stores secrets in [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/). Uses the standard AWS credential chain — configure via `~/.aws/credentials`, environment variables, or an IAM role. Optionally specify a region and/or named profile. Requires `@aws-sdk/client-secrets-manager` as a peer dependency.
+Stores secrets in [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/). Uses the standard AWS credential chain — configure via `~/.aws/credentials`, environment variables (`AWS_PROFILE`, `AWS_REGION`), or an IAM role. Requires `@aws-sdk/client-secrets-manager` as a peer dependency.
 
 ```yaml
 provider:
     adapter: aws-sm
-    region: us-east-1 # optional, falls back to AWS SDK defaults
-    profile: my-profile # optional, uses a named profile from ~/.aws/credentials
 ```
 
-Secrets are stored with names in the format `keyshelf/<env>/<path>`.
+Secrets are stored with names in the format `keyshelf/<name>/<env>/<path>`.
 
 ### Per-environment providers
 
