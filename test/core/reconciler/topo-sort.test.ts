@@ -70,4 +70,11 @@ describe('topoSort', () => {
         };
         expect(() => topoSort(envs)).toThrow(/[Cc]ycle/);
     });
+
+    it('throws when an env imports a name not present in the map', () => {
+        const envs = {
+            dev: { imports: ['missing'] }
+        };
+        expect(() => topoSort(envs)).toThrow('Environment "missing" not found (imported by "dev")');
+    });
 });

@@ -20,32 +20,22 @@ export async function applyEnvironmentPlan(options: ApplyOptions): Promise<void>
     const { plan, provider, collectValue, getSourceProvider } = options;
 
     for (const change of plan.secretChanges) {
-        await applyChange(change, plan.envName, provider, collectValue, getSourceProvider);
-    }
-}
-
-async function applyChange(
-    change: SecretChange,
-    envName: string,
-    provider: SecretProvider,
-    collectValue: (path: string) => Promise<string>,
-    getSourceProvider: (sourceEnv: string) => { provider: SecretProvider; env: string }
-): Promise<void> {
-    switch (change.kind) {
-        case 'add': {
-            const value = await collectValue(change.path);
-            await provider.set(envName, change.path, value);
-            break;
-        }
-        case 'copy': {
-            const source = getSourceProvider(change.sourceEnv);
-            const value = await source.provider.get(source.env, change.path);
-            await provider.set(envName, change.path, value);
-            break;
-        }
-        case 'remove': {
-            await provider.delete(envName, change.path);
-            break;
+        switch (change.kind) {
+            case 'add': {
+                const value = await collectValue(change.path);
+                await provider.set(plan.envName, change.path, value);
+                break;
+            }
+            case 'copy': {
+                const source = getSourceProvider(change.sourceEnv);
+                const value = await source.provider.get(source.env, change.path);
+                await provider.set(plan.envName, change.path, value);
+                break;
+            }
+            case 'remove': {
+                await provider.delete(plan.envName, change.path);
+                break;
+            }
         }
     }
 }

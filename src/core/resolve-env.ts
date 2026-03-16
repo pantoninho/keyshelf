@@ -1,7 +1,5 @@
-import path from 'node:path';
-import os from 'node:os';
 import { loadEnvironment } from './environment.js';
-import { loadConfig } from './config.js';
+import { loadConfig, defaultConfigDir } from './config.js';
 import { resolve } from './resolver.js';
 import { replaceSecrets, flattenToEnvRecord } from './env-vars.js';
 import { resolveProvider } from '../providers/index.js';
@@ -35,8 +33,7 @@ export async function resolveEnv(options: ResolveEnvOptions): Promise<Record<str
     const envDef = await loadFn(env);
     const resolved = await resolve(env, loadFn);
     const config = loadConfig(projectDir);
-    const configDir =
-        options.configDir ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
+    const configDir = options.configDir ?? defaultConfigDir(config);
     const provider = resolveProvider(envDef, config, configDir);
     const replaced = await replaceSecrets(resolved.values, env, provider, 'reveal');
     return flattenToEnvRecord(replaced, envDef.env);

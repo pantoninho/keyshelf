@@ -144,13 +144,13 @@ describe('flattenToEnvRecord', () => {
             expect(result).toEqual({ my_custom_var: 'https://example.com' });
         });
 
-        it('returns undefined string for missing paths', () => {
+        it('throws when mapping references a non-existent path', () => {
             const obj = { api: {} };
             const mapping = { MISSING: 'api/key' };
 
-            const result = flattenToEnvRecord(obj, mapping);
-
-            expect(result).toEqual({ MISSING: 'undefined' });
+            expect(() => flattenToEnvRecord(obj, mapping)).toThrow(
+                /Env mapping "MISSING" references path "api\/key" which does not exist/
+            );
         });
     });
 });

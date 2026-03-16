@@ -77,6 +77,11 @@ function flattenWithMapping(
     const result: Record<string, string> = {};
     for (const [varName, path] of Object.entries(envMapping)) {
         const value = lookupPath(obj, path);
+        if (value === undefined) {
+            throw new Error(
+                `Env mapping "${varName}" references path "${path}" which does not exist in resolved values.`
+            );
+        }
         result[varName] = String(value);
     }
     return result;

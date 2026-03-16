@@ -1,5 +1,37 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { makeCollector } from '../../../src/core/reconciler/input.js';
+import { makeCollector, readMaskedLine } from '../../../src/core/reconciler/input.js';
+
+describe('readMaskedLine', () => {
+    it('resolves correctly when a multi-character chunk with newline is delivered at once', async () => {
+        const mockStdin = {
+            setRawMode: vi.fn(),
+            once: vi.fn(),
+            removeListener: vi.fn()
+        };
+        const mockStdout = { write: vi.fn() };
+
+        const originalStdin = process.stdin;
+        const originalStdout = process.stdout;
+        Object.defineProperty(process, 'stdin', { value: mockStdin, configurable: true });
+        Object.defineProperty(process, 'stdout', { value: mockStdout, configurable: true });
+
+        let capturedHandler: ((chunk: Buffer) => void) | undefined;
+        mockStdin.once.mockImplementation((_event: string, handler: (chunk: Buffer) => void) => {
+            capturedHandler = handler;
+        });
+
+        const resultPromise = readMaskedLine('Enter secret: ');
+
+        // Simulate a multi-character chunk delivered at once (e.g. pasted input)
+        capturedHandler!(Buffer.from('secret\n'));
+
+        const result = await resultPromise;
+        expect(result).toBe('secret');
+
+        Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
+        Object.defineProperty(process, 'stdout', { value: originalStdout, configurable: true });
+    });
+});
 
 describe('makeCollector', () => {
     describe('env source', () => {

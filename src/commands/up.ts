@@ -1,10 +1,8 @@
 import { Command, Flags } from '@oclif/core';
-import path from 'node:path';
-import os from 'node:os';
 import fs from 'node:fs/promises';
 import readline from 'node:readline';
 import { listEnvironments, loadEnvironment } from '../core/environment.js';
-import { loadConfig } from '../core/config.js';
+import { loadConfig, defaultConfigDir } from '../core/config.js';
 import { resolve as resolveEnv } from '../core/resolver.js';
 import { resolveProvider } from '../providers/index.js';
 import { EnvironmentDefinition, KeyshelfConfig } from '../core/types.js';
@@ -46,8 +44,7 @@ export default class Up extends Command {
         const { flags } = await this.parse(Up);
         const cwd = process.cwd();
         const config = loadConfig(cwd);
-        const configDir =
-            flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
+        const configDir = flags['config-dir'] ?? defaultConfigDir(config);
 
         const envNames = await listEnvironments(cwd);
         if (envNames.length === 0) {
@@ -59,8 +56,8 @@ export default class Up extends Command {
         const sortedNames = topoSort(
             Object.fromEntries(envNames.map((n) => [n, { imports: envDefs.get(n)!.imports }]))
         );
-
-        const plan = await buildReconciliationPlan(sortedNames, envDefs, config, configDir);
+        const ctx: PlanContext = { envDefs, config, configDir };
+        const plan = await buildReconciliationPlan(ctx, sortedNames);
 
         this.log(renderPlan(plan));
 
@@ -70,24 +67,36 @@ export default class Up extends Command {
             return;
         }
 
+        await this.confirmAndApply(flags, plan, ctx);
+    }
+
+    private async confirmAndApply(
+        flags: { apply: boolean; 'from-env': boolean; 'from-file': string | undefined },
+        plan: ReconciliationPlan,
+        ctx: PlanContext
+    ): Promise<void> {
         const shouldApply = flags.apply || (await confirmApply());
         if (!shouldApply) {
             this.log('Aborted.');
             return;
         }
 
-        const collector = await buildCollector(flags['from-env'], flags['from-file'], envDefs);
+        const collector = await buildCollector(flags['from-env'], flags['from-file'], ctx.envDefs);
 
         for (const envPlan of plan.environments) {
             if (envPlan.secretChanges.length === 0) continue;
-            const envDef = envDefs.get(envPlan.envName)!;
-            const provider = resolveProvider(envDef, config, configDir);
+            const envDef = ctx.envDefs.get(envPlan.envName)!;
+            const provider = resolveProvider(envDef, ctx.config, ctx.configDir);
             await applyEnvironmentPlan({
                 plan: envPlan,
                 provider,
                 collectValue: collector,
                 getSourceProvider: (sourceEnv) => ({
-                    provider: resolveProvider(envDefs.get(sourceEnv)!, config, configDir),
+                    provider: resolveProvider(
+                        ctx.envDefs.get(sourceEnv)!,
+                        ctx.config,
+                        ctx.configDir
+                    ),
                     env: sourceEnv
                 })
             });
@@ -107,25 +116,29 @@ async function loadAllEnvDefs(
     return new Map(entries);
 }
 
+interface PlanContext {
+    envDefs: Map<string, EnvironmentDefinition>;
+    config: KeyshelfConfig;
+    configDir: string;
+}
+
 async function buildReconciliationPlan(
-    sortedNames: string[],
-    envDefs: Map<string, EnvironmentDefinition>,
-    config: KeyshelfConfig,
-    configDir: string
+    ctx: PlanContext,
+    sortedNames: string[]
 ): Promise<ReconciliationPlan> {
     const environments: EnvironmentPlan[] = [];
+    const cachedSecrets = new Map<string, string[]>();
 
     for (const envName of sortedNames) {
-        const envDef = envDefs.get(envName)!;
-        const provider = resolveProvider(envDef, config, configDir);
-        const resolved = await resolveEnv(envName, (name) => Promise.resolve(envDefs.get(name)!));
-        const providerSecretPaths = await provider.list(envName);
-        const importedSecretSources = await buildImportedSecretSources(
-            envDef.imports,
-            envDefs,
-            config,
-            configDir
+        const envDef = ctx.envDefs.get(envName)!;
+        const provider = resolveProvider(envDef, ctx.config, ctx.configDir);
+        const resolved = await resolveEnv(envName, (name) =>
+            Promise.resolve(ctx.envDefs.get(name)!)
         );
+        const providerSecretPaths = await provider.list(envName);
+        cachedSecrets.set(envName, providerSecretPaths);
+
+        const importedSecretSources = buildImportedSecretSources(envDef.imports, cachedSecrets);
 
         const envPlan = buildEnvironmentPlan({
             envName,
@@ -140,37 +153,19 @@ async function buildReconciliationPlan(
     return { environments };
 }
 
-async function buildImportedSecretSources(
+function buildImportedSecretSources(
     imports: string[],
-    envDefs: Map<string, EnvironmentDefinition>,
-    config: KeyshelfConfig,
-    configDir: string
-): Promise<Map<string, string>> {
+    cachedSecrets: Map<string, string[]>
+): Map<string, string> {
     const sources = new Map<string, string>();
-
     for (const importName of imports) {
-        const importDef = envDefs.get(importName);
-        if (!importDef) continue;
-        const importProvider = resolveProvider(importDef, config, configDir);
-        const importSecrets = await importProvider.list(importName);
-        for (const secretPath of importSecrets) {
+        const secretPaths = cachedSecrets.get(importName) ?? [];
+        for (const secretPath of secretPaths) {
             if (!sources.has(secretPath)) {
                 sources.set(secretPath, importName);
             }
         }
-        const transitive = await buildImportedSecretSources(
-            importDef.imports,
-            envDefs,
-            config,
-            configDir
-        );
-        for (const [secretPath, source] of transitive) {
-            if (!sources.has(secretPath)) {
-                sources.set(secretPath, source);
-            }
-        }
     }
-
     return sources;
 }
 

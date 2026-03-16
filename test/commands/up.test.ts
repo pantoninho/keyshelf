@@ -181,7 +181,6 @@ describe('up command', () => {
     });
 
     it('processes environments in topological order (parent before child)', async () => {
-        const processOrder: string[] = [];
         await saveEnvironment(tmpDir, 'base', {
             imports: [],
             values: {}

@@ -1,9 +1,7 @@
 import { Args, Command, Flags } from '@oclif/core';
-import path from 'node:path';
-import os from 'node:os';
 import yamlLib from 'js-yaml';
 import { loadEnvironment } from '../../core/environment.js';
-import { loadConfig } from '../../core/config.js';
+import { loadConfig, defaultConfigDir } from '../../core/config.js';
 import { resolve } from '../../core/resolver.js';
 import { replaceSecrets, flattenToEnvRecord } from '../../core/env-vars.js';
 import { SecretRef } from '../../core/types.js';
@@ -41,8 +39,7 @@ export default class EnvPrint extends Command {
         const envDef = await loadEnvironment(cwd, args.env);
         const resolved = await resolve(args.env, (name) => loadEnvironment(cwd, name));
         const config = loadConfig(cwd);
-        const configDirPath =
-            flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
+        const configDirPath = flags['config-dir'] ?? defaultConfigDir(config);
         const provider = resolveProvider(envDef, config, configDirPath);
 
         if (flags.format === 'json' && !flags.reveal) {
@@ -65,18 +62,13 @@ export default class EnvPrint extends Command {
             case 'json':
                 this.log(JSON.stringify(output, null, 2));
                 break;
-            case 'env':
-                if (envDef.env) {
-                    const envRecord = flattenToEnvRecord(output, envDef.env);
-                    for (const [k, v] of Object.entries(envRecord)) {
-                        this.log(`${k}=${v}`);
-                    }
-                } else {
-                    for (const line of flattenToEnv(output)) {
-                        this.log(line);
-                    }
+            case 'env': {
+                const record = flattenToEnvRecord(output, envDef.env);
+                for (const [key, value] of Object.entries(record)) {
+                    this.log(`${key}=${value}`);
                 }
                 break;
+            }
             default:
                 this.log(yamlLib.dump(output).trimEnd());
         }
@@ -121,17 +113,4 @@ function extractSecretRefs(
     }
 
     return result;
-}
-
-function flattenToEnv(obj: Record<string, unknown>, prefix = ''): string[] {
-    const lines: string[] = [];
-    for (const [key, value] of Object.entries(obj)) {
-        const envKey = prefix ? `${prefix}_${key}` : key;
-        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-            lines.push(...flattenToEnv(value as Record<string, unknown>, envKey));
-        } else {
-            lines.push(`${envKey.toUpperCase()}=${value}`);
-        }
-    }
-    return lines;
 }
