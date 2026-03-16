@@ -19,11 +19,18 @@ interface ApplyOptions {
 export async function applyEnvironmentPlan(options: ApplyOptions): Promise<void> {
     const { plan, provider, collectValue, getSourceProvider } = options;
 
+    const collected = new Map<string, string>();
+
+    for (const change of plan.secretChanges) {
+        if (change.kind === 'add') {
+            collected.set(change.path, await collectValue(change.path));
+        }
+    }
+
     for (const change of plan.secretChanges) {
         switch (change.kind) {
             case 'add': {
-                const value = await collectValue(change.path);
-                await provider.set(plan.envName, change.path, value);
+                await provider.set(plan.envName, change.path, collected.get(change.path)!);
                 break;
             }
             case 'copy': {
