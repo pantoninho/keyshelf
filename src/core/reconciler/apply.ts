@@ -1,5 +1,5 @@
 import { SecretProvider } from '../../providers/provider.js';
-import { EnvironmentPlan, SecretChange } from './types.js';
+import { EnvironmentPlan } from './types.js';
 
 interface ApplyOptions {
     plan: EnvironmentPlan;
