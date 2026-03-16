@@ -7,6 +7,7 @@ import { loadConfig } from '../../core/config.js';
 import { PathTree } from '../../core/path-tree.js';
 import { SecretRef } from '../../core/types.js';
 import { resolveProvider } from '../../providers/index.js';
+import { parseEnvFile } from '../../core/env-file.js';
 
 export default class EnvLoad extends Command {
     static override description = 'Load KEY=VALUE pairs from a file into an environment';
@@ -40,7 +41,8 @@ export default class EnvLoad extends Command {
         }
 
         const content = fs.readFileSync(args.file, 'utf-8');
-        const entries = parseEnvFile(content);
+        const fileValues = parseEnvFile(content);
+        const entries = Object.entries(fileValues);
 
         const def = await loadEnvironment(cwd, args.env);
         const tree = PathTree.fromJSON(def.values);
@@ -64,37 +66,7 @@ export default class EnvLoad extends Command {
             }
         }
 
-        await saveEnvironment(cwd, args.env, {
-            imports: def.imports,
-            values: tree.toJSON(),
-            provider: def.provider
-        });
+        await saveEnvironment(cwd, args.env, { ...def, values: tree.toJSON() });
         this.log(`Loaded ${entries.length} entries into "${args.env}"`);
     }
-}
-
-function parseEnvFile(content: string): [string, string][] {
-    const entries: [string, string][] = [];
-
-    for (const line of content.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-
-        const eqIndex = trimmed.indexOf('=');
-        if (eqIndex === -1) continue;
-
-        const key = trimmed.slice(0, eqIndex).trim();
-        let value = trimmed.slice(eqIndex + 1).trim();
-
-        if (
-            (value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))
-        ) {
-            value = value.slice(1, -1);
-        }
-
-        entries.push([key, value]);
-    }
-
-    return entries;
 }

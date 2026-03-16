@@ -6,8 +6,9 @@ export class SecretRef {
 /** An environment definition as stored in YAML. */
 export interface EnvironmentDefinition {
     imports: string[];
-    values: Record<string, unknown>;
     provider?: ProviderConfig;
+    env?: Record<string, string>;
+    values: Record<string, unknown>;
 }
 
 /** Discriminated union for adapter-specific provider configuration. */

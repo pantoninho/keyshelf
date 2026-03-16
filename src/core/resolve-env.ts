@@ -39,5 +39,5 @@ export async function resolveEnv(options: ResolveEnvOptions): Promise<Record<str
         options.configDir ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
     const provider = resolveProvider(envDef, config, configDir);
     const replaced = await replaceSecrets(resolved.values, env, provider, 'reveal');
-    return flattenToEnvRecord(replaced);
+    return flattenToEnvRecord(replaced, envDef.env);
 }

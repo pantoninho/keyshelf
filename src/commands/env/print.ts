@@ -5,7 +5,7 @@ import yamlLib from 'js-yaml';
 import { loadEnvironment } from '../../core/environment.js';
 import { loadConfig } from '../../core/config.js';
 import { resolve } from '../../core/resolver.js';
-import { replaceSecrets } from '../../core/env-vars.js';
+import { replaceSecrets, flattenToEnvRecord } from '../../core/env-vars.js';
 import { SecretRef } from '../../core/types.js';
 import { SecretProvider } from '../../providers/provider.js';
 import { resolveProvider } from '../../providers/index.js';
@@ -66,8 +66,15 @@ export default class EnvPrint extends Command {
                 this.log(JSON.stringify(output, null, 2));
                 break;
             case 'env':
-                for (const line of flattenToEnv(output)) {
-                    this.log(line);
+                if (envDef.env) {
+                    const envRecord = flattenToEnvRecord(output, envDef.env);
+                    for (const [k, v] of Object.entries(envRecord)) {
+                        this.log(`${k}=${v}`);
+                    }
+                } else {
+                    for (const line of flattenToEnv(output)) {
+                        this.log(line);
+                    }
                 }
                 break;
             default:
