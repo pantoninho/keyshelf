@@ -70,11 +70,11 @@ describe('env:create command', () => {
         expect(def.provider).toBeUndefined();
     });
 
-    it('creates environment with --adapter aws-sm and optional flags', async () => {
-        await Create.run(['prod', '--adapter', 'aws-sm', '--profile', 'production']);
+    it('creates environment with --adapter aws-sm', async () => {
+        await Create.run(['prod', '--adapter', 'aws-sm']);
 
         const def = await loadEnvironment(tmpDir, 'prod');
-        expect(def.provider).toEqual({ adapter: 'aws-sm', profile: 'production' });
+        expect(def.provider).toEqual({ adapter: 'aws-sm' });
     });
 
     it('creates environment with --adapter aws-sm without optional flags', async () => {

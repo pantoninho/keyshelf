@@ -17,9 +17,6 @@ export default class Init extends Command {
         }),
         project: Flags.string({
             description: 'GCP project ID (required for gcp-sm adapter)'
-        }),
-        profile: Flags.string({
-            description: 'AWS profile name (optional for aws-sm adapter)'
         })
     };
 
@@ -41,10 +38,7 @@ export default class Init extends Command {
                 provider = { adapter: 'gcp-sm', project: flags.project };
                 break;
             case 'aws-sm':
-                provider = {
-                    adapter: 'aws-sm',
-                    ...(flags.profile && { profile: flags.profile })
-                };
+                provider = { adapter: 'aws-sm' };
                 break;
             default:
                 provider = { adapter: 'local' };

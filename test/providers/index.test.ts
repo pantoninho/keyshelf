@@ -36,7 +36,7 @@ describe('createProvider', () => {
     });
 
     it('creates an aws-sm provider', () => {
-        const provider = createProvider({ adapter: 'aws-sm', profile: 'dev' }, tmpDir, 'myapp');
+        const provider = createProvider({ adapter: 'aws-sm' }, tmpDir, 'myapp');
         expect(provider).toBeInstanceOf(AwsSmProvider);
     });
 });
