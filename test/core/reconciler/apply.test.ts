@@ -92,6 +92,42 @@ describe('applyEnvironmentPlan', () => {
         expect(provider.delete).toHaveBeenCalledWith('dev', 'old/key');
     });
 
+    it('collects all values before writing any secrets', async () => {
+        const provider = makeMockProvider();
+        const plan: EnvironmentPlan = {
+            envName: 'dev',
+            secretChanges: [
+                { kind: 'add', path: 'first/secret' },
+                { kind: 'add', path: 'second/secret' }
+            ]
+        };
+
+        const events: string[] = [];
+        const collectValue = vi.fn(async (path: string) => {
+            events.push(`collect:${path}`);
+            return `value-for-${path}`;
+        });
+        (provider.set as ReturnType<typeof vi.fn>).mockImplementation(
+            async (_env: string, path: string) => {
+                events.push(`set:${path}`);
+            }
+        );
+
+        await applyEnvironmentPlan({
+            plan,
+            provider,
+            collectValue,
+            getSourceProvider: vi.fn()
+        });
+
+        expect(events).toEqual([
+            'collect:first/secret',
+            'collect:second/secret',
+            'set:first/secret',
+            'set:second/secret'
+        ]);
+    });
+
     it('processes all changes in a mixed plan', async () => {
         const targetProvider = makeMockProvider({ 'old/key': 'value' });
         const sourceProvider = makeMockProvider({ 'shared/token': 'token-value' });
