@@ -5,8 +5,10 @@ describe('readMaskedLine', () => {
     it('resolves correctly when a multi-character chunk with newline is delivered at once', async () => {
         const mockStdin = {
             setRawMode: vi.fn(),
-            once: vi.fn(),
-            removeListener: vi.fn()
+            on: vi.fn(),
+            removeListener: vi.fn(),
+            resume: vi.fn(),
+            pause: vi.fn()
         };
         const mockStdout = { write: vi.fn() };
 
@@ -16,7 +18,7 @@ describe('readMaskedLine', () => {
         Object.defineProperty(process, 'stdout', { value: mockStdout, configurable: true });
 
         let capturedHandler: ((chunk: Buffer) => void) | undefined;
-        mockStdin.once.mockImplementation((_event: string, handler: (chunk: Buffer) => void) => {
+        mockStdin.on.mockImplementation((_event: string, handler: (chunk: Buffer) => void) => {
             capturedHandler = handler;
         });
 
