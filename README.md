@@ -1,11 +1,12 @@
 # keyshelf
 
-CLI tool for managing hierarchical config values and secrets across multiple environments.
+Configuration-driven tool for managing hierarchical config values and secrets across multiple environments.
 
 - Config values live in version-controlled YAML files
 - Secret values live in pluggable providers (local filesystem, GCP Secret Manager, AWS Secrets Manager)
 - YAML files reference secrets via `!secret` tags (safe to commit)
 - Environments compose via imports with JSON Merge Patch semantics
+- `keyshelf up` reconciles provider state to match your YAML declarations
 
 ## Install
 
@@ -25,18 +26,48 @@ keyshelf init
 keyshelf env:create base
 keyshelf env:create dev --import base
 keyshelf env:create prod --import base
+```
 
-# Add config values
-keyshelf config:add base database/port 5432
-keyshelf config:add dev database/host localhost
-keyshelf config:add prod database/host db.prod.example.com
+Edit `.keyshelf/environments/base.yml`:
 
-# Add secrets
-keyshelf secret:add dev database/password devpass123
-keyshelf secret:add prod database/password prodpass456
+```yaml
+values:
+    database:
+        port: 5432
+```
 
-# View resolved config
-keyshelf env:print dev
+Edit `.keyshelf/environments/dev.yml`:
+
+```yaml
+imports:
+    - base
+values:
+    database:
+        host: localhost
+        password: !secret database/password
+env:
+    DB_HOST: database/host
+    DB_PORT: database/port
+    DB_PASS: database/password
+```
+
+Then reconcile — `keyshelf up` detects the new `!secret` reference, shows a plan, and prompts for the value:
+
+```bash
+keyshelf up
+```
+
+```
+Environment: dev
+  + secret  database/password  (new)
+
+Environment: prod
+  (no changes)
+
+Apply changes? (y/N) y
+Enter value for dev > database/password: ****
+
+✓ Applied 1 change across 2 environments.
 ```
 
 ## How It Works
@@ -50,15 +81,50 @@ values:
     database:
         host: localhost
         password: !secret database/password
+env:
+    DB_HOST: database/host
+    DB_PASS: database/password
 ```
 
 - **Plain values** are stored directly in YAML (safe to commit)
 - **Secret values** are stored in a provider and referenced via `!secret <path>`
 - **Imports** let environments inherit and override values from other environments
+- **Env mapping** explicitly maps config/secret paths to env var names
+
+The YAML files are the source of truth. Edit them directly, then run `keyshelf up` to reconcile provider state (create new secrets, delete removed ones, sync across providers).
 
 When you resolve an environment, imports are merged depth-first using JSON Merge Patch semantics: later values override earlier ones, and the current environment's values override all imports.
 
 ## Commands
+
+### `keyshelf up`
+
+Reconcile all environments against their providers. Shows a Terraform-style plan and prompts for confirmation.
+
+```bash
+keyshelf up                           # interactive: show plan, confirm, prompt for secrets
+keyshelf up --apply                   # skip confirmation
+keyshelf up --from-env                # read new secret values from process env vars
+keyshelf up --from-file secrets.env   # read new secret values from a key=value file
+```
+
+The plan shows what will change:
+
+```
+Environment: dev
+  + secret  database/password  (new)
+  - secret  old/api-key
+  ↻ secret  cache/token  (from base)
+
+Environment: prod
+  (no changes)
+```
+
+- `+` new secret (will prompt for value, or read from `--from-env`/`--from-file`)
+- `-` removed secret (will be deleted from provider)
+- `↻` imported secret from another env with a different provider (will be copied)
+
+Environments are processed in topological order (parents before children), so imported secrets are always available when needed.
 
 ### `keyshelf init`
 
@@ -86,7 +152,7 @@ Print the fully resolved config tree for an environment. Secrets are masked by d
 keyshelf env:print dev                # YAML output, secrets masked
 keyshelf env:print dev --reveal       # show actual secret values
 keyshelf env:print dev --format json  # JSON output
-keyshelf env:print dev --format env   # KEY=VALUE pairs
+keyshelf env:print dev --format env   # KEY=VALUE pairs (uses env mapping)
 ```
 
 ### `keyshelf env:load <env> <file>`
@@ -99,15 +165,6 @@ keyshelf env:load dev .env --prefix database       # nest under database/
 keyshelf env:load dev .env.secrets --secrets        # store as secrets
 ```
 
-### `keyshelf config:add <env> <path> <value>`
-
-Add a config value at a slash-delimited path.
-
-```bash
-keyshelf config:add dev database/host localhost
-keyshelf config:add dev api/stripe/enabled true
-```
-
 ### `keyshelf config:get <env> <path>`
 
 Get a resolved config value (follows imports).
@@ -115,14 +172,6 @@ Get a resolved config value (follows imports).
 ```bash
 keyshelf config:get dev database/host
 keyshelf config:get dev database          # returns subtree as YAML
-```
-
-### `keyshelf config:rm <env> <path>`
-
-Remove a config value from an environment. Only removes from the specified environment, not from imports.
-
-```bash
-keyshelf config:rm dev database/host
 ```
 
 ### `keyshelf config:list <env>`
@@ -134,28 +183,12 @@ keyshelf config:list dev
 keyshelf config:list dev --prefix database
 ```
 
-### `keyshelf secret:add <env> <path> <value>`
-
-Store a secret in the provider and add a `!secret` reference to the environment.
-
-```bash
-keyshelf secret:add dev database/password s3cret
-```
-
 ### `keyshelf secret:get <env> <path>`
 
 Retrieve a secret value from the provider.
 
 ```bash
 keyshelf secret:get dev database/password
-```
-
-### `keyshelf secret:rm <env> <path>`
-
-Remove a secret from both the provider and the environment YAML.
-
-```bash
-keyshelf secret:rm dev database/password
 ```
 
 ### `keyshelf secret:list <env>`
@@ -166,6 +199,38 @@ List all secret paths in a resolved environment.
 keyshelf secret:list dev
 keyshelf secret:list dev --prefix database
 ```
+
+### `keyshelf run --env <env> -- <command>`
+
+Run a command with resolved config and secrets injected as env vars. Uses the `env` mapping section to determine which variables to inject.
+
+```bash
+keyshelf run --env dev -- node server.js
+keyshelf run --env prod -- docker compose up
+```
+
+## Env Mapping
+
+The `env` section in an environment YAML file explicitly maps config/secret paths to env var names:
+
+```yaml
+values:
+    database:
+        host: localhost
+        port: 5432
+        password: !secret database/password
+    app:
+        name: myservice
+env:
+    DB_HOST: database/host
+    DB_PORT: database/port
+    DB_PASS: database/password
+    APP_NAME: app/name
+```
+
+Only paths listed in `env` are injected as environment variables by `keyshelf run` and `keyshelf env:print --format env`. This gives you explicit control over your process environment contract.
+
+The `env` mapping is also used by `keyshelf up --from-env` to know which process env vars to read when sourcing new secret values non-interactively.
 
 ## Project Structure
 
