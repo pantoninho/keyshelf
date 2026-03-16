@@ -39,6 +39,7 @@ export function readMaskedLine(prompt: string): Promise<string> {
     return new Promise((resolve, reject) => {
         process.stdout.write(prompt);
         process.stdin.setRawMode?.(true);
+        process.stdin.resume();
 
         let value = '';
 
@@ -47,6 +48,7 @@ export function readMaskedLine(prompt: string): Promise<string> {
                 if (char === '\r' || char === '\n') {
                     process.stdin.setRawMode?.(false);
                     process.stdin.removeListener('data', onData);
+                    process.stdin.pause();
                     process.stdout.write('\n');
                     resolve(value);
                     return;
@@ -54,6 +56,7 @@ export function readMaskedLine(prompt: string): Promise<string> {
                 if (char === '\u0003') {
                     process.stdin.setRawMode?.(false);
                     process.stdin.removeListener('data', onData);
+                    process.stdin.pause();
                     reject(new Error('Aborted by user'));
                     return;
                 }
@@ -62,7 +65,7 @@ export function readMaskedLine(prompt: string): Promise<string> {
             }
         }
 
-        process.stdin.once('data', onData);
+        process.stdin.on('data', onData);
     });
 }
 
