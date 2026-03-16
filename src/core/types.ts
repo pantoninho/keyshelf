@@ -15,7 +15,7 @@ export interface EnvironmentDefinition {
 export type ProviderConfig =
     | { adapter: 'local' }
     | { adapter: 'gcp-sm'; project: string }
-    | { adapter: 'aws-sm'; profile?: string };
+    | { adapter: 'aws-sm' };
 
 /** Project-level configuration from keyshelf.yml. */
 export interface KeyshelfConfig {

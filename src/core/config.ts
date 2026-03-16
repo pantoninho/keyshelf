@@ -31,16 +31,8 @@ export function parseProviderConfig(
                 );
             }
             return { adapter: 'gcp-sm', project: provider.project };
-        case 'aws-sm': {
-            if (provider.profile !== undefined && typeof provider.profile !== 'string') {
-                throw new Error(
-                    `Invalid ${context}: "aws-sm" field "provider.profile" must be a string.`
-                );
-            }
-            const awsConfig: { adapter: 'aws-sm'; profile?: string } = { adapter: 'aws-sm' };
-            if (provider.profile !== undefined) awsConfig.profile = provider.profile as string;
-            return awsConfig;
-        }
+        case 'aws-sm':
+            return { adapter: 'aws-sm' };
         default:
             throw new Error('unreachable');
     }
