@@ -1,0 +1,165 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import yaml from 'js-yaml';
+import SecretSet from '../../../src/commands/secret/set.js';
+import { saveEnvironment, loadEnvironment } from '../../../src/core/environment.js';
+import { LocalProvider } from '../../../src/providers/local.js';
+import { SecretRef } from '../../../src/core/types.js';
+import * as inputModule from '../../../src/core/input.js';
+
+describe('secret:set command', () => {
+    let tmpDir: string;
+    let origCwd: string;
+    let configDir: string;
+    let logSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-secret-set-'));
+        configDir = path.join(tmpDir, '.config');
+        origCwd = process.cwd();
+        process.chdir(tmpDir);
+        fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'test-project', provider: { adapter: 'local' } })
+        );
+        logSpy = vi.fn();
+        vi.spyOn(SecretSet.prototype, 'log').mockImplementation(logSpy);
+    });
+
+    afterEach(() => {
+        process.chdir(origCwd);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        vi.restoreAllMocks();
+    });
+
+    it('sets a secret value for an existing SecretRef', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { password: new SecretRef('database/password') } }
+        });
+
+        await SecretSet.run([
+            '--env',
+            'dev',
+            'database/password',
+            'mysecret',
+            '--config-dir',
+            configDir
+        ]);
+
+        const provider = new LocalProvider(configDir);
+        const stored = await provider.get('dev', 'database/password');
+        expect(stored).toBe('mysecret');
+    });
+
+    it('creates SecretRef in YAML when path does not exist, then sets value', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: {}
+        });
+
+        await SecretSet.run([
+            '--env',
+            'dev',
+            'database/password',
+            'newpassword',
+            '--config-dir',
+            configDir
+        ]);
+
+        const envDef = await loadEnvironment(tmpDir, 'dev');
+        const { database } = envDef.values as { database: { password: unknown } };
+        expect(database.password).toBeInstanceOf(SecretRef);
+
+        const provider = new LocalProvider(configDir);
+        const stored = await provider.get('dev', 'database/password');
+        expect(stored).toBe('newpassword');
+    });
+
+    it('warns and overwrites when path is a plain value', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { password: 'plain-text' } }
+        });
+
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        await SecretSet.run([
+            '--env',
+            'dev',
+            'database/password',
+            'newvalue',
+            '--config-dir',
+            configDir
+        ]);
+
+        expect(stderrSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Overwriting plain value at database/password')
+        );
+
+        const envDef = await loadEnvironment(tmpDir, 'dev');
+        const { database } = envDef.values as { database: { password: unknown } };
+        expect(database.password).toBeInstanceOf(SecretRef);
+
+        const provider = new LocalProvider(configDir);
+        const stored = await provider.get('dev', 'database/password');
+        expect(stored).toBe('newvalue');
+    });
+
+    it('propagates to child environments that import the target env', async () => {
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { shared: { key: new SecretRef('shared/key') } }
+        });
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: ['base'],
+            values: {}
+        });
+
+        await SecretSet.run([
+            '--env',
+            'base',
+            'shared/key',
+            'propagated-value',
+            '--config-dir',
+            configDir
+        ]);
+
+        const provider = new LocalProvider(configDir);
+        const baseValue = await provider.get('base', 'shared/key');
+        expect(baseValue).toBe('propagated-value');
+
+        const devValue = await provider.get('dev', 'shared/key');
+        expect(devValue).toBe('propagated-value');
+
+        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('dev'));
+        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('shared/key'));
+        expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('base'));
+    });
+
+    it('prompts interactively when value arg is omitted', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { api: { key: new SecretRef('api/key') } }
+        });
+
+        vi.spyOn(inputModule, 'readMaskedLine').mockResolvedValue('prompted-secret');
+
+        await SecretSet.run(['--env', 'dev', 'api/key', '--config-dir', configDir]);
+
+        expect(inputModule.readMaskedLine).toHaveBeenCalledWith(expect.stringContaining('api/key'));
+
+        const provider = new LocalProvider(configDir);
+        const stored = await provider.get('dev', 'api/key');
+        expect(stored).toBe('prompted-secret');
+    });
+
+    it('errors with helpful message if environment does not exist', async () => {
+        await expect(
+            SecretSet.run(['--env', 'nonexistent', 'some/path', 'value', '--config-dir', configDir])
+        ).rejects.toThrow(/nonexistent/);
+    });
+});
