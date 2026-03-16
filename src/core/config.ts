@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import yaml from 'js-yaml';
 import { KeyshelfConfig, ProviderConfig } from './types.js';
 
@@ -43,6 +44,16 @@ export function parseProviderConfig(
         default:
             throw new Error('unreachable');
     }
+}
+
+/**
+ * Return the default config directory for a keyshelf project.
+ *
+ * @param config - Loaded keyshelf config
+ * @returns Absolute path to the default config directory
+ */
+export function defaultConfigDir(config: KeyshelfConfig): string {
+    return path.join(os.homedir(), '.config', 'keyshelf', config.name);
 }
 
 /** Load and validate keyshelf.yml from a project root directory. */

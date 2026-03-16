@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { replaceSecrets, flattenToEnvRecord } from '../../src/core/env-vars.js';
+import { replaceSecrets, flattenToEnvRecord, lookupPath } from '../../src/core/env-vars.js';
 import { SecretRef } from '../../src/core/types.js';
 import { SecretProvider } from '../../src/providers/provider.js';
 
@@ -59,6 +59,24 @@ describe('replaceSecrets', () => {
     });
 });
 
+describe('lookupPath', () => {
+    it('returns a top-level value', () => {
+        expect(lookupPath({ host: 'localhost' }, 'host')).toBe('localhost');
+    });
+
+    it('returns a nested value via slash path', () => {
+        expect(lookupPath({ db: { host: 'localhost' } }, 'db/host')).toBe('localhost');
+    });
+
+    it('returns undefined for missing path', () => {
+        expect(lookupPath({ db: { host: 'localhost' } }, 'db/port')).toBeUndefined();
+    });
+
+    it('returns undefined when intermediate node is missing', () => {
+        expect(lookupPath({}, 'a/b/c')).toBeUndefined();
+    });
+});
+
 describe('flattenToEnvRecord', () => {
     it('flattens nested objects with underscore separator and uppercased keys', () => {
         const obj = { database: { host: 'localhost', port: 5432 } };
@@ -96,5 +114,43 @@ describe('flattenToEnvRecord', () => {
         const result = flattenToEnvRecord(obj);
 
         expect(result).toEqual({ COUNT: '42', ENABLED: 'true' });
+    });
+
+    describe('with envMapping', () => {
+        it('returns only mapped variables', () => {
+            const obj = { database: { host: 'localhost', port: 5432 }, api: { key: 'abc' } };
+            const mapping = { DB_HOST: 'database/host', API_KEY: 'api/key' };
+
+            const result = flattenToEnvRecord(obj, mapping);
+
+            expect(result).toEqual({ DB_HOST: 'localhost', API_KEY: 'abc' });
+        });
+
+        it('converts mapped values to strings', () => {
+            const obj = { db: { port: 5432 } };
+            const mapping = { DB_PORT: 'db/port' };
+
+            const result = flattenToEnvRecord(obj, mapping);
+
+            expect(result).toEqual({ DB_PORT: '5432' });
+        });
+
+        it('uses exact var names from mapping without uppercasing', () => {
+            const obj = { api: { url: 'https://example.com' } };
+            const mapping = { my_custom_var: 'api/url' };
+
+            const result = flattenToEnvRecord(obj, mapping);
+
+            expect(result).toEqual({ my_custom_var: 'https://example.com' });
+        });
+
+        it('throws when mapping references a non-existent path', () => {
+            const obj = { api: {} };
+            const mapping = { MISSING: 'api/key' };
+
+            expect(() => flattenToEnvRecord(obj, mapping)).toThrow(
+                /Env mapping "MISSING" references path "api\/key" which does not exist/
+            );
+        });
     });
 });
