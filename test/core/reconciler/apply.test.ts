@@ -14,7 +14,7 @@ function makeMockProvider(secrets: Record<string, string> = {}): SecretProvider 
         set: vi.fn(async (_env: string, path: string, value: string) => {
             store[path] = value;
         }),
-        delete: vi.fn(async (_env: string, _path: string) => {}),
+        delete: vi.fn(async () => {}),
         list: vi.fn(async () => []),
         ref: vi.fn((_env: string, path: string) => path)
     };
