@@ -30,16 +30,14 @@ function makeFakeTarget(overrides: {
     };
 }
 
+const EAS_TARGETS = {
+    'eas-prod': { adapter: 'eas' as const, environment: 'production' as const }
+};
+
 function writePushConfig(tmpDir: string): void {
     fs.writeFileSync(
         path.join(tmpDir, 'keyshelf.yml'),
-        yaml.dump({
-            name: 'test-project',
-            provider: { adapter: 'local' },
-            targets: {
-                'eas-prod': { adapter: 'eas', environment: 'production' }
-            }
-        })
+        yaml.dump({ name: 'test-project', provider: { adapter: 'local' } })
     );
 }
 
@@ -84,11 +82,11 @@ describe('push command', () => {
         ).rejects.toThrow(/keyshelf\.yml not found/);
     });
 
-    it('errors if target is not configured', async () => {
-        fs.writeFileSync(
-            path.join(tmpDir, 'keyshelf.yml'),
-            yaml.dump({ name: 'test-project', provider: { adapter: 'local' } })
-        );
+    it('errors if target is not configured in environment', async () => {
+        await saveEnvironment(tmpDir, 'production', {
+            imports: [],
+            values: { app: { name: 'myapp' } }
+        });
 
         await expect(
             Push.run(['--env', 'production', '--target', 'eas-prod', '--config-dir', configDir])
@@ -98,6 +96,7 @@ describe('push command', () => {
     it('errors if .env.keyshelf is missing', async () => {
         await saveEnvironment(tmpDir, 'production', {
             imports: [],
+            targets: EAS_TARGETS,
             values: { app: { name: 'myapp' } }
         });
 
@@ -111,6 +110,7 @@ describe('push command', () => {
 
         await saveEnvironment(tmpDir, 'production', {
             imports: [],
+            targets: EAS_TARGETS,
             values: { app: { name: 'myapp' } }
         });
         fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP_NAME=app/name\n');
@@ -127,6 +127,7 @@ describe('push command', () => {
 
         await saveEnvironment(tmpDir, 'production', {
             imports: [],
+            targets: EAS_TARGETS,
             values: { app: { name: 'myapp' } }
         });
         fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP_NAME=app/name\n');
@@ -145,6 +146,7 @@ describe('push command', () => {
 
         await saveEnvironment(tmpDir, 'production', {
             imports: [],
+            targets: EAS_TARGETS,
             values: { app: { name: 'myapp' } }
         });
         fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP_NAME=app/name\n');
@@ -174,6 +176,7 @@ describe('push command', () => {
 
         await saveEnvironment(tmpDir, 'production', {
             imports: [],
+            targets: EAS_TARGETS,
             values: {
                 app: { name: 'myapp' },
                 api: { key: new SecretRef('api/key') }
@@ -210,6 +213,7 @@ describe('push command', () => {
 
         await saveEnvironment(tmpDir, 'production', {
             imports: [],
+            targets: EAS_TARGETS,
             values: { app: { name: 'myapp' } }
         });
         fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP_NAME=app/name\n');
@@ -231,6 +235,7 @@ describe('push command', () => {
 
         await saveEnvironment(tmpDir, 'production', {
             imports: [],
+            targets: EAS_TARGETS,
             values: { app: { name: 'myapp' } }
         });
         fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP_NAME=app/name\n');
@@ -256,6 +261,7 @@ describe('push command', () => {
 
         await saveEnvironment(tmpDir, 'production', {
             imports: [],
+            targets: EAS_TARGETS,
             values: { app: { name: 'new-name' } }
         });
         fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP_NAME=app/name\n');
@@ -278,6 +284,7 @@ describe('push command', () => {
 
         await saveEnvironment(tmpDir, 'production', {
             imports: [],
+            targets: EAS_TARGETS,
             values: { app: { name: 'new-name' } }
         });
         fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP_NAME=app/name\n');

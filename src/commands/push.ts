@@ -28,9 +28,11 @@ export default class Push extends Command {
         }
 
         const config = loadConfig(projectRoot);
-        const targetConfig = config.targets?.[flags.target];
+        const envDef = await loadEnvironment(projectRoot, flags.env);
+
+        const targetConfig = envDef.targets?.[flags.target];
         if (!targetConfig) {
-            this.error(`Target "${flags.target}" is not configured in keyshelf.yml.`);
+            this.error(`Target "${flags.target}" is not configured in environment "${flags.env}".`);
         }
 
         const envMapping = loadEnvMapping(process.cwd());
@@ -41,7 +43,6 @@ export default class Push extends Command {
         }
 
         const configDir = flags['config-dir'] ?? defaultConfigDir(config);
-        const envDef = await loadEnvironment(projectRoot, flags.env);
         const resolved = await resolve(flags.env, (name) => loadEnvironment(projectRoot, name));
         const provider = resolveProvider(envDef, config, configDir);
 

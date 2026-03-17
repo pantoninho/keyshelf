@@ -7,6 +7,7 @@ export class SecretRef {
 export interface EnvironmentDefinition {
     imports: string[];
     provider?: ProviderConfig;
+    targets?: Record<string, TargetConfig>;
     values: Record<string, unknown>;
 }
 
@@ -26,5 +27,4 @@ export type TargetConfig = { adapter: 'eas'; environment: EasEnvironment };
 export interface KeyshelfConfig {
     name: string;
     provider: ProviderConfig;
-    targets?: Record<string, TargetConfig>;
 }
