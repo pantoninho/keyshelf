@@ -12,7 +12,6 @@ import { applyEnvironmentPlan } from '../core/reconciler/apply.js';
 import { makeCollector } from '../core/reconciler/input.js';
 import { renderPlan } from '../core/reconciler/render.js';
 import { parseEnvFile } from '../core/env-file.js';
-import { loadEnvMapping } from '../core/env-keyshelf.js';
 import { ReconciliationPlan, EnvironmentPlan } from '../core/reconciler/types.js';
 
 export default class Up extends Command {
@@ -22,17 +21,12 @@ export default class Up extends Command {
     static override examples = [
         '<%= config.bin %> up',
         '<%= config.bin %> up --apply',
-        '<%= config.bin %> up --apply --from-env',
         '<%= config.bin %> up --apply --from-file .env.secrets'
     ];
 
     static override flags = {
         apply: Flags.boolean({
             description: 'Apply changes without interactive confirmation',
-            default: false
-        }),
-        'from-env': Flags.boolean({
-            description: 'Read new secret values from process environment variables',
             default: false
         }),
         'from-file': Flags.string({
@@ -72,7 +66,7 @@ export default class Up extends Command {
     }
 
     private async confirmAndApply(
-        flags: { apply: boolean; 'from-env': boolean; 'from-file': string | undefined },
+        flags: { apply: boolean; 'from-file': string | undefined },
         plan: ReconciliationPlan,
         ctx: PlanContext
     ): Promise<void> {
@@ -82,7 +76,7 @@ export default class Up extends Command {
             return;
         }
 
-        const collector = await buildCollector(flags['from-env'], flags['from-file'], ctx.cwd);
+        const collector = await buildCollector(flags['from-file']);
 
         for (const envPlan of plan.environments) {
             if (envPlan.secretChanges.length === 0) continue;
@@ -185,19 +179,12 @@ async function confirmApply(): Promise<boolean> {
 }
 
 async function buildCollector(
-    fromEnv: boolean,
-    fromFile: string | undefined,
-    cwd: string
+    fromFile: string | undefined
 ): Promise<(path: string) => Promise<string>> {
     if (fromFile) {
         const content = await fs.readFile(fromFile, 'utf-8');
         const values = parseEnvFile(content);
         return makeCollector({ kind: 'file', values });
-    }
-
-    if (fromEnv) {
-        const mapping = loadEnvMapping(cwd);
-        return makeCollector({ kind: 'env', mapping });
     }
 
     return makeCollector({ kind: 'prompt' });

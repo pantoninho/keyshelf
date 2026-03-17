@@ -138,8 +138,6 @@ REDIS_URL=cache/redis/url
 
 When `keyshelf run`, `keyshelf print --format env`, or the preload module is used, only the variables listed in `.env.keyshelf` are exported. If the file is absent, no environment variables are injected (a warning is shown).
 
-The mapping is also used by `keyshelf up --from-env`: keyshelf reverse-looks up each secret path by its mapped variable name in the current process environment.
-
 ---
 
 ## File Structure
@@ -440,7 +438,6 @@ USAGE
 
 FLAGS
   --apply              Skip the y/N confirmation prompt  [default: false]
-  --from-env           Read new secret values from process environment variables  [default: false]
   --from-file=<value>  Read new secret values from a KEY=VALUE file
 ```
 
@@ -450,9 +447,6 @@ keyshelf up
 
 # Skip confirmation prompt, then prompt for each new secret value
 keyshelf up --apply
-
-# Skip confirmation, reading new values from the current process environment
-keyshelf up --apply --from-env
 
 # Skip confirmation, reading new values from a file
 keyshelf up --apply --from-file .env.secrets
@@ -519,14 +513,9 @@ keyshelf up
 # Apply with interactive prompts for each new secret value
 keyshelf up --apply
 
-# Apply using values already present in CI environment variables
-keyshelf up --apply --from-env
-
 # Apply using a secrets export file
 keyshelf up --apply --from-file secrets.env
 ```
-
-`--from-env` uses the `.env.keyshelf` mapping to reverse-look up each secret path by its corresponding variable name. Ensure the variables are set in the calling shell before running this.
 
 ### Running processes with secrets
 
