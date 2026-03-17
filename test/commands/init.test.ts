@@ -74,4 +74,24 @@ describe('init command', () => {
         const config = yaml.load(content) as Record<string, unknown>;
         expect(config.provider).toEqual({ adapter: 'aws-sm' });
     });
+
+    it('errors when a parent directory already has keyshelf.yml (nested projects)', async () => {
+        fs.writeFileSync(path.join(tmpDir, 'keyshelf.yml'), 'existing: true');
+        const subDir = path.join(tmpDir, 'packages', 'app');
+        fs.mkdirSync(subDir, { recursive: true });
+        process.chdir(subDir);
+
+        await expect(Init.run([])).rejects.toThrow(/Nested keyshelf projects are not supported/);
+    });
+
+    it('--force does not bypass ancestor keyshelf.yml check', async () => {
+        fs.writeFileSync(path.join(tmpDir, 'keyshelf.yml'), 'existing: true');
+        const subDir = path.join(tmpDir, 'packages', 'app');
+        fs.mkdirSync(subDir, { recursive: true });
+        process.chdir(subDir);
+
+        await expect(Init.run(['--force'])).rejects.toThrow(
+            /Nested keyshelf projects are not supported/
+        );
+    });
 });

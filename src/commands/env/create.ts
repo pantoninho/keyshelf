@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { saveEnvironment } from '../../core/environment.js';
 import { EnvironmentDefinition, ProviderConfig } from '../../core/types.js';
+import { findProjectRoot } from '../../core/config.js';
 
 export default class EnvCreate extends Command {
     static override description = 'Create a new environment';
@@ -35,8 +36,11 @@ export default class EnvCreate extends Command {
 
     async run(): Promise<void> {
         const { args, flags } = await this.parse(EnvCreate);
-        const cwd = process.cwd();
-        const envPath = path.join(cwd, '.keyshelf', 'environments', `${args.name}.yml`);
+        const projectRoot = findProjectRoot(process.cwd());
+        if (!projectRoot) {
+            this.error('keyshelf.yml not found in current directory or any parent directory.');
+        }
+        const envPath = path.join(projectRoot, '.keyshelf', 'environments', `${args.name}.yml`);
 
         if (fs.existsSync(envPath)) {
             this.error(`Environment "${args.name}" already exists at ${envPath}.`);
@@ -65,7 +69,7 @@ export default class EnvCreate extends Command {
             provider
         };
 
-        await saveEnvironment(cwd, args.name, def);
+        await saveEnvironment(projectRoot, args.name, def);
 
         this.log(`Created environment "${args.name}"`);
     }

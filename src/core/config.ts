@@ -48,6 +48,22 @@ export function defaultConfigDir(config: KeyshelfConfig): string {
     return path.join(os.homedir(), '.config', 'keyshelf', config.name);
 }
 
+/**
+ * Walk up from startDir until a directory containing `keyshelf.yml` is found.
+ *
+ * @param startDir - Directory to begin searching from
+ * @returns Absolute path to the first ancestor directory containing `keyshelf.yml`, or null
+ */
+export function findProjectRoot(startDir: string): string | null {
+    let dir = path.resolve(startDir);
+    while (true) {
+        if (fs.existsSync(path.join(dir, 'keyshelf.yml'))) return dir;
+        const parent = path.dirname(dir);
+        if (parent === dir) return null;
+        dir = parent;
+    }
+}
+
 /** Load and validate keyshelf.yml from a project root directory. */
 export function loadConfig(projectRoot: string): KeyshelfConfig {
     const configPath = path.join(projectRoot, 'keyshelf.yml');

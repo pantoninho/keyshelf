@@ -2,7 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import fs from 'node:fs/promises';
 import readline from 'node:readline';
 import { listEnvironments, loadEnvironment } from '../core/environment.js';
-import { loadConfig, defaultConfigDir } from '../core/config.js';
+import { loadConfig, defaultConfigDir, findProjectRoot } from '../core/config.js';
 import { resolve as resolveEnv } from '../core/resolver.js';
 import { resolveProvider } from '../providers/index.js';
 import { EnvironmentDefinition, KeyshelfConfig } from '../core/types.js';
@@ -37,21 +37,24 @@ export default class Up extends Command {
 
     async run(): Promise<void> {
         const { flags } = await this.parse(Up);
-        const cwd = process.cwd();
-        const config = loadConfig(cwd);
+        const projectRoot = findProjectRoot(process.cwd());
+        if (!projectRoot) {
+            this.error('keyshelf.yml not found in current directory or any parent directory.');
+        }
+        const config = loadConfig(projectRoot);
         const configDir = flags['config-dir'] ?? defaultConfigDir(config);
 
-        const envNames = await listEnvironments(cwd);
+        const envNames = await listEnvironments(projectRoot);
         if (envNames.length === 0) {
             this.log('No environments found.');
             return;
         }
 
-        const envDefs = await loadAllEnvDefs(cwd, envNames);
+        const envDefs = await loadAllEnvDefs(projectRoot, envNames);
         const sortedNames = topoSort(
             Object.fromEntries(envNames.map((n) => [n, { imports: envDefs.get(n)!.imports }]))
         );
-        const ctx: PlanContext = { envDefs, config, configDir, cwd };
+        const ctx: PlanContext = { envDefs, config, configDir, projectRoot };
         const plan = await buildReconciliationPlan(ctx, sortedNames);
 
         this.log(renderPlan(plan));
@@ -102,11 +105,11 @@ export default class Up extends Command {
 }
 
 async function loadAllEnvDefs(
-    cwd: string,
+    projectRoot: string,
     envNames: string[]
 ): Promise<Map<string, EnvironmentDefinition>> {
     const entries = await Promise.all(
-        envNames.map(async (name) => [name, await loadEnvironment(cwd, name)] as const)
+        envNames.map(async (name) => [name, await loadEnvironment(projectRoot, name)] as const)
     );
     return new Map(entries);
 }
@@ -115,7 +118,7 @@ interface PlanContext {
     envDefs: Map<string, EnvironmentDefinition>;
     config: KeyshelfConfig;
     configDir: string;
-    cwd: string;
+    projectRoot: string;
 }
 
 async function buildReconciliationPlan(

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
-import { loadConfig, parseProviderConfig } from '../../src/core/config.js';
+import { loadConfig, parseProviderConfig, findProjectRoot } from '../../src/core/config.js';
 
 describe('config validation', () => {
     let tmpDir: string;
@@ -129,6 +129,55 @@ describe('config validation', () => {
 
         const config = loadConfig(tmpDir);
         expect(config.provider).toEqual({ adapter: 'aws-sm' });
+    });
+});
+
+describe('findProjectRoot', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-find-root-'));
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('finds keyshelf.yml in startDir itself', () => {
+        fs.writeFileSync(path.join(tmpDir, 'keyshelf.yml'), 'name: test\n');
+
+        const result = findProjectRoot(tmpDir);
+        expect(result).toBe(path.resolve(tmpDir));
+    });
+
+    it('finds keyshelf.yml two levels up', () => {
+        fs.writeFileSync(path.join(tmpDir, 'keyshelf.yml'), 'name: test\n');
+        const subDir = path.join(tmpDir, 'packages', 'app');
+        fs.mkdirSync(subDir, { recursive: true });
+
+        const result = findProjectRoot(subDir);
+        expect(result).toBe(path.resolve(tmpDir));
+    });
+
+    it('returns null when keyshelf.yml is not found anywhere', () => {
+        const subDir = path.join(tmpDir, 'some', 'deep', 'dir');
+        fs.mkdirSync(subDir, { recursive: true });
+
+        // Use a sub-path of tmpDir that has no keyshelf.yml, but we cannot
+        // guarantee tmpDir ancestors don't have one, so use a fresh isolated path.
+        // We test with a non-existent start to ensure null is returned when walking
+        // up finds nothing. Instead, we write keyshelf.yml nowhere and start from
+        // a deep subdir — if the test machine's tmpdir ancestors don't have keyshelf.yml
+        // (they won't), this returns null.
+        const result = findProjectRoot(subDir);
+        expect(result).toBeNull();
+    });
+
+    it('returns the resolved absolute path', () => {
+        fs.writeFileSync(path.join(tmpDir, 'keyshelf.yml'), 'name: test\n');
+
+        const result = findProjectRoot(tmpDir);
+        expect(path.isAbsolute(result!)).toBe(true);
     });
 });
 

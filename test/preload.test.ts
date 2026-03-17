@@ -62,10 +62,11 @@ describe('keyshelf/preload', () => {
         );
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.DATABASE_HOST + ":" + process.env.DATABASE_PORT)`;
-        const result = runPreload(script, {
-            KEYSHELF_ENV: 'dev',
-            KEYSHELF_PROJECT_DIR: tmpDir
-        });
+        const result = runPreload(
+            script,
+            { KEYSHELF_ENV: 'dev', KEYSHELF_PROJECT_DIR: tmpDir },
+            tmpDir
+        );
 
         expect(result.status, result.stderr).toBe(0);
         expect(result.output).toBe('localhost:5432');
@@ -84,11 +85,11 @@ describe('keyshelf/preload', () => {
         fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'API_KEY=api/key\nAPI_URL=api/url\n');
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.API_KEY + "|" + process.env.API_URL)`;
-        const result = runPreload(script, {
-            KEYSHELF_ENV: 'prod',
-            KEYSHELF_PROJECT_DIR: tmpDir,
-            KEYSHELF_CONFIG_DIR: configDir
-        });
+        const result = runPreload(
+            script,
+            { KEYSHELF_ENV: 'prod', KEYSHELF_PROJECT_DIR: tmpDir, KEYSHELF_CONFIG_DIR: configDir },
+            tmpDir
+        );
 
         expect(result.status, result.stderr).toBe(0);
         expect(result.output).toBe('super-secret-key|https://api.example.com');
@@ -116,10 +117,11 @@ describe('keyshelf/preload', () => {
         fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'SHARED=shared\nLOCAL=local\n');
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.SHARED + "|" + process.env.LOCAL)`;
-        const result = runPreload(script, {
-            KEYSHELF_ENV: 'dev',
-            KEYSHELF_PROJECT_DIR: tmpDir
-        });
+        const result = runPreload(
+            script,
+            { KEYSHELF_ENV: 'dev', KEYSHELF_PROJECT_DIR: tmpDir },
+            tmpDir
+        );
 
         expect(result.status, result.stderr).toBe(0);
         expect(result.output).toBe('from-base|from-dev');
@@ -141,5 +143,44 @@ describe('keyshelf/preload', () => {
 
         expect(result.status, result.stderr).toBe(0);
         expect(result.output).toBe('from-cwd');
+    });
+
+    it('walks up from a subdirectory to find keyshelf.yml when KEYSHELF_PROJECT_DIR is not set', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { service: { name: 'walked-up' } }
+        });
+
+        const subDir = path.join(tmpDir, 'packages', 'myapp');
+        fs.mkdirSync(subDir, { recursive: true });
+        // .env.keyshelf is package-local — it lives in the package subdirectory
+        fs.writeFileSync(path.join(subDir, '.env.keyshelf'), 'SERVICE_NAME=service/name\n');
+
+        const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.SERVICE_NAME)`;
+        const result = runPreload(
+            script,
+            { KEYSHELF_ENV: 'dev', KEYSHELF_PROJECT_DIR: undefined },
+            subDir
+        );
+
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.output).toBe('walked-up');
+    });
+
+    it('throws a clear error when keyshelf.yml is not found in cwd or any ancestor', async () => {
+        const isolatedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-no-config-'));
+        try {
+            const script = `console.log("should not reach")`;
+            const result = runPreload(
+                script,
+                { KEYSHELF_ENV: 'dev', KEYSHELF_PROJECT_DIR: undefined },
+                isolatedDir
+            );
+
+            expect(result.status).not.toBe(0);
+            expect(result.stderr).toMatch(/keyshelf\.yml not found/);
+        } finally {
+            fs.rmSync(isolatedDir, { recursive: true, force: true });
+        }
     });
 });

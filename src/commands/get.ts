@@ -1,6 +1,6 @@
 import { Args, Command, Flags } from '@oclif/core';
 import { loadEnvironment } from '../core/environment.js';
-import { loadConfig, defaultConfigDir } from '../core/config.js';
+import { loadConfig, defaultConfigDir, findProjectRoot } from '../core/config.js';
 import { resolve } from '../core/resolver.js';
 import { PathTree } from '../core/path-tree.js';
 import { SecretRef } from '../core/types.js';
@@ -22,9 +22,12 @@ export default class Get extends Command {
 
     async run(): Promise<void> {
         const { args, flags } = await this.parse(Get);
-        const cwd = process.cwd();
+        const projectRoot = findProjectRoot(process.cwd());
+        if (!projectRoot) {
+            this.error('keyshelf.yml not found in current directory or any parent directory.');
+        }
 
-        const resolved = await resolve(flags.env, (name) => loadEnvironment(cwd, name));
+        const resolved = await resolve(flags.env, (name) => loadEnvironment(projectRoot, name));
         const tree = PathTree.fromJSON(resolved.values);
         const value = tree.get(args.path);
 
@@ -39,8 +42,8 @@ export default class Get extends Command {
         }
 
         if (value instanceof SecretRef) {
-            const envDef = await loadEnvironment(cwd, flags.env);
-            const config = loadConfig(cwd);
+            const envDef = await loadEnvironment(projectRoot, flags.env);
+            const config = loadConfig(projectRoot);
             const configDir = flags['config-dir'] ?? defaultConfigDir(config);
             const provider = resolveProvider(envDef, config, configDir);
             const secret = await provider.get(flags.env, value.path);

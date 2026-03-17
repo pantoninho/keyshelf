@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import yaml from 'js-yaml';
 import Create from '../../../src/commands/env/create.js';
 import { loadEnvironment } from '../../../src/core/environment.js';
 
@@ -14,6 +15,10 @@ describe('env:create command', () => {
         origCwd = process.cwd();
         process.chdir(tmpDir);
         fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'test-project', provider: { adapter: 'local' } })
+        );
     });
 
     afterEach(() => {

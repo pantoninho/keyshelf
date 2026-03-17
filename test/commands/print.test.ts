@@ -273,3 +273,62 @@ describe('print command', () => {
         expect(output).toContain('local: from-dev');
     });
 });
+
+describe('walk-up discovery (print command)', () => {
+    let tmpDir: string;
+    let origCwd: string;
+    let logSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-print-walkup-'));
+        origCwd = process.cwd();
+        fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'test-project', provider: { adapter: 'local' } })
+        );
+        logSpy = vi.fn();
+        vi.spyOn(Print.prototype, 'log').mockImplementation(logSpy);
+    });
+
+    afterEach(() => {
+        process.chdir(origCwd);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        vi.restoreAllMocks();
+    });
+
+    it('--format env from a subdirectory uses the subdirectory .env.keyshelf', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { app: { name: 'myapp', port: 3000 } }
+        });
+
+        const subDir = path.join(tmpDir, 'packages', 'web');
+        fs.mkdirSync(subDir, { recursive: true });
+        fs.writeFileSync(path.join(subDir, '.env.keyshelf'), 'APP_PORT=app/port\n');
+        process.chdir(subDir);
+
+        await Print.run(['--env', 'dev', '--format', 'env']);
+
+        const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        expect(output).toContain('APP_PORT=3000');
+        expect(output).not.toContain('APP_NAME');
+    });
+
+    it('yaml format from a subdirectory resolves config from the project root', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { host: 'db.internal', port: 5432 } }
+        });
+
+        const subDir = path.join(tmpDir, 'packages', 'web');
+        fs.mkdirSync(subDir, { recursive: true });
+        process.chdir(subDir);
+
+        await Print.run(['--env', 'dev']);
+
+        const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        expect(output).toContain('host: db.internal');
+        expect(output).toContain('port: 5432');
+    });
+});
