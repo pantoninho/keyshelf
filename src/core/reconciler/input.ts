@@ -38,7 +38,7 @@ function makeEnvCollector(mapping: Record<string, string>): (path: string) => Pr
         const varName = reverseMapping.get(path);
         if (!varName) {
             throw new Error(
-                `No env var mapped to secret path "${path}". Add it to the env section.`
+                `No env var mapped to secret path "${path}". Add a mapping to .env.keyshelf.`
             );
         }
         const value = process.env[varName];

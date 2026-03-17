@@ -156,9 +156,9 @@ describe('up command', () => {
     it('applies new secret from --from-env flag', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
-            env: { MY_DB_PASS: 'db/password' },
             values: { db: { password: new SecretRef('db/password') } }
         });
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'MY_DB_PASS=db/password\n');
 
         const origEnv = process.env;
         process.env = { ...origEnv, MY_DB_PASS: 'env-secret-value' };

@@ -26,9 +26,7 @@ export function parseEnvironment(content: string): EnvironmentDefinition {
         provider = parseProviderConfig(doc.provider as Record<string, unknown>, 'environment file');
     }
 
-    const env = doc.env as Record<string, string> | undefined;
-
-    return { imports, provider, env, values };
+    return { imports, provider, values };
 }
 
 /** Serialize an EnvironmentDefinition to YAML with !secret tags preserved. */
@@ -39,9 +37,6 @@ export function serializeEnvironment(def: EnvironmentDefinition): string {
     }
     if (def.provider) {
         doc.provider = def.provider;
-    }
-    if (def.env) {
-        doc.env = def.env;
     }
     doc.values = def.values;
     return yaml.dump(doc, { schema: SCHEMA });

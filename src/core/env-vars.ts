@@ -51,53 +51,26 @@ export function lookupPath(obj: Record<string, unknown>, path: string): unknown 
 }
 
 /**
- * Flatten a nested object to a flat Record<string, string>.
+ * Flatten a nested object to a flat Record<string, string> using an explicit mapping.
  *
- * When envMapping is provided, only the mapped variables are returned,
- * with values resolved by path from the object. When absent, all keys
- * are uppercased and underscore-separated.
+ * Only the mapped variables are returned, with values resolved by path from the object.
  *
  * @param obj - The nested object to flatten
- * @param envMapping - Optional mapping of env var name to slash-delimited path
+ * @param envMapping - Mapping of env var name to slash-delimited path
  */
 export function flattenToEnvRecord(
-    obj: Record<string, unknown>,
-    envMapping?: Record<string, string>
-): Record<string, string> {
-    if (envMapping) {
-        return flattenWithMapping(obj, envMapping);
-    }
-    return flattenGeneric(obj);
-}
-
-function flattenWithMapping(
     obj: Record<string, unknown>,
     envMapping: Record<string, string>
 ): Record<string, string> {
     const result: Record<string, string> = {};
-    for (const [varName, path] of Object.entries(envMapping)) {
-        const value = lookupPath(obj, path);
+    for (const [varName, valuePath] of Object.entries(envMapping)) {
+        const value = lookupPath(obj, valuePath);
         if (value === undefined) {
             throw new Error(
-                `Env mapping "${varName}" references path "${path}" which does not exist in resolved values.`
+                `Env mapping "${varName}" references path "${valuePath}" which does not exist in resolved values.`
             );
         }
         result[varName] = String(value);
     }
-    return result;
-}
-
-function flattenGeneric(obj: Record<string, unknown>, prefix = ''): Record<string, string> {
-    const result: Record<string, string> = {};
-
-    for (const [key, value] of Object.entries(obj)) {
-        const envKey = prefix ? `${prefix}_${key}` : key;
-        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-            Object.assign(result, flattenGeneric(value as Record<string, unknown>, envKey));
-        } else {
-            result[envKey.toUpperCase()] = String(value);
-        }
-    }
-
     return result;
 }
