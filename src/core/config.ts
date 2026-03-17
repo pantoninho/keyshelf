@@ -157,6 +157,19 @@ function parseTargetConfig(
         );
     }
 
+    switch (raw.adapter) {
+        case 'eas':
+            return parseEasTargetConfig(raw, context, name);
+        default:
+            throw new Error('unreachable');
+    }
+}
+
+function parseEasTargetConfig(
+    raw: Record<string, unknown>,
+    context: string,
+    name: string
+): TargetConfig {
     if (!raw.environment || typeof raw.environment !== 'string') {
         throw new Error(
             `Invalid ${context}: target "${name}" is missing required field "environment".`

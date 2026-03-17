@@ -5,8 +5,9 @@ import { resolve } from '../core/resolver.js';
 import { replaceSecrets, flattenToEnvRecord, classifyEnvRecord } from '../core/env-vars.js';
 import { resolveProvider } from '../providers/index.js';
 import { loadEnvMapping } from '../core/env-keyshelf.js';
-import { buildPushPlan, renderPushPlan } from '../core/push-plan.js';
+import { buildPushPlan, renderPushPlan, PushPlan } from '../core/push-plan.js';
 import { createTarget } from '../targets/index.js';
+import { DeployTarget } from '../targets/target.js';
 
 export default class Push extends Command {
     static override description = 'Push resolved environment config to a deploy target';
@@ -82,9 +83,9 @@ function buildDesiredRecord(
 
 /** Apply all changes in the plan to the target. */
 async function applyPlan(
-    plan: ReturnType<typeof buildPushPlan>,
+    plan: PushPlan,
     desired: Record<string, { value: string; sensitive: boolean }>,
-    target: Awaited<ReturnType<typeof createTarget>>
+    target: DeployTarget
 ): Promise<void> {
     for (const change of plan.changes) {
         if (change.kind === 'add' || change.kind === 'update') {

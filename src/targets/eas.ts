@@ -17,6 +17,7 @@ export class EasTarget implements DeployTarget {
     async list(): Promise<Record<string, string>> {
         const stdout = await this.runEas([
             'env:list',
+            '--environment',
             this.environment,
             '--format',
             'short',
@@ -57,9 +58,9 @@ export class EasTarget implements DeployTarget {
     async delete(key: string): Promise<void> {
         await this.runEas([
             'env:delete',
-            '--name',
+            '--variable-name',
             key,
-            '--environment',
+            '--variable-environment',
             this.environment,
             '--non-interactive'
         ]);

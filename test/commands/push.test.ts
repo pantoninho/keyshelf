@@ -248,6 +248,31 @@ describe('push command', () => {
         expect(deleteSpy).toHaveBeenCalledWith('STALE_KEY');
     });
 
+    it('applies updates with --apply when values differ', async () => {
+        const setSpy = vi.fn().mockResolvedValue(undefined);
+        mockCreateTarget.mockReturnValue(
+            makeFakeTarget({ list: { APP_NAME: 'old-name' }, setSpy })
+        );
+
+        await saveEnvironment(tmpDir, 'production', {
+            imports: [],
+            values: { app: { name: 'new-name' } }
+        });
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP_NAME=app/name\n');
+
+        await Push.run([
+            '--env',
+            'production',
+            '--target',
+            'eas-prod',
+            '--apply',
+            '--config-dir',
+            configDir
+        ]);
+
+        expect(setSpy).toHaveBeenCalledWith('APP_NAME', 'new-name', false);
+    });
+
     it('shows plan with updates when values differ', async () => {
         mockCreateTarget.mockReturnValue(makeFakeTarget({ list: { APP_NAME: 'old-name' } }));
 

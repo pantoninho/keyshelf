@@ -53,7 +53,7 @@ describe('EasTarget', () => {
             });
         });
 
-        it('passes production as positional argument to eas env:list', async () => {
+        it('passes --environment production to eas env:list', async () => {
             mockExecFileSuccess('');
 
             const target = new EasTarget('production');
@@ -61,13 +61,13 @@ describe('EasTarget', () => {
 
             expect(execFileMock).toHaveBeenCalledWith(
                 'eas',
-                expect.arrayContaining(['env:list', 'production']),
+                expect.arrayContaining(['env:list', '--environment', 'production']),
                 expect.anything(),
                 expect.any(Function)
             );
         });
 
-        it('passes development as positional argument to eas env:list', async () => {
+        it('passes --environment development to eas env:list', async () => {
             mockExecFileSuccess('');
 
             const target = new EasTarget('development');
@@ -75,7 +75,7 @@ describe('EasTarget', () => {
 
             expect(execFileMock).toHaveBeenCalledWith(
                 'eas',
-                expect.arrayContaining(['env:list', 'development']),
+                expect.arrayContaining(['env:list', '--environment', 'development']),
                 expect.anything(),
                 expect.any(Function)
             );
@@ -176,9 +176,9 @@ describe('EasTarget', () => {
                 'eas',
                 expect.arrayContaining([
                     'env:delete',
-                    '--name',
+                    '--variable-name',
                     'STALE_KEY',
-                    '--environment',
+                    '--variable-environment',
                     'production',
                     '--non-interactive'
                 ]),
