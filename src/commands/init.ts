@@ -2,6 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
+import { findProjectRoot } from '../core/config.js';
 
 export default class Init extends Command {
     static override description = 'Initialize a new keyshelf project';
@@ -27,6 +28,13 @@ export default class Init extends Command {
 
         if (fs.existsSync(configPath) && !flags.force) {
             this.error('keyshelf.yml already exists (use --force to overwrite)');
+        }
+
+        const existingRoot = findProjectRoot(path.dirname(cwd));
+        if (existingRoot) {
+            this.error(
+                `keyshelf.yml already exists at ${existingRoot}. Nested keyshelf projects are not supported.`
+            );
         }
 
         let provider: Record<string, string>;

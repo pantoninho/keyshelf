@@ -3,6 +3,7 @@ import { loadEnvironment } from '../core/environment.js';
 import { resolve } from '../core/resolver.js';
 import { PathTree } from '../core/path-tree.js';
 import { SecretRef } from '../core/types.js';
+import { findProjectRoot } from '../core/config.js';
 
 export default class List extends Command {
     static override description = 'List all paths in an environment';
@@ -15,9 +16,12 @@ export default class List extends Command {
 
     async run(): Promise<void> {
         const { flags } = await this.parse(List);
-        const cwd = process.cwd();
+        const projectRoot = findProjectRoot(process.cwd());
+        if (!projectRoot) {
+            this.error('keyshelf.yml not found in current directory or any parent directory.');
+        }
 
-        const resolved = await resolve(flags.env, (name) => loadEnvironment(cwd, name));
+        const resolved = await resolve(flags.env, (name) => loadEnvironment(projectRoot, name));
         const tree = PathTree.fromJSON(resolved.values);
         const paths = tree.list();
 

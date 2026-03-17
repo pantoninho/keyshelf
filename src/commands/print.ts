@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import yamlLib from 'js-yaml';
 import { loadEnvironment } from '../core/environment.js';
-import { loadConfig, defaultConfigDir } from '../core/config.js';
+import { loadConfig, defaultConfigDir, findProjectRoot } from '../core/config.js';
 import { resolve } from '../core/resolver.js';
 import { replaceSecrets, flattenToEnvRecord } from '../core/env-vars.js';
 import { SecretRef } from '../core/types.js';
@@ -32,11 +32,14 @@ export default class Print extends Command {
 
     async run(): Promise<void> {
         const { flags } = await this.parse(Print);
-        const cwd = process.cwd();
+        const projectRoot = findProjectRoot(process.cwd());
+        if (!projectRoot) {
+            this.error('keyshelf.yml not found in current directory or any parent directory.');
+        }
 
-        const envDef = await loadEnvironment(cwd, flags.env);
-        const resolved = await resolve(flags.env, (name) => loadEnvironment(cwd, name));
-        const config = loadConfig(cwd);
+        const envDef = await loadEnvironment(projectRoot, flags.env);
+        const resolved = await resolve(flags.env, (name) => loadEnvironment(projectRoot, name));
+        const config = loadConfig(projectRoot);
         const configDirPath = flags['config-dir'] ?? defaultConfigDir(config);
         const provider = resolveProvider(envDef, config, configDirPath);
 
@@ -61,7 +64,7 @@ export default class Print extends Command {
                 this.log(JSON.stringify(output, null, 2));
                 break;
             case 'env': {
-                const envMapping = loadEnvMapping(cwd);
+                const envMapping = loadEnvMapping(process.cwd());
                 if (Object.keys(envMapping).length === 0) {
                     this.warn(
                         'No .env.keyshelf file found — no environment variables will be injected.'

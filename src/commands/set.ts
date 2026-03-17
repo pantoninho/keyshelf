@@ -1,6 +1,6 @@
 import { Args, Command, Flags } from '@oclif/core';
 import { loadEnvironment, saveEnvironment, listEnvironments } from '../core/environment.js';
-import { loadConfig, defaultConfigDir } from '../core/config.js';
+import { loadConfig, defaultConfigDir, findProjectRoot } from '../core/config.js';
 import { resolve } from '../core/resolver.js';
 import { PathTree } from '../core/path-tree.js';
 import { SecretRef } from '../core/types.js';
@@ -28,10 +28,13 @@ export default class SetCommand extends Command {
 
     async run(): Promise<void> {
         const { args, flags } = await this.parse(SetCommand);
-        const cwd = process.cwd();
+        const projectRoot = findProjectRoot(process.cwd());
+        if (!projectRoot) {
+            this.error('keyshelf.yml not found in current directory or any parent directory.');
+        }
         const envName = flags.env;
 
-        const resolved = await resolve(envName, (name) => loadEnvironment(cwd, name));
+        const resolved = await resolve(envName, (name) => loadEnvironment(projectRoot, name));
         const resolvedTree = PathTree.fromJSON(resolved.values);
         const existing = resolvedTree.get(args.path);
 
@@ -42,21 +45,21 @@ export default class SetCommand extends Command {
         }
 
         if (existing === undefined) {
-            const envDef = await loadEnvironment(cwd, envName);
+            const envDef = await loadEnvironment(projectRoot, envName);
             const tree = PathTree.fromJSON(envDef.values);
             tree.set(args.path, new SecretRef(args.path));
-            await saveEnvironment(cwd, envName, { ...envDef, values: tree.toJSON() });
+            await saveEnvironment(projectRoot, envName, { ...envDef, values: tree.toJSON() });
         }
 
         const value = args.value ?? (await readMaskedLine(`Enter value for "${args.path}": `));
 
-        const config = loadConfig(cwd);
+        const config = loadConfig(projectRoot);
         const configDir = flags['config-dir'] ?? defaultConfigDir(config);
-        const envDef = await loadEnvironment(cwd, envName);
+        const envDef = await loadEnvironment(projectRoot, envName);
         const provider = resolveProvider(envDef, config, configDir);
         await provider.set(envName, args.path, value);
 
-        await this.propagateToImporters(cwd, envName, args.path, value, config, configDir);
+        await this.propagateToImporters(projectRoot, envName, args.path, value, config, configDir);
     }
 
     private async propagateToImporters(

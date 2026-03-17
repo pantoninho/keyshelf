@@ -202,6 +202,92 @@ describe('run command', () => {
     });
 });
 
+describe('walk-up discovery', () => {
+    let tmpDir: string;
+    let origCwd: string;
+    let outFile: string;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-run-walkup-'));
+        outFile = path.join(tmpDir, 'output.txt');
+        origCwd = process.cwd();
+        fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'test-project', provider: { adapter: 'local' } })
+        );
+    });
+
+    afterEach(() => {
+        process.chdir(origCwd);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        vi.restoreAllMocks();
+    });
+
+    it('resolves config from project root and env mapping from cwd when run from a subdirectory', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { host: 'localhost' } }
+        });
+
+        const subDir = path.join(tmpDir, 'packages', 'api');
+        fs.mkdirSync(subDir, { recursive: true });
+        fs.writeFileSync(path.join(subDir, '.env.keyshelf'), 'DATABASE_HOST=database/host\n');
+        process.chdir(subDir);
+
+        const exitSpy = vi.spyOn(Run.prototype, 'exit').mockImplementation(() => {
+            throw new Error('EXIT');
+        });
+
+        const script = `require("fs").writeFileSync(${JSON.stringify(outFile)}, process.env.DATABASE_HOST)`;
+        await runAndCatch(['--env', 'dev', '--', 'node', '-e', script]);
+
+        const output = fs.readFileSync(outFile, 'utf-8');
+        expect(output).toBe('localhost');
+        expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('does not load .env.keyshelf from the project root when run from a subdirectory without one', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { host: 'localhost' } }
+        });
+
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'ROOT_VAR=database/host\n');
+
+        const subDir = path.join(tmpDir, 'packages', 'api');
+        fs.mkdirSync(subDir, { recursive: true });
+        process.chdir(subDir);
+
+        const warnSpy = vi.spyOn(Run.prototype, 'warn').mockImplementation(() => {
+            return undefined as never;
+        });
+        const exitSpy = vi.spyOn(Run.prototype, 'exit').mockImplementation(() => {
+            throw new Error('EXIT');
+        });
+
+        await runAndCatch(['--env', 'dev', '--', 'node', '-e', '1']);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+            'No .env.keyshelf file found — no environment variables will be injected.'
+        );
+        expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('errors when no keyshelf.yml exists anywhere up the tree', async () => {
+        const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-no-config-'));
+        process.chdir(emptyDir);
+
+        try {
+            await expect(Run.run(['--env', 'dev', '--', 'node', '-e', '1'])).rejects.toThrow(
+                /keyshelf\.yml not found/
+            );
+        } finally {
+            fs.rmSync(emptyDir, { recursive: true, force: true });
+        }
+    });
+});
+
 async function runAndCatch(argv: string[]): Promise<void> {
     try {
         await Run.run(argv);

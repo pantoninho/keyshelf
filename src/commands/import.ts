@@ -1,9 +1,7 @@
 import { Args, Command, Flags } from '@oclif/core';
-import path from 'node:path';
-import os from 'node:os';
 import fs from 'node:fs';
 import { loadEnvironment, saveEnvironment } from '../core/environment.js';
-import { loadConfig } from '../core/config.js';
+import { loadConfig, defaultConfigDir, findProjectRoot } from '../core/config.js';
 import { PathTree } from '../core/path-tree.js';
 import { SecretRef } from '../core/types.js';
 import { resolveProvider } from '../providers/index.js';
@@ -34,7 +32,10 @@ export default class Import extends Command {
 
     async run(): Promise<void> {
         const { args, flags } = await this.parse(Import);
-        const cwd = process.cwd();
+        const projectRoot = findProjectRoot(process.cwd());
+        if (!projectRoot) {
+            this.error('keyshelf.yml not found in current directory or any parent directory.');
+        }
 
         if (!fs.existsSync(args.file)) {
             this.error(`File not found: ${args.file}`);
@@ -44,14 +45,14 @@ export default class Import extends Command {
         const fileValues = parseEnvFile(content);
         const entries = Object.entries(fileValues);
 
-        const def = await loadEnvironment(cwd, flags.env);
+        const def = await loadEnvironment(projectRoot, flags.env);
         const tree = PathTree.fromJSON(def.values);
 
         let provider = null;
         if (flags.secrets) {
-            const config = loadConfig(cwd);
+            const config = loadConfig(projectRoot);
             const configDir =
-                flags['config-dir'] ?? path.join(os.homedir(), '.config', 'keyshelf', config.name);
+                flags['config-dir'] ?? defaultConfigDir(config);
             provider = resolveProvider(def, config, configDir);
         }
 
@@ -66,7 +67,7 @@ export default class Import extends Command {
             }
         }
 
-        await saveEnvironment(cwd, flags.env, { ...def, values: tree.toJSON() });
+        await saveEnvironment(projectRoot, flags.env, { ...def, values: tree.toJSON() });
         this.log(`Loaded ${entries.length} entries into "${flags.env}"`);
     }
 }

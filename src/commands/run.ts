@@ -2,6 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import { spawnSync } from 'node:child_process';
 import { resolveEnv } from '../core/resolve-env.js';
 import { loadEnvMapping } from '../core/env-keyshelf.js';
+import { findProjectRoot } from '../core/config.js';
 
 export default class Run extends Command {
     static override description =
@@ -27,14 +28,17 @@ export default class Run extends Command {
             this.error('No command specified. Provide a command after "--".');
         }
 
-        const projectDir = process.cwd();
-        const envMapping = loadEnvMapping(projectDir);
+        const projectRoot = findProjectRoot(process.cwd());
+        if (!projectRoot) {
+            this.error('keyshelf.yml not found in current directory or any parent directory.');
+        }
+        const envMapping = loadEnvMapping(process.cwd());
         if (Object.keys(envMapping).length === 0) {
             this.warn('No .env.keyshelf file found — no environment variables will be injected.');
         }
         const envRecord = await resolveEnv({
             env: flags.env,
-            projectDir,
+            projectDir: projectRoot,
             configDir: flags['config-dir'],
             envMapping
         });
