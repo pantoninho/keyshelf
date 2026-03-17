@@ -66,6 +66,196 @@ keyshelf run --env dev -- node server.js
 
 ---
 
+## Integration Guide
+
+Step-by-step instructions for integrating keyshelf into an existing project. Each step produces a specific file — no ambiguity, no "edit the file" instructions.
+
+### What belongs in keyshelf
+
+**Put in keyshelf:** database credentials, API keys, service URLs, feature flags, connection strings, port numbers, external service config — anything your app reads from environment variables or config files that varies across environments.
+
+**Leave out of keyshelf:** runtime-only variables like `NODE_ENV`, `PATH`, `HOME`, `CI`, or anything set by the platform/runtime itself. These are not application config — they describe the execution context.
+
+**Rule of thumb:** if the value is the same regardless of which machine runs the code, it probably belongs in keyshelf. If it describes the machine itself, it does not.
+
+### Step 1: Initialize
+
+```bash
+keyshelf init
+```
+
+This creates `keyshelf.yml` and `.keyshelf/environments/`. The generated `keyshelf.yml` will contain:
+
+```yaml
+name: <directory-name>
+provider:
+    adapter: local
+```
+
+For cloud providers, use `keyshelf init --adapter gcp-sm --project <id>` or `keyshelf init --adapter aws-sm`.
+
+### Step 2: Create environments
+
+```bash
+keyshelf env:create base
+keyshelf env:create dev --import base
+keyshelf env:create prod --import base
+```
+
+This creates three files under `.keyshelf/environments/`. Each starts with an empty `values: {}` block.
+
+### Step 3: Define config values in YAML
+
+Write plain config values directly into the environment YAML files. Use `!secret` tags for values that must be stored in the provider.
+
+`.keyshelf/environments/base.yml`:
+
+```yaml
+values:
+    database:
+        port: 5432
+        password: !secret database/password
+    app:
+        log-level: info
+        api-key: !secret app/api-key
+```
+
+`.keyshelf/environments/dev.yml`:
+
+```yaml
+imports:
+    - base
+values:
+    database:
+        host: localhost
+    app:
+        debug: true
+```
+
+`.keyshelf/environments/prod.yml`:
+
+```yaml
+imports:
+    - base
+values:
+    database:
+        host: prod-db.internal
+    app:
+        debug: false
+```
+
+`dev` and `prod` inherit `database/port`, `database/password`, `app/log-level`, and `app/api-key` from `base`. They override only the values that differ.
+
+### Step 4: Create the `.env.keyshelf` mapping
+
+The `.env.keyshelf` file maps keyshelf paths to the environment variable names your application reads.
+
+```bash
+# .env.keyshelf
+DATABASE_HOST=database/host
+DATABASE_PORT=database/port
+DATABASE_PASSWORD=database/password
+APP_DEBUG=app/debug
+APP_LOG_LEVEL=app/log-level
+APP_API_KEY=app/api-key
+```
+
+Only paths listed here are injected as environment variables by `keyshelf run` and `keyshelf/preload`.
+
+### Step 5: Provision secrets
+
+```bash
+# Interactive — prompts for each missing secret value
+keyshelf up --apply
+
+# Or from a file
+keyshelf up --apply --from-file .env.secrets
+```
+
+### Step 6: Run your application
+
+```bash
+keyshelf run --env dev -- node server.js
+```
+
+Or use the Node.js preload (no wrapper command needed):
+
+```bash
+KEYSHELF_ENV=dev node --import keyshelf/preload dist/server.js
+```
+
+### Complete file listing
+
+After integration, the project should contain:
+
+```
+myproject/
+├── keyshelf.yml
+├── .env.keyshelf
+└── .keyshelf/
+    └── environments/
+        ├── base.yml
+        ├── dev.yml
+        └── prod.yml
+```
+
+`keyshelf.yml`:
+
+```yaml
+name: myproject
+provider:
+    adapter: local
+```
+
+`.env.keyshelf`:
+
+```bash
+DATABASE_HOST=database/host
+DATABASE_PORT=database/port
+DATABASE_PASSWORD=database/password
+APP_DEBUG=app/debug
+APP_LOG_LEVEL=app/log-level
+APP_API_KEY=app/api-key
+```
+
+`.keyshelf/environments/base.yml`:
+
+```yaml
+values:
+    database:
+        port: 5432
+        password: !secret database/password
+    app:
+        log-level: info
+        api-key: !secret app/api-key
+```
+
+`.keyshelf/environments/dev.yml`:
+
+```yaml
+imports:
+    - base
+values:
+    database:
+        host: localhost
+    app:
+        debug: true
+```
+
+`.keyshelf/environments/prod.yml`:
+
+```yaml
+imports:
+    - base
+values:
+    database:
+        host: prod-db.internal
+    app:
+        debug: false
+```
+
+---
+
 ## Core Concepts
 
 ### Config vs Secrets
@@ -137,6 +327,14 @@ REDIS_URL=cache/redis/url
 ```
 
 When `keyshelf run`, `keyshelf print --format env`, or the preload module is used, only the variables listed in `.env.keyshelf` are exported. If the file is absent, no environment variables are injected (a warning is shown).
+
+**Format rules:**
+
+- One `ENV_VAR_NAME=keyshelf/path` mapping per line.
+- Left side (env var name): uppercase letters, digits, and underscores. Must match `[A-Z_][A-Z0-9_]*`.
+- Right side (keyshelf path): slash-delimited path matching a leaf in the environment YAML. Alphanumeric, hyphens, and slashes: `[a-z0-9-]+(/[a-z0-9-]+)*`.
+- Lines starting with `#` are comments. Blank lines are ignored.
+- No quoting, no spaces around `=`, no variable interpolation.
 
 ---
 
@@ -470,19 +668,40 @@ Environments are processed in topological order (imports before the environments
 # Initialize the project
 keyshelf init
 
-# Create an environment
-keyshelf env:create dev
+# Create environments
+keyshelf env:create base
+keyshelf env:create dev --import base
+keyshelf env:create prod --import base
 
-# Import plain values from your .env
-keyshelf import --env dev .env
+# Import plain values from your .env into the base environment
+keyshelf import --env base .env
 
-# Import secrets from a separate secrets file (stores in provider)
-keyshelf import --env dev .env.secrets --secrets
+# Import secrets (stores values in provider, writes !secret refs to YAML)
+keyshelf import --env base .env --secrets
+
+# Create .env.keyshelf so the same env var names your app already reads keep working.
+# For each KEY=VALUE in your .env, write a line: KEY=keyshelf/path
+# The keyshelf path is the lowercased key with underscores replaced by slashes,
+# or whatever path structure you chose during import.
+# Example: if your .env had DATABASE_HOST=localhost, write:
+#   DATABASE_HOST=database-host
+# (keyshelf import converts underscores in keys to hyphens by default)
 
 # Verify the result
 keyshelf list --env dev
 keyshelf print --env dev --reveal
 ```
+
+### Integrating a project that reads `process.env` directly
+
+If your application reads environment variables directly (e.g., `process.env.DATABASE_URL`), you do not need to change application code. keyshelf injects variables at runtime.
+
+1. Identify every `process.env.X` or `os.environ["X"]` your app reads.
+2. Decide which are application config (put in keyshelf) vs runtime context (leave out). See [What belongs in keyshelf](#what-belongs-in-keyshelf).
+3. Create the YAML structure under `.keyshelf/environments/` with appropriate `!secret` tags for sensitive values.
+4. Create `.env.keyshelf` mapping each env var name to its keyshelf path.
+5. Run `keyshelf up --apply` to provision secrets.
+6. Replace your existing start command with `keyshelf run --env <name> -- <command>` or use the `keyshelf/preload` entry point.
 
 ### Adding a derived environment
 
