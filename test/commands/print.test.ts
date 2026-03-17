@@ -167,6 +167,10 @@ describe('print command', () => {
             imports: [],
             values: { database: { host: 'localhost', port: 5432 } }
         });
+        fs.writeFileSync(
+            path.join(tmpDir, '.env.keyshelf'),
+            'DATABASE_HOST=database/host\nDATABASE_PORT=database/port\n'
+        );
 
         await Print.run(['--env', 'dev', '--format', 'env', '--config-dir', configDir]);
 
@@ -204,6 +208,10 @@ describe('print command', () => {
                 api: { key: new SecretRef('api/key') }
             }
         });
+        fs.writeFileSync(
+            path.join(tmpDir, '.env.keyshelf'),
+            'DATABASE_HOST=database/host\nAPI_KEY=api/key\n'
+        );
 
         await Print.run(['--env', 'dev', '--format', 'env', '--config-dir', configDir]);
 
@@ -211,6 +219,21 @@ describe('print command', () => {
         expect(output).toContain('DATABASE_HOST=localhost');
         expect(output).toContain('API_KEY=api/key');
         expect(output).not.toContain('secret-key');
+    });
+
+    it('--format env warns when no .env.keyshelf file is present', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { key: 'val' }
+        });
+        const warnSpy = vi.fn();
+        vi.spyOn(Print.prototype, 'warn').mockImplementation(warnSpy);
+
+        await Print.run(['--env', 'dev', '--format', 'env', '--config-dir', configDir]);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+            'No .env.keyshelf file found — no environment variables will be injected.'
+        );
     });
 
     it('uses env-level provider over global config', async () => {

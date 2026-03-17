@@ -9,6 +9,7 @@ interface ResolveEnvOptions {
     env: string;
     projectDir: string;
     configDir?: string;
+    envMapping: Record<string, string>;
 }
 
 /**
@@ -17,10 +18,11 @@ interface ResolveEnvOptions {
  * @param options.env - Environment name to resolve
  * @param options.projectDir - Path to project root containing keyshelf.yml
  * @param options.configDir - Override for the provider config directory
- * @returns Flat record of uppercased env var names to string values
+ * @param options.envMapping - Mapping of env var names to slash-delimited value paths
+ * @returns Flat record of env var names to string values
  */
 export async function resolveEnv(options: ResolveEnvOptions): Promise<Record<string, string>> {
-    const { env, projectDir } = options;
+    const { env, projectDir, envMapping } = options;
     const cache = new Map<string, EnvironmentDefinition>();
     const loadFn = async (name: string) => {
         const cached = cache.get(name);
@@ -36,5 +38,5 @@ export async function resolveEnv(options: ResolveEnvOptions): Promise<Record<str
     const configDir = options.configDir ?? defaultConfigDir(config);
     const provider = resolveProvider(envDef, config, configDir);
     const replaced = await replaceSecrets(resolved.values, env, provider, 'reveal');
-    return flattenToEnvRecord(replaced, envDef.env);
+    return flattenToEnvRecord(replaced, envMapping);
 }

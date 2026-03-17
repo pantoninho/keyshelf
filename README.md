@@ -56,7 +56,11 @@ keyshelf up
 # 9. Apply the reconciliation plan interactively
 keyshelf up --apply
 
-# 10. Run a process with config and secrets injected as env vars
+# 10. Create a .env.keyshelf file to map paths to env var names
+#     echo "DATABASE_HOST=database/host" >> .env.keyshelf
+#     echo "DATABASE_PASSWORD=database/password" >> .env.keyshelf
+
+# 11. Run a process with config and secrets injected as env vars
 keyshelf run --env dev -- node server.js
 ```
 
@@ -121,27 +125,20 @@ A provider is the backend that stores secret values. The provider is declared in
 | `gcp-sm` | GCP Secret Manager                          | Application Default Credentials |
 | `aws-sm` | AWS Secrets Manager                         | Standard AWS credential chain   |
 
-### The `env` Mapping
+### The `.env.keyshelf` Mapping
 
-The `env` field in an environment file defines how paths map to environment variable names. It is bidirectional: when running `keyshelf run` or using the preload module, keyshelf uses this mapping to produce the exact variable names your application expects.
+The `.env.keyshelf` file lives in the project root and defines how keyshelf paths map to environment variable names. This mapping belongs to the consumer (your app), not to the environment definition.
 
-```yaml
-env:
-    DATABASE_HOST: database/host
-    DATABASE_PASSWORD: database/password
-    REDIS_URL: cache/redis/url
-values:
-    database:
-        host: localhost
-        password: !secret database/password
-    cache:
-        redis:
-            url: redis://localhost:6379
+```bash
+# .env.keyshelf
+DATABASE_HOST=database/host
+DATABASE_PASSWORD=database/password
+REDIS_URL=cache/redis/url
 ```
 
-When `env` is defined, **only** the mapped variables are exported. When `env` is absent, all leaf values are exported using auto-generated `UPPER_SNAKE_CASE` names derived from the path (`database/host` becomes `DATABASE_HOST`).
+When `keyshelf run`, `keyshelf print --format env`, or the preload module is used, only the variables listed in `.env.keyshelf` are exported. If the file is absent, no environment variables are injected (a warning is shown).
 
-The `env` mapping is also used by `keyshelf up --from-env`: keyshelf collects mappings across all environments and looks up each secret path by its mapped variable name.
+The mapping is also used by `keyshelf up --from-env`: keyshelf reverse-looks up each secret path by its mapped variable name in the current process environment.
 
 ---
 
@@ -150,6 +147,7 @@ The `env` mapping is also used by `keyshelf up --from-env`: keyshelf collects ma
 ```
 myproject/
 ├── keyshelf.yml                          # Project-level config
+├── .env.keyshelf                         # Env var name → path mapping (consumer-side)
 └── .keyshelf/
     └── environments/
         ├── base.yml                      # Shared base config
@@ -196,12 +194,6 @@ imports:
 provider:
     adapter: gcp-sm
     project: my-prod-project
-
-# Optional: explicit env var name to path mapping
-env:
-    DATABASE_HOST: database/host
-    DATABASE_PASSWORD: database/password
-    APP_SECRET_KEY: app/secret-key
 
 # Required: values for this environment
 values:
@@ -370,7 +362,7 @@ keyshelf print --env dev
 # Print with secrets revealed
 keyshelf print --env dev --reveal
 
-# Print as shell-sourceable KEY=VALUE pairs (requires --reveal for secret values)
+# Print as shell-sourceable KEY=VALUE pairs (uses .env.keyshelf mapping)
 keyshelf print --env dev --format env --reveal
 
 # Print as JSON with secrets split into a separate object (no --reveal)
@@ -386,7 +378,7 @@ When `--format json` is used without `--reveal`, the output is an object with tw
 
 ### `keyshelf run`
 
-Run a command with the resolved environment injected as process environment variables. Resolves secrets from the provider and merges with the current `process.env`.
+Run a command with the resolved environment injected as process environment variables. Requires a `.env.keyshelf` file in the project root to define which paths map to which env var names. Resolves secrets from the provider and merges with the current `process.env`.
 
 ```
 USAGE
@@ -534,7 +526,7 @@ keyshelf up --apply --from-env
 keyshelf up --apply --from-file secrets.env
 ```
 
-`--from-env` works by collecting the `env` mappings from all environment files and looking up each secret path by its corresponding variable name. Ensure the variables are set in the calling shell before running this.
+`--from-env` uses the `.env.keyshelf` mapping to reverse-look up each secret path by its corresponding variable name. Ensure the variables are set in the calling shell before running this.
 
 ### Running processes with secrets
 

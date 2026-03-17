@@ -12,6 +12,7 @@ import { applyEnvironmentPlan } from '../core/reconciler/apply.js';
 import { makeCollector } from '../core/reconciler/input.js';
 import { renderPlan } from '../core/reconciler/render.js';
 import { parseEnvFile } from '../core/env-file.js';
+import { loadEnvMapping } from '../core/env-keyshelf.js';
 import { ReconciliationPlan, EnvironmentPlan } from '../core/reconciler/types.js';
 
 export default class Up extends Command {
@@ -56,7 +57,7 @@ export default class Up extends Command {
         const sortedNames = topoSort(
             Object.fromEntries(envNames.map((n) => [n, { imports: envDefs.get(n)!.imports }]))
         );
-        const ctx: PlanContext = { envDefs, config, configDir };
+        const ctx: PlanContext = { envDefs, config, configDir, cwd };
         const plan = await buildReconciliationPlan(ctx, sortedNames);
 
         this.log(renderPlan(plan));
@@ -81,7 +82,7 @@ export default class Up extends Command {
             return;
         }
 
-        const collector = await buildCollector(flags['from-env'], flags['from-file'], ctx.envDefs);
+        const collector = await buildCollector(flags['from-env'], flags['from-file'], ctx.cwd);
 
         for (const envPlan of plan.environments) {
             if (envPlan.secretChanges.length === 0) continue;
@@ -120,6 +121,7 @@ interface PlanContext {
     envDefs: Map<string, EnvironmentDefinition>;
     config: KeyshelfConfig;
     configDir: string;
+    cwd: string;
 }
 
 async function buildReconciliationPlan(
@@ -185,7 +187,7 @@ async function confirmApply(): Promise<boolean> {
 async function buildCollector(
     fromEnv: boolean,
     fromFile: string | undefined,
-    envDefs: Map<string, EnvironmentDefinition>
+    cwd: string
 ): Promise<(path: string) => Promise<string>> {
     if (fromFile) {
         const content = await fs.readFile(fromFile, 'utf-8');
@@ -194,21 +196,9 @@ async function buildCollector(
     }
 
     if (fromEnv) {
-        const mapping = buildCombinedEnvMapping(envDefs);
+        const mapping = loadEnvMapping(cwd);
         return makeCollector({ kind: 'env', mapping });
     }
 
     return makeCollector({ kind: 'prompt' });
-}
-
-function buildCombinedEnvMapping(
-    envDefs: Map<string, EnvironmentDefinition>
-): Record<string, string> {
-    const combined: Record<string, string> = {};
-    for (const def of envDefs.values()) {
-        if (def.env) {
-            Object.assign(combined, def.env);
-        }
-    }
-    return combined;
 }

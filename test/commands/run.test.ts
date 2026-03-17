@@ -38,6 +38,10 @@ describe('run command', () => {
             imports: [],
             values: { database: { host: 'localhost', port: 5432 } }
         });
+        fs.writeFileSync(
+            path.join(tmpDir, '.env.keyshelf'),
+            'DATABASE_HOST=database/host\nDATABASE_PORT=database/port\n'
+        );
 
         const exitSpy = vi.spyOn(Run.prototype, 'exit').mockImplementation(() => {
             throw new Error('EXIT');
@@ -60,6 +64,7 @@ describe('run command', () => {
                 api: { key: new SecretRef('api/key'), url: 'https://api.example.com' }
             }
         });
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'API_KEY=api/key\nAPI_URL=api/url\n');
 
         const exitSpy = vi.spyOn(Run.prototype, 'exit').mockImplementation(() => {
             throw new Error('EXIT');
@@ -78,6 +83,7 @@ describe('run command', () => {
             imports: [],
             values: { app: 'myapp' }
         });
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP=app\n');
 
         const exitSpy = vi.spyOn(Run.prototype, 'exit').mockImplementation(() => {
             throw new Error('EXIT');
@@ -96,6 +102,7 @@ describe('run command', () => {
             imports: [],
             values: { key: 'val' }
         });
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'KEY=key\n');
 
         const exitSpy = vi.spyOn(Run.prototype, 'exit').mockImplementation(() => {
             throw new Error('EXIT');
@@ -113,6 +120,27 @@ describe('run command', () => {
         ]);
 
         expect(exitSpy).toHaveBeenCalledWith(42);
+    });
+
+    it('warns when no .env.keyshelf file is present', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { key: 'val' }
+        });
+
+        const warnSpy = vi.spyOn(Run.prototype, 'warn').mockImplementation(() => {
+            return undefined as never;
+        });
+        const exitSpy = vi.spyOn(Run.prototype, 'exit').mockImplementation(() => {
+            throw new Error('EXIT');
+        });
+
+        await runAndCatch(['--env', 'dev', '--config-dir', configDir, '--', 'node', '-e', '1']);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+            'No .env.keyshelf file found — no environment variables will be injected.'
+        );
+        expect(exitSpy).toHaveBeenCalledWith(0);
     });
 
     it('errors when no command is provided after --', async () => {
@@ -159,6 +187,7 @@ describe('run command', () => {
             imports: ['base'],
             values: { local: 'from-dev' }
         });
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'SHARED=shared\nLOCAL=local\n');
 
         const exitSpy = vi.spyOn(Run.prototype, 'exit').mockImplementation(() => {
             throw new Error('EXIT');

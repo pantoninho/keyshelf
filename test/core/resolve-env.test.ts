@@ -32,7 +32,12 @@ describe('resolveEnv', () => {
             values: { database: { host: 'localhost', port: 5432 } }
         });
 
-        const result = await resolveEnv({ env: 'dev', projectDir: tmpDir, configDir });
+        const result = await resolveEnv({
+            env: 'dev',
+            projectDir: tmpDir,
+            configDir,
+            envMapping: { DATABASE_HOST: 'database/host', DATABASE_PORT: 'database/port' }
+        });
 
         expect(result).toEqual({
             DATABASE_HOST: 'localhost',
@@ -51,7 +56,12 @@ describe('resolveEnv', () => {
             }
         });
 
-        const result = await resolveEnv({ env: 'prod', projectDir: tmpDir, configDir });
+        const result = await resolveEnv({
+            env: 'prod',
+            projectDir: tmpDir,
+            configDir,
+            envMapping: { API_KEY: 'api/key', API_URL: 'api/url' }
+        });
 
         expect(result).toEqual({
             API_KEY: 'super-secret-key',
@@ -69,7 +79,12 @@ describe('resolveEnv', () => {
             values: { local: 'from-dev' }
         });
 
-        const result = await resolveEnv({ env: 'dev', projectDir: tmpDir, configDir });
+        const result = await resolveEnv({
+            env: 'dev',
+            projectDir: tmpDir,
+            configDir,
+            envMapping: { SHARED: 'shared', LOCAL: 'local' }
+        });
 
         expect(result).toEqual({
             SHARED: 'from-base',
@@ -87,14 +102,35 @@ describe('resolveEnv', () => {
             values: { setting: 'dev-value' }
         });
 
-        const result = await resolveEnv({ env: 'dev', projectDir: tmpDir, configDir });
+        const result = await resolveEnv({
+            env: 'dev',
+            projectDir: tmpDir,
+            configDir,
+            envMapping: { SETTING: 'setting' }
+        });
 
         expect(result).toEqual({ SETTING: 'dev-value' });
     });
 
+    it('returns empty record when envMapping is empty', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { host: 'localhost', port: 5432 } }
+        });
+
+        const result = await resolveEnv({
+            env: 'dev',
+            projectDir: tmpDir,
+            configDir,
+            envMapping: {}
+        });
+
+        expect(result).toEqual({});
+    });
+
     it('throws when environment does not exist', async () => {
         await expect(
-            resolveEnv({ env: 'nonexistent', projectDir: tmpDir, configDir })
+            resolveEnv({ env: 'nonexistent', projectDir: tmpDir, configDir, envMapping: {} })
         ).rejects.toThrow(/Environment "nonexistent" not found/);
     });
 
@@ -104,7 +140,7 @@ describe('resolveEnv', () => {
             fs.mkdirSync(path.join(noConfigDir, '.keyshelf', 'environments'), { recursive: true });
             await saveEnvironment(noConfigDir, 'dev', { imports: [], values: { key: 'val' } });
             await expect(
-                resolveEnv({ env: 'dev', projectDir: noConfigDir, configDir })
+                resolveEnv({ env: 'dev', projectDir: noConfigDir, configDir, envMapping: {} })
             ).rejects.toThrow(/keyshelf.yml not found/);
         } finally {
             fs.rmSync(noConfigDir, { recursive: true, force: true });

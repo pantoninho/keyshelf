@@ -7,7 +7,6 @@ export class SecretRef {
 export interface EnvironmentDefinition {
     imports: string[];
     provider?: ProviderConfig;
-    env?: Record<string, string>;
     values: Record<string, unknown>;
 }
 

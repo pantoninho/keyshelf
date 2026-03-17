@@ -1,6 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import { spawnSync } from 'node:child_process';
 import { resolveEnv } from '../core/resolve-env.js';
+import { loadEnvMapping } from '../core/env-keyshelf.js';
 
 export default class Run extends Command {
     static override description =
@@ -27,10 +28,15 @@ export default class Run extends Command {
         }
 
         const projectDir = process.cwd();
+        const envMapping = loadEnvMapping(projectDir);
+        if (Object.keys(envMapping).length === 0) {
+            this.warn('No .env.keyshelf file found — no environment variables will be injected.');
+        }
         const envRecord = await resolveEnv({
             env: flags.env,
             projectDir,
-            configDir: flags['config-dir']
+            configDir: flags['config-dir'],
+            envMapping
         });
 
         const [cmd, ...args] = command;
