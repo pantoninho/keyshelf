@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
 import SetCommand from '../../src/commands/set.js';
-import { saveEnvironment, loadEnvironment } from '../../src/core/environment.js';
+import { saveEnvironment } from '../../src/core/environment.js';
 import { LocalProvider } from '../../src/providers/local.js';
 import { SecretRef } from '../../src/core/types.js';
 import * as inputModule from '../../src/core/input.js';
@@ -55,58 +55,40 @@ describe('set command', () => {
         expect(stored).toBe('mysecret');
     });
 
-    it('creates SecretRef in YAML when path does not exist, then sets value', async () => {
+    it('errors when path does not exist in config', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
             values: {}
         });
 
-        await SetCommand.run([
-            '--env',
-            'dev',
-            'database/password',
-            'newpassword',
-            '--config-dir',
-            configDir
-        ]);
-
-        const envDef = await loadEnvironment(tmpDir, 'dev');
-        const { database } = envDef.values as { database: { password: unknown } };
-        expect(database.password).toBeInstanceOf(SecretRef);
-
-        const provider = new LocalProvider(configDir);
-        const stored = await provider.get('dev', 'database/password');
-        expect(stored).toBe('newpassword');
+        await expect(
+            SetCommand.run([
+                '--env',
+                'dev',
+                'database/password',
+                'newpassword',
+                '--config-dir',
+                configDir
+            ])
+        ).rejects.toThrow(/Path "database\/password" not found in environment "dev"/);
     });
 
-    it('warns and overwrites when path is a plain value', async () => {
+    it('errors when path is a plain value, not a secret', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
             values: { database: { password: 'plain-text' } }
         });
 
-        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
-        await SetCommand.run([
-            '--env',
-            'dev',
-            'database/password',
-            'newvalue',
-            '--config-dir',
-            configDir
-        ]);
-
-        expect(stderrSpy).toHaveBeenCalledWith(
-            expect.stringContaining('Overwriting plain value at database/password')
-        );
-
-        const envDef = await loadEnvironment(tmpDir, 'dev');
-        const { database } = envDef.values as { database: { password: unknown } };
-        expect(database.password).toBeInstanceOf(SecretRef);
-
-        const provider = new LocalProvider(configDir);
-        const stored = await provider.get('dev', 'database/password');
-        expect(stored).toBe('newvalue');
+        await expect(
+            SetCommand.run([
+                '--env',
+                'dev',
+                'database/password',
+                'newvalue',
+                '--config-dir',
+                configDir
+            ])
+        ).rejects.toThrow(/plain value, not a secret reference/);
     });
 
     it('propagates to child environments that import the target env', async () => {

@@ -1,9 +1,9 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { loadEnvironment, saveEnvironment, listEnvironments } from '../core/environment.js';
+import { loadEnvironment, listEnvironments } from '../core/environment.js';
 import { loadConfig, defaultConfigDir } from '../core/config.js';
 import { resolve } from '../core/resolver.js';
 import { PathTree } from '../core/path-tree.js';
-import { SecretRef, EnvironmentDefinition } from '../core/types.js';
+import { SecretRef } from '../core/types.js';
 import { resolveProvider } from '../providers/index.js';
 import { readMaskedLine } from '../core/input.js';
 import { topoSort } from '../core/reconciler/topo-sort.js';
@@ -35,7 +35,13 @@ export default class SetCommand extends Command {
         const resolvedTree = PathTree.fromJSON(resolved.values);
         const existing = resolvedTree.get(args.path);
 
-        await this.ensureSecretRef(cwd, envName, args.path, existing);
+        if (!(existing instanceof SecretRef)) {
+            const msg =
+                existing === undefined
+                    ? `Path "${args.path}" not found in environment "${envName}". Add it to your YAML config and run "keyshelf up" first.`
+                    : `Path "${args.path}" in environment "${envName}" is a plain value, not a secret reference. Change it to a !secret tag and run "keyshelf up" first.`;
+            this.error(msg);
+        }
 
         const value = args.value ?? (await readMaskedLine(`Enter value for "${args.path}": `));
 
@@ -46,35 +52,6 @@ export default class SetCommand extends Command {
         await provider.set(envName, args.path, value);
 
         await this.propagateToImporters(cwd, envName, args.path, value, config, configDir);
-    }
-
-    private async ensureSecretRef(
-        cwd: string,
-        envName: string,
-        secretPath: string,
-        existing: unknown
-    ): Promise<void> {
-        if (existing instanceof SecretRef) return;
-
-        if (existing !== undefined) {
-            process.stderr.write(
-                `Warning: Overwriting plain value at ${secretPath} with a secret reference\n`
-            );
-        }
-
-        await this.addSecretRefToEnv(cwd, envName, secretPath);
-    }
-
-    private async addSecretRefToEnv(
-        cwd: string,
-        envName: string,
-        secretPath: string
-    ): Promise<void> {
-        const envDef = await loadEnvironment(cwd, envName);
-        const tree = PathTree.fromJSON(envDef.values);
-        tree.set(secretPath, new SecretRef(secretPath));
-        const updated: EnvironmentDefinition = { ...envDef, values: tree.toJSON() };
-        await saveEnvironment(cwd, envName, updated);
     }
 
     private async propagateToImporters(
