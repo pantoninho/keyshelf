@@ -39,6 +39,13 @@ describe('createProvider', () => {
         const provider = createProvider({ adapter: 'aws-sm' }, tmpDir, 'myapp');
         expect(provider).toBeInstanceOf(AwsSmProvider);
     });
+
+    it('throws for an unknown adapter', () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(() =>
+            createProvider({ adapter: 'unknown-adapter' } as any, tmpDir, 'myapp')
+        ).toThrow();
+    });
 });
 
 describe('resolveProvider', () => {

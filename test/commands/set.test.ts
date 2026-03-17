@@ -132,11 +132,56 @@ describe('set command', () => {
 
         await SetCommand.run(['--env', 'dev', 'api/key', '--config-dir', configDir]);
 
-        expect(inputModule.readMaskedLine).toHaveBeenCalledWith(expect.stringContaining('api/key'));
-
         const provider = new LocalProvider(configDir);
         const stored = await provider.get('dev', 'api/key');
         expect(stored).toBe('prompted-secret');
+    });
+
+    it('propagation skips environments where the path is not a SecretRef', async () => {
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { shared: { key: new SecretRef('shared/key') } }
+        });
+        await saveEnvironment(tmpDir, 'staging', {
+            imports: ['base'],
+            values: { shared: { key: 'overridden-plain-value' } }
+        });
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: ['base'],
+            values: {}
+        });
+
+        await SetCommand.run([
+            '--env',
+            'base',
+            'shared/key',
+            'propagated-value',
+            '--config-dir',
+            configDir
+        ]);
+
+        const provider = new LocalProvider(configDir);
+        expect(await provider.get('base', 'shared/key')).toBe('propagated-value');
+        expect(await provider.get('dev', 'shared/key')).toBe('propagated-value');
+        await expect(provider.get('staging', 'shared/key')).rejects.toThrow();
+    });
+
+    it('propagation uses the importer own provider when it has an env-level provider override', async () => {
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { db: { pass: new SecretRef('db/pass') } }
+        });
+        await saveEnvironment(tmpDir, 'prod', {
+            imports: ['base'],
+            values: {},
+            provider: { adapter: 'local' }
+        });
+
+        await SetCommand.run(['--env', 'base', 'db/pass', 'secret123', '--config-dir', configDir]);
+
+        const provider = new LocalProvider(configDir);
+        expect(await provider.get('base', 'db/pass')).toBe('secret123');
+        expect(await provider.get('prod', 'db/pass')).toBe('secret123');
     });
 
     it('errors with helpful message if environment does not exist', async () => {

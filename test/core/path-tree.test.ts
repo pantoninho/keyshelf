@@ -26,6 +26,13 @@ describe('PathTree', () => {
             const tree = new PathTree();
             expect(tree.get('missing/path')).toBeUndefined();
         });
+
+        it('overwrites a scalar intermediate node when setting a deeper path', () => {
+            const tree = new PathTree();
+            tree.set('a', 'scalar-value');
+            tree.set('a/b', 'nested-value');
+            expect(tree.get('a/b')).toBe('nested-value');
+        });
     });
 
     describe('delete', () => {
@@ -59,6 +66,12 @@ describe('PathTree', () => {
             tree.set('database/port', 5432);
             tree.set('api/key', 'abc');
             expect(tree.list().sort()).toEqual(['api/key', 'database/host', 'database/port']);
+        });
+
+        it('returns empty array for non-existent prefix', () => {
+            const tree = new PathTree();
+            tree.set('database/host', 'localhost');
+            expect(tree.list('nonexistent')).toEqual([]);
         });
     });
 

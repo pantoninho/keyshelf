@@ -33,11 +33,11 @@ describe('keyshelf/preload', () => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    function runPreload(script: string, env: Record<string, string | undefined>) {
+    function runPreload(script: string, env: Record<string, string | undefined>, cwd?: string) {
         const result = spawnSync(
             'node',
             ['--import', `file://${PRELOAD_PATH}`, '--input-type=module'],
-            { input: script, env: { ...process.env, ...env } }
+            { input: script, env: { ...process.env, ...env }, cwd }
         );
         if (result.error) throw result.error;
         return {
@@ -113,5 +113,22 @@ describe('keyshelf/preload', () => {
 
         expect(result.status, result.stderr).toBe(0);
         expect(result.output).toBe('from-base|from-dev');
+    });
+
+    it('defaults project dir to cwd when KEYSHELF_PROJECT_DIR is not set', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { app: { name: 'from-cwd' } }
+        });
+
+        const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.APP_NAME)`;
+        const result = runPreload(
+            script,
+            { KEYSHELF_ENV: 'dev', KEYSHELF_PROJECT_DIR: undefined },
+            tmpDir
+        );
+
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.output).toBe('from-cwd');
     });
 });

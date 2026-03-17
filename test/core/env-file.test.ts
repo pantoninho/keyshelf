@@ -46,4 +46,9 @@ describe('parseEnvFile', () => {
         const result = parseEnvFile('');
         expect(result).toEqual({});
     });
+
+    it('preserves equals signs in values', () => {
+        const result = parseEnvFile('KEY=val=with=equals');
+        expect(result).toEqual({ KEY: 'val=with=equals' });
+    });
 });

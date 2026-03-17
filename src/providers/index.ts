@@ -17,6 +17,10 @@ export function createProvider(
             return new GcpSmProvider(projectName, config.project);
         case 'aws-sm':
             return new AwsSmProvider({ name: projectName });
+        default:
+            throw new Error(
+                `Unknown provider adapter: "${(config as { adapter: string }).adapter}"`
+            );
     }
 }
 

@@ -175,6 +175,25 @@ describe('print command', () => {
         expect(output).toContain('DATABASE_PORT=5432');
     });
 
+    it('--format env --reveal shows resolved secret values', async () => {
+        const provider = new LocalProvider(configDir);
+        await provider.set('dev', 'api/key', 'revealed-secret');
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: {
+                database: { host: 'localhost' },
+                api: { key: new SecretRef('api/key') }
+            }
+        });
+
+        await Print.run(['--env', 'dev', '--format', 'env', '--reveal', '--config-dir', configDir]);
+
+        const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        expect(output).toContain('DATABASE_HOST=localhost');
+        expect(output).toContain('API_KEY=revealed-secret');
+        expect(output).not.toContain('api/key');
+    });
+
     it('--format env without --reveal shows refs', async () => {
         const provider = new LocalProvider(configDir);
         await provider.set('dev', 'api/key', 'secret-key');
