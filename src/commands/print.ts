@@ -1,28 +1,25 @@
-import { Args, Command, Flags } from '@oclif/core';
+import { Command, Flags } from '@oclif/core';
 import yamlLib from 'js-yaml';
-import { loadEnvironment } from '../../core/environment.js';
-import { loadConfig, defaultConfigDir } from '../../core/config.js';
-import { resolve } from '../../core/resolver.js';
-import { replaceSecrets, flattenToEnvRecord } from '../../core/env-vars.js';
-import { SecretRef } from '../../core/types.js';
-import { SecretProvider } from '../../providers/provider.js';
-import { resolveProvider } from '../../providers/index.js';
+import { loadEnvironment } from '../core/environment.js';
+import { loadConfig, defaultConfigDir } from '../core/config.js';
+import { resolve } from '../core/resolver.js';
+import { replaceSecrets, flattenToEnvRecord } from '../core/env-vars.js';
+import { SecretRef } from '../core/types.js';
+import { SecretProvider } from '../providers/provider.js';
+import { resolveProvider } from '../providers/index.js';
 
-export default class EnvPrint extends Command {
+export default class Print extends Command {
     static override description = 'Print resolved environment config';
 
     static override examples = [
-        '<%= config.bin %> env:print dev',
-        '<%= config.bin %> env:print dev --reveal',
-        '<%= config.bin %> env:print dev --format json',
-        '<%= config.bin %> env:print dev --format env'
+        '<%= config.bin %> print --env dev',
+        '<%= config.bin %> print --env dev --reveal',
+        '<%= config.bin %> print --env dev --format json',
+        '<%= config.bin %> print --env dev --format env'
     ];
 
-    static override args = {
-        env: Args.string({ description: 'Environment name', required: true })
-    };
-
     static override flags = {
+        env: Flags.string({ description: 'Environment name', required: true }),
         reveal: Flags.boolean({ description: 'Show actual secret values', default: false }),
         format: Flags.string({
             description: 'Output format',
@@ -33,11 +30,11 @@ export default class EnvPrint extends Command {
     };
 
     async run(): Promise<void> {
-        const { args, flags } = await this.parse(EnvPrint);
+        const { flags } = await this.parse(Print);
         const cwd = process.cwd();
 
-        const envDef = await loadEnvironment(cwd, args.env);
-        const resolved = await resolve(args.env, (name) => loadEnvironment(cwd, name));
+        const envDef = await loadEnvironment(cwd, flags.env);
+        const resolved = await resolve(flags.env, (name) => loadEnvironment(cwd, name));
         const config = loadConfig(cwd);
         const configDirPath = flags['config-dir'] ?? defaultConfigDir(config);
         const provider = resolveProvider(envDef, config, configDirPath);
@@ -45,7 +42,7 @@ export default class EnvPrint extends Command {
         if (flags.format === 'json' && !flags.reveal) {
             const split = {
                 config: flattenConfig(resolved.values),
-                secrets: extractSecretRefs(resolved.values, args.env, provider)
+                secrets: extractSecretRefs(resolved.values, flags.env, provider)
             };
             this.log(JSON.stringify(split, null, 2));
             return;
@@ -53,7 +50,7 @@ export default class EnvPrint extends Command {
 
         const output = await replaceSecrets(
             resolved.values,
-            args.env,
+            flags.env,
             provider,
             flags.reveal ? 'reveal' : 'ref'
         );

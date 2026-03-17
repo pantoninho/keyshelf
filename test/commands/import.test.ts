@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
-import EnvLoad from '../../../src/commands/env/load.js';
-import { loadEnvironment, saveEnvironment } from '../../../src/core/environment.js';
-import { LocalProvider } from '../../../src/providers/local.js';
-import { SecretRef } from '../../../src/core/types.js';
+import Import from '../../src/commands/import.js';
+import { loadEnvironment, saveEnvironment } from '../../src/core/environment.js';
+import { LocalProvider } from '../../src/providers/local.js';
+import { SecretRef } from '../../src/core/types.js';
 
-describe('env:load command', () => {
+describe('import command', () => {
     let tmpDir: string;
     let origCwd: string;
     let configDir: string;
@@ -35,7 +35,7 @@ describe('env:load command', () => {
         const envFile = path.join(tmpDir, '.env');
         fs.writeFileSync(envFile, 'DATABASE_HOST=localhost\nDATABASE_PORT=5432\n');
 
-        await EnvLoad.run(['dev', envFile]);
+        await Import.run(['--env', 'dev', envFile]);
 
         const def = await loadEnvironment(tmpDir, 'dev');
         expect(def.values).toEqual({
@@ -49,7 +49,7 @@ describe('env:load command', () => {
         const envFile = path.join(tmpDir, '.env');
         fs.writeFileSync(envFile, '# comment\n\nKEY=val\n\n# another\n');
 
-        await EnvLoad.run(['dev', envFile]);
+        await Import.run(['--env', 'dev', envFile]);
 
         const def = await loadEnvironment(tmpDir, 'dev');
         expect(def.values).toEqual({ KEY: 'val' });
@@ -60,7 +60,7 @@ describe('env:load command', () => {
         const envFile = path.join(tmpDir, '.env');
         fs.writeFileSync(envFile, 'KEY="hello world"\nKEY2=\'single\'\n');
 
-        await EnvLoad.run(['dev', envFile]);
+        await Import.run(['--env', 'dev', envFile]);
 
         const def = await loadEnvironment(tmpDir, 'dev');
         expect(def.values).toEqual({ KEY: 'hello world', KEY2: 'single' });
@@ -71,7 +71,7 @@ describe('env:load command', () => {
         const envFile = path.join(tmpDir, '.env');
         fs.writeFileSync(envFile, 'HOST=localhost\nPORT=5432\n');
 
-        await EnvLoad.run(['dev', envFile, '--prefix', 'database']);
+        await Import.run(['--env', 'dev', envFile, '--prefix', 'database']);
 
         const def = await loadEnvironment(tmpDir, 'dev');
         expect(def.values).toEqual({
@@ -84,7 +84,7 @@ describe('env:load command', () => {
         const envFile = path.join(tmpDir, '.env');
         fs.writeFileSync(envFile, 'API_KEY=sk_123\nDB_PASS=s3cret\n');
 
-        await EnvLoad.run(['dev', envFile, '--secrets', '--config-dir', configDir]);
+        await Import.run(['--env', 'dev', envFile, '--secrets', '--config-dir', configDir]);
 
         const def = await loadEnvironment(tmpDir, 'dev');
         expect(def.values.API_KEY).toBeInstanceOf(SecretRef);
@@ -104,7 +104,7 @@ describe('env:load command', () => {
         const envFile = path.join(tmpDir, '.env');
         fs.writeFileSync(envFile, 'KEY=val\n');
 
-        await EnvLoad.run(['dev', envFile]);
+        await Import.run(['--env', 'dev', envFile]);
 
         const def = await loadEnvironment(tmpDir, 'dev');
         expect(def.provider).toEqual({ adapter: 'local' });
@@ -119,7 +119,7 @@ describe('env:load command', () => {
         const envFile = path.join(tmpDir, '.env');
         fs.writeFileSync(envFile, 'API_KEY=sk_123\n');
 
-        await EnvLoad.run(['dev', envFile, '--secrets', '--config-dir', configDir]);
+        await Import.run(['--env', 'dev', envFile, '--secrets', '--config-dir', configDir]);
 
         const def = await loadEnvironment(tmpDir, 'dev');
         expect(def.provider).toEqual({ adapter: 'local' });
@@ -127,6 +127,6 @@ describe('env:load command', () => {
 
     it('errors if env file not found', async () => {
         await saveEnvironment(tmpDir, 'dev', { imports: [], values: {} });
-        await expect(EnvLoad.run(['dev', '/nonexistent/.env'])).rejects.toThrow();
+        await expect(Import.run(['--env', 'dev', '/nonexistent/.env'])).rejects.toThrow();
     });
 });

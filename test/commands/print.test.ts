@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
-import EnvPrint from '../../../src/commands/env/print.js';
-import { saveEnvironment } from '../../../src/core/environment.js';
-import { LocalProvider } from '../../../src/providers/local.js';
-import { SecretRef } from '../../../src/core/types.js';
+import Print from '../../src/commands/print.js';
+import { saveEnvironment } from '../../src/core/environment.js';
+import { LocalProvider } from '../../src/providers/local.js';
+import { SecretRef } from '../../src/core/types.js';
 
-describe('env:print command', () => {
+describe('print command', () => {
     let tmpDir: string;
     let origCwd: string;
     let configDir: string;
@@ -25,7 +25,7 @@ describe('env:print command', () => {
             yaml.dump({ name: 'test-project', provider: { adapter: 'local' } })
         );
         logSpy = vi.fn();
-        vi.spyOn(EnvPrint.prototype, 'log').mockImplementation(logSpy);
+        vi.spyOn(Print.prototype, 'log').mockImplementation(logSpy);
     });
 
     afterEach(() => {
@@ -40,7 +40,7 @@ describe('env:print command', () => {
             values: { database: { host: 'localhost', port: 5432 } }
         });
 
-        await EnvPrint.run(['dev', '--config-dir', configDir]);
+        await Print.run(['--env', 'dev', '--config-dir', configDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         expect(output).toContain('host: localhost');
@@ -60,7 +60,7 @@ describe('env:print command', () => {
             }
         });
 
-        await EnvPrint.run(['dev', '--config-dir', configDir]);
+        await Print.run(['--env', 'dev', '--config-dir', configDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         expect(output).toContain('database/password');
@@ -81,7 +81,7 @@ describe('env:print command', () => {
             }
         });
 
-        await EnvPrint.run(['dev', '--reveal', '--config-dir', configDir]);
+        await Print.run(['--env', 'dev', '--reveal', '--config-dir', configDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         expect(output).toContain('s3cret');
@@ -101,7 +101,7 @@ describe('env:print command', () => {
             }
         });
 
-        await EnvPrint.run(['dev', '--format', 'json', '--config-dir', configDir]);
+        await Print.run(['--env', 'dev', '--format', 'json', '--config-dir', configDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         const parsed = JSON.parse(output);
@@ -129,7 +129,15 @@ describe('env:print command', () => {
             }
         });
 
-        await EnvPrint.run(['dev', '--format', 'json', '--reveal', '--config-dir', configDir]);
+        await Print.run([
+            '--env',
+            'dev',
+            '--format',
+            'json',
+            '--reveal',
+            '--config-dir',
+            configDir
+        ]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         const parsed = JSON.parse(output);
@@ -144,7 +152,7 @@ describe('env:print command', () => {
             values: { key: 'val' }
         });
 
-        await EnvPrint.run(['dev', '--format', 'json', '--config-dir', configDir]);
+        await Print.run(['--env', 'dev', '--format', 'json', '--config-dir', configDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         const parsed = JSON.parse(output);
@@ -160,7 +168,7 @@ describe('env:print command', () => {
             values: { database: { host: 'localhost', port: 5432 } }
         });
 
-        await EnvPrint.run(['dev', '--format', 'env', '--config-dir', configDir]);
+        await Print.run(['--env', 'dev', '--format', 'env', '--config-dir', configDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         expect(output).toContain('DATABASE_HOST=localhost');
@@ -178,7 +186,7 @@ describe('env:print command', () => {
             }
         });
 
-        await EnvPrint.run(['dev', '--format', 'env', '--config-dir', configDir]);
+        await Print.run(['--env', 'dev', '--format', 'env', '--config-dir', configDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         expect(output).toContain('DATABASE_HOST=localhost');
@@ -196,7 +204,7 @@ describe('env:print command', () => {
             provider: { adapter: 'local' }
         });
 
-        await EnvPrint.run(['dev', '--reveal', '--config-dir', envConfigDir]);
+        await Print.run(['--env', 'dev', '--reveal', '--config-dir', envConfigDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         expect(output).toContain('env-secret');
@@ -212,7 +220,7 @@ describe('env:print command', () => {
             values: { local: 'from-dev' }
         });
 
-        await EnvPrint.run(['dev', '--config-dir', configDir]);
+        await Print.run(['--env', 'dev', '--config-dir', configDir]);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
         expect(output).toContain('shared: from-base');
