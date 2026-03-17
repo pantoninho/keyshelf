@@ -5,14 +5,15 @@ import os from 'node:os';
 import yaml from 'js-yaml';
 import Up from '../../src/commands/up.js';
 import { saveEnvironment } from '../../src/core/environment.js';
-import { AwsSmProvider } from '../../src/providers/aws-sm.js';
 import { SecretRef } from '../../src/core/types.js';
+import { SecretProvider } from '../../src/providers/provider.js';
+import { providerConfig, providerLabel, createTestProvider } from './provider-fixture.js';
 
-describe('up command (e2e against real AWS SM)', () => {
+describe(`up command (e2e against ${providerLabel})`, () => {
     let tmpDir: string;
     let origCwd: string;
-    let provider: AwsSmProvider;
-    /** Tracks every {env, path} pair that might exist in AWS SM, for deterministic cleanup. */
+    let provider: SecretProvider;
+    /** Tracks every {env, path} pair that might exist in the provider, for deterministic cleanup. */
     let secretsToCleanup: Array<{ env: string; path: string }>;
 
     beforeEach(() => {
@@ -23,9 +24,9 @@ describe('up command (e2e against real AWS SM)', () => {
         fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
         fs.writeFileSync(
             path.join(tmpDir, 'keyshelf.yml'),
-            yaml.dump({ name: projectName, provider: { adapter: 'aws-sm' } })
+            yaml.dump({ name: projectName, provider: providerConfig })
         );
-        provider = new AwsSmProvider({ name: projectName });
+        provider = createTestProvider(projectName);
         secretsToCleanup = [];
     });
 
@@ -42,7 +43,7 @@ describe('up command (e2e against real AWS SM)', () => {
         }
     });
 
-    it('creates new secrets in AWS SM', async () => {
+    it('creates new secrets in the provider', async () => {
         secretsToCleanup.push({ env: 'dev', path: 'db/password' });
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
@@ -58,7 +59,7 @@ describe('up command (e2e against real AWS SM)', () => {
         expect(value).toBe('e2e-secret-value');
     });
 
-    it('deletes stale secrets from AWS SM', async () => {
+    it('deletes stale secrets from the provider', async () => {
         secretsToCleanup.push({ env: 'dev', path: 'old/stale-key' });
         await provider.set('dev', 'old/stale-key', 'stale-value');
         await waitForSecretInList(provider, 'dev', 'old/stale-key');
@@ -119,7 +120,7 @@ describe('up command (e2e against real AWS SM)', () => {
 });
 
 async function waitForSecretInList(
-    provider: AwsSmProvider,
+    provider: SecretProvider,
     env: string,
     secretPath: string,
     timeoutMs = 30_000

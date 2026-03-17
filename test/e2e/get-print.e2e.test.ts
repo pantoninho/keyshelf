@@ -6,13 +6,14 @@ import yaml from 'js-yaml';
 import Get from '../../src/commands/get.js';
 import Print from '../../src/commands/print.js';
 import { saveEnvironment } from '../../src/core/environment.js';
-import { AwsSmProvider } from '../../src/providers/aws-sm.js';
 import { SecretRef } from '../../src/core/types.js';
+import { SecretProvider } from '../../src/providers/provider.js';
+import { providerConfig, providerLabel, createTestProvider } from './provider-fixture.js';
 
-describe('get and print commands (e2e against real AWS SM)', () => {
+describe(`get and print commands (e2e against ${providerLabel})`, () => {
     let tmpDir: string;
     let origCwd: string;
-    let provider: AwsSmProvider;
+    let provider: SecretProvider;
     let secretsToCleanup: Array<{ env: string; path: string }>;
 
     beforeEach(() => {
@@ -23,9 +24,9 @@ describe('get and print commands (e2e against real AWS SM)', () => {
         fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
         fs.writeFileSync(
             path.join(tmpDir, 'keyshelf.yml'),
-            yaml.dump({ name: projectName, provider: { adapter: 'aws-sm' } })
+            yaml.dump({ name: projectName, provider: providerConfig })
         );
-        provider = new AwsSmProvider({ name: projectName });
+        provider = createTestProvider(projectName);
         secretsToCleanup = [];
     });
 
@@ -44,7 +45,7 @@ describe('get and print commands (e2e against real AWS SM)', () => {
     });
 
     describe('get', () => {
-        it('retrieves a secret value from AWS SM', async () => {
+        it('retrieves a secret value from the provider', async () => {
             secretsToCleanup.push({ env: 'dev', path: 'db/password' });
             await provider.set('dev', 'db/password', 'real-secret-from-aws');
             await saveEnvironment(tmpDir, 'dev', {
@@ -60,7 +61,7 @@ describe('get and print commands (e2e against real AWS SM)', () => {
             expect(logSpy).toHaveBeenCalledWith('real-secret-from-aws');
         });
 
-        it('retrieves an inherited secret from AWS SM', async () => {
+        it('retrieves an inherited secret from the provider', async () => {
             secretsToCleanup.push({ env: 'dev', path: 'shared/key' });
             await provider.set('dev', 'shared/key', 'inherited-aws-secret');
             await saveEnvironment(tmpDir, 'base', {
@@ -82,7 +83,7 @@ describe('get and print commands (e2e against real AWS SM)', () => {
     });
 
     describe('print --reveal', () => {
-        it('reveals secret values from AWS SM in yaml format', async () => {
+        it('reveals secret values in yaml format', async () => {
             secretsToCleanup.push({ env: 'dev', path: 'api/key' });
             await provider.set('dev', 'api/key', 'revealed-aws-secret');
             await saveEnvironment(tmpDir, 'dev', {

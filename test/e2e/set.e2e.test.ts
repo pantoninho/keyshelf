@@ -5,13 +5,14 @@ import os from 'node:os';
 import yaml from 'js-yaml';
 import SetCommand from '../../src/commands/set.js';
 import { saveEnvironment, loadEnvironment } from '../../src/core/environment.js';
-import { AwsSmProvider } from '../../src/providers/aws-sm.js';
 import { SecretRef } from '../../src/core/types.js';
+import { SecretProvider } from '../../src/providers/provider.js';
+import { providerConfig, providerLabel, createTestProvider } from './provider-fixture.js';
 
-describe('set command (e2e against real AWS SM)', () => {
+describe(`set command (e2e against ${providerLabel})`, () => {
     let tmpDir: string;
     let origCwd: string;
-    let provider: AwsSmProvider;
+    let provider: SecretProvider;
     let secretsToCleanup: Array<{ env: string; path: string }>;
 
     beforeEach(() => {
@@ -22,9 +23,9 @@ describe('set command (e2e against real AWS SM)', () => {
         fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
         fs.writeFileSync(
             path.join(tmpDir, 'keyshelf.yml'),
-            yaml.dump({ name: projectName, provider: { adapter: 'aws-sm' } })
+            yaml.dump({ name: projectName, provider: providerConfig })
         );
-        provider = new AwsSmProvider({ name: projectName });
+        provider = createTestProvider(projectName);
         secretsToCleanup = [];
     });
 
@@ -41,7 +42,7 @@ describe('set command (e2e against real AWS SM)', () => {
         }
     });
 
-    it('sets a secret value in AWS SM', async () => {
+    it('sets a secret value in the provider', async () => {
         secretsToCleanup.push({ env: 'dev', path: 'api/key' });
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
@@ -71,7 +72,7 @@ describe('set command (e2e against real AWS SM)', () => {
         expect(value).toBe('brand-new-value');
     });
 
-    it('propagates secret to child environments in AWS SM', async () => {
+    it('propagates secret to child environments', async () => {
         secretsToCleanup.push(
             { env: 'base', path: 'shared/token' },
             { env: 'staging', path: 'shared/token' }
