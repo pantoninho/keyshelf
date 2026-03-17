@@ -4,7 +4,7 @@ export default defineConfig({
     test: {
         globals: true,
         root: '.',
-        exclude: ['test/e2e/**', 'node_modules/**'],
+        exclude: ['test/e2e/**', 'node_modules/**', '.claude/worktrees/**'],
         coverage: {
             provider: 'v8',
             reporter: ['text', 'lcov', 'clover', 'json'],
