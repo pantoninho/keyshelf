@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.1.0](https://github.com/pantoninho/keyshelf/compare/v2.0.2...v2.1.0) (2026-03-17)
+
+
+### Features
+
+* auto-create SecretRef in YAML when `set` targets a new path ([#25](https://github.com/pantoninho/keyshelf/issues/25)) ([edb2771](https://github.com/pantoninho/keyshelf/commit/edb2771263cc24d5851de9ea1b368e8275b0b4f7))
+* walk-up directory discovery for monorepo support ([#28](https://github.com/pantoninho/keyshelf/issues/28)) ([d207738](https://github.com/pantoninho/keyshelf/commit/d2077382607d0c898297311851168d7ea9ed5042))
+
+
+### Bug Fixes
+
+* validate environment/project names and harden input handling ([#27](https://github.com/pantoninho/keyshelf/issues/27)) ([08c12c4](https://github.com/pantoninho/keyshelf/commit/08c12c4591683b06cd4175b60f99b4fe705f8d1f))
+
 ## [2.0.2](https://github.com/pantoninho/keyshelf/compare/v2.0.1...v2.0.2) (2026-03-17)
 
 
