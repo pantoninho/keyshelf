@@ -37,6 +37,10 @@
         "cli",
         "yaml"
     ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/pantoninho/keyshelf"
+    },
     "author": "pantoninho",
     "license": "ISC",
     "files": [
