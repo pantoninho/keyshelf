@@ -13,12 +13,14 @@ import { providerConfig, providerLabel, createTestProvider } from './provider-fi
 describe(`get and print commands (e2e against ${providerLabel})`, () => {
     let tmpDir: string;
     let origCwd: string;
+    let configDir: string;
     let provider: SecretProvider;
     let secretsToCleanup: Array<{ env: string; path: string }>;
 
     beforeEach(() => {
         const projectName = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-e2e-read-'));
+        configDir = path.join(tmpDir, '.config');
         origCwd = process.cwd();
         process.chdir(tmpDir);
         fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
@@ -26,7 +28,7 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
             path.join(tmpDir, 'keyshelf.yml'),
             yaml.dump({ name: projectName, provider: providerConfig })
         );
-        provider = createTestProvider(projectName);
+        provider = createTestProvider(projectName, configDir);
         secretsToCleanup = [];
     });
 
@@ -56,7 +58,7 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
             const logSpy = vi.fn();
             vi.spyOn(Get.prototype, 'log').mockImplementation(logSpy);
 
-            await Get.run(['--env', 'dev', 'db/password']);
+            await Get.run(['--env', 'dev', '--config-dir', configDir, 'db/password']);
 
             expect(logSpy).toHaveBeenCalledWith('real-secret-from-aws');
         });
@@ -76,7 +78,7 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
             const logSpy = vi.fn();
             vi.spyOn(Get.prototype, 'log').mockImplementation(logSpy);
 
-            await Get.run(['--env', 'dev', 'shared/key']);
+            await Get.run(['--env', 'dev', '--config-dir', configDir, 'shared/key']);
 
             expect(logSpy).toHaveBeenCalledWith('inherited-aws-secret');
         });
@@ -97,7 +99,7 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
             const logSpy = vi.fn();
             vi.spyOn(Print.prototype, 'log').mockImplementation(logSpy);
 
-            await Print.run(['--env', 'dev', '--reveal']);
+            await Print.run(['--env', 'dev', '--config-dir', configDir, '--reveal']);
 
             const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
             expect(output).toContain('revealed-aws-secret');
@@ -120,7 +122,15 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
             const logSpy = vi.fn();
             vi.spyOn(Print.prototype, 'log').mockImplementation(logSpy);
 
-            await Print.run(['--env', 'dev', '--format', 'json', '--reveal']);
+            await Print.run([
+                '--env',
+                'dev',
+                '--config-dir',
+                configDir,
+                '--format',
+                'json',
+                '--reveal'
+            ]);
 
             const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
             const parsed = JSON.parse(output);
@@ -143,7 +153,15 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
             const logSpy = vi.fn();
             vi.spyOn(Print.prototype, 'log').mockImplementation(logSpy);
 
-            await Print.run(['--env', 'dev', '--format', 'env', '--reveal']);
+            await Print.run([
+                '--env',
+                'dev',
+                '--config-dir',
+                configDir,
+                '--format',
+                'env',
+                '--reveal'
+            ]);
 
             const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
             expect(output).toContain('API_KEY=env-revealed-secret');

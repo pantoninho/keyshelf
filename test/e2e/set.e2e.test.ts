@@ -12,12 +12,14 @@ import { providerConfig, providerLabel, createTestProvider } from './provider-fi
 describe(`set command (e2e against ${providerLabel})`, () => {
     let tmpDir: string;
     let origCwd: string;
+    let configDir: string;
     let provider: SecretProvider;
     let secretsToCleanup: Array<{ env: string; path: string }>;
 
     beforeEach(() => {
         const projectName = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-e2e-set-'));
+        configDir = path.join(tmpDir, '.config');
         origCwd = process.cwd();
         process.chdir(tmpDir);
         fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
@@ -25,7 +27,7 @@ describe(`set command (e2e against ${providerLabel})`, () => {
             path.join(tmpDir, 'keyshelf.yml'),
             yaml.dump({ name: projectName, provider: providerConfig })
         );
-        provider = createTestProvider(projectName);
+        provider = createTestProvider(projectName, configDir);
         secretsToCleanup = [];
     });
 
@@ -49,7 +51,14 @@ describe(`set command (e2e against ${providerLabel})`, () => {
             values: { api: { key: new SecretRef('api/key') } }
         });
 
-        await SetCommand.run(['--env', 'dev', 'api/key', 'e2e-api-key-value']);
+        await SetCommand.run([
+            '--env',
+            'dev',
+            '--config-dir',
+            configDir,
+            'api/key',
+            'e2e-api-key-value'
+        ]);
 
         const value = await provider.get('dev', 'api/key');
         expect(value).toBe('e2e-api-key-value');
@@ -62,7 +71,14 @@ describe(`set command (e2e against ${providerLabel})`, () => {
             values: {}
         });
 
-        await SetCommand.run(['--env', 'dev', 'new/secret', 'brand-new-value']);
+        await SetCommand.run([
+            '--env',
+            'dev',
+            '--config-dir',
+            configDir,
+            'new/secret',
+            'brand-new-value'
+        ]);
 
         const envDef = await loadEnvironment(tmpDir, 'dev');
         const { new: newNode } = envDef.values as { new: { secret: unknown } };
@@ -86,7 +102,14 @@ describe(`set command (e2e against ${providerLabel})`, () => {
             values: {}
         });
 
-        await SetCommand.run(['--env', 'base', 'shared/token', 'propagated-e2e-value']);
+        await SetCommand.run([
+            '--env',
+            'base',
+            '--config-dir',
+            configDir,
+            'shared/token',
+            'propagated-e2e-value'
+        ]);
 
         const baseValue = await provider.get('base', 'shared/token');
         expect(baseValue).toBe('propagated-e2e-value');

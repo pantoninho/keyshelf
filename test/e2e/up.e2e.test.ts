@@ -12,6 +12,7 @@ import { providerConfig, providerLabel, createTestProvider } from './provider-fi
 describe(`up command (e2e against ${providerLabel})`, () => {
     let tmpDir: string;
     let origCwd: string;
+    let configDir: string;
     let provider: SecretProvider;
     /** Tracks every {env, path} pair that might exist in the provider, for deterministic cleanup. */
     let secretsToCleanup: Array<{ env: string; path: string }>;
@@ -19,6 +20,7 @@ describe(`up command (e2e against ${providerLabel})`, () => {
     beforeEach(() => {
         const projectName = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-e2e-up-'));
+        configDir = path.join(tmpDir, '.config');
         origCwd = process.cwd();
         process.chdir(tmpDir);
         fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
@@ -26,7 +28,7 @@ describe(`up command (e2e against ${providerLabel})`, () => {
             path.join(tmpDir, 'keyshelf.yml'),
             yaml.dump({ name: projectName, provider: providerConfig })
         );
-        provider = createTestProvider(projectName);
+        provider = createTestProvider(projectName, configDir);
         secretsToCleanup = [];
     });
 
@@ -53,7 +55,7 @@ describe(`up command (e2e against ${providerLabel})`, () => {
         const secretsFile = path.join(tmpDir, 'secrets.env');
         fs.writeFileSync(secretsFile, 'db/password=e2e-secret-value\n');
 
-        await Up.run(['--apply', '--from-file', secretsFile]);
+        await Up.run(['--apply', '--config-dir', configDir, '--from-file', secretsFile]);
 
         const value = await provider.get('dev', 'db/password');
         expect(value).toBe('e2e-secret-value');
@@ -72,7 +74,7 @@ describe(`up command (e2e against ${providerLabel})`, () => {
         const secretsFile = path.join(tmpDir, 'secrets.env');
         fs.writeFileSync(secretsFile, '');
 
-        await Up.run(['--apply', '--from-file', secretsFile]);
+        await Up.run(['--apply', '--config-dir', configDir, '--from-file', secretsFile]);
 
         await expect(provider.get('dev', 'old/stale-key')).rejects.toThrow(
             /not found|marked for deletion/
@@ -96,7 +98,7 @@ describe(`up command (e2e against ${providerLabel})`, () => {
             values: { shared: { token: new SecretRef('shared/token') } }
         });
 
-        await Up.run(['--apply']);
+        await Up.run(['--apply', '--config-dir', configDir]);
 
         const value = await provider.get('dev', 'shared/token');
         expect(value).toBe('base-token-value');
@@ -112,7 +114,7 @@ describe(`up command (e2e against ${providerLabel})`, () => {
             values: { db: { password: new SecretRef('db/password') } }
         });
 
-        await Up.run(['--apply']);
+        await Up.run(['--apply', '--config-dir', configDir]);
 
         const value = await provider.get('dev', 'db/password');
         expect(value).toBe('already-set');

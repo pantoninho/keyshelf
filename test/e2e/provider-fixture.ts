@@ -9,6 +9,8 @@ function getProviderConfig(): ProviderConfig {
     switch (adapter) {
         case 'aws-sm':
             return { adapter: 'aws-sm' };
+        case 'local':
+            return { adapter: 'local' };
         case 'gcp-sm': {
             const project = process.env.KEYSHELF_E2E_GCP_PROJECT;
             if (!project) {
@@ -25,6 +27,6 @@ export const providerConfig = getProviderConfig();
 
 export const providerLabel = providerConfig.adapter;
 
-export function createTestProvider(projectName: string): SecretProvider {
-    return createProvider(providerConfig, '', projectName);
+export function createTestProvider(projectName: string, configDir: string): SecretProvider {
+    return createProvider(providerConfig, configDir, projectName);
 }
