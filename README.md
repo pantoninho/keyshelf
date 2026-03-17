@@ -144,25 +144,25 @@ keyshelf env:create dev
 keyshelf env:create staging --import base --import shared
 ```
 
-### `keyshelf env:print <env>`
+### `keyshelf print --env <env>`
 
 Print the fully resolved config tree for an environment. Secrets are masked by default.
 
 ```bash
-keyshelf env:print dev                # YAML output, secrets masked
-keyshelf env:print dev --reveal       # show actual secret values
-keyshelf env:print dev --format json  # JSON output
-keyshelf env:print dev --format env   # KEY=VALUE pairs (uses env mapping)
+keyshelf print --env dev                # YAML output, secrets masked
+keyshelf print --env dev --reveal       # show actual secret values
+keyshelf print --env dev --format json  # JSON output
+keyshelf print --env dev --format env   # KEY=VALUE pairs (uses env mapping)
 ```
 
-### `keyshelf env:load <env> <file>`
+### `keyshelf import --env <env> <file>`
 
 Load KEY=VALUE pairs from an env file into an environment.
 
 ```bash
-keyshelf env:load dev .env
-keyshelf env:load dev .env --prefix database       # nest under database/
-keyshelf env:load dev .env.secrets --secrets        # store as secrets
+keyshelf import --env dev .env
+keyshelf import --env dev .env --prefix database       # nest under database/
+keyshelf import --env dev .env.secrets --secrets        # store as secrets
 ```
 
 ### `keyshelf config:get <env> <path>`
@@ -228,7 +228,7 @@ env:
     APP_NAME: app/name
 ```
 
-Only paths listed in `env` are injected as environment variables by `keyshelf run` and `keyshelf env:print --format env`. This gives you explicit control over your process environment contract.
+Only paths listed in `env` are injected as environment variables by `keyshelf run` and `keyshelf print --format env`. This gives you explicit control over your process environment contract.
 
 The `env` mapping is also used by `keyshelf up --from-env` to know which process env vars to read when sourcing new secret values non-interactively.
 
