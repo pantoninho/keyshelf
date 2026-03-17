@@ -189,6 +189,10 @@ describe('print command', () => {
                 api: { key: new SecretRef('api/key') }
             }
         });
+        fs.writeFileSync(
+            path.join(tmpDir, '.env.keyshelf'),
+            'DATABASE_HOST=database/host\nAPI_KEY=api/key\n'
+        );
 
         await Print.run(['--env', 'dev', '--format', 'env', '--reveal', '--config-dir', configDir]);
 

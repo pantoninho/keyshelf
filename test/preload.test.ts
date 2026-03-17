@@ -34,10 +34,14 @@ describe('keyshelf/preload', () => {
     });
 
     function runPreload(script: string, env: Record<string, string | undefined>, cwd?: string) {
+        const merged: Record<string, string> = {};
+        for (const [k, v] of Object.entries({ ...process.env, ...env })) {
+            if (v !== undefined) merged[k] = v;
+        }
         const result = spawnSync(
             'node',
             ['--import', `file://${PRELOAD_PATH}`, '--input-type=module'],
-            { input: script, env: { ...process.env, ...env }, cwd }
+            { input: script, env: merged, cwd }
         );
         if (result.error) throw result.error;
         return {
@@ -126,6 +130,7 @@ describe('keyshelf/preload', () => {
             imports: [],
             values: { app: { name: 'from-cwd' } }
         });
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'APP_NAME=app/name\n');
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.APP_NAME)`;
         const result = runPreload(
