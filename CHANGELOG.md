@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/pantoninho/keyshelf/compare/v2.0.0...v2.0.1) (2026-03-17)
+
+
+### Bug Fixes
+
+* exclude CHANGELOG.md from prettier checks ([af66cc3](https://github.com/pantoninho/keyshelf/commit/af66cc3f04e5c4afb4c98c8adb0ccd7cdb409f62))
+
 ## [2.0.0](https://github.com/pantoninho/keyshelf/compare/v1.6.0...v2.0.0) (2026-03-17)
 
 
