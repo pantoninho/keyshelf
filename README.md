@@ -72,11 +72,7 @@ Step-by-step instructions for integrating keyshelf into an existing project. Eac
 
 ### What belongs in keyshelf
 
-**Put in keyshelf:** database credentials, API keys, service URLs, feature flags, connection strings, port numbers, external service config — anything your app reads from environment variables or config files that varies across environments.
-
-**Leave out of keyshelf:** runtime-only variables like `NODE_ENV`, `PATH`, `HOME`, `CI`, or anything set by the platform/runtime itself. These are not application config — they describe the execution context.
-
-**Rule of thumb:** if the value is the same regardless of which machine runs the code, it probably belongs in keyshelf. If it describes the machine itself, it does not.
+Database credentials, API keys, service URLs, feature flags, connection strings, port numbers, external service config — anything your app reads from environment variables or config files that varies across environments.
 
 ### Step 1: Initialize
 
