@@ -30,6 +30,13 @@ export function readMaskedLine(prompt: string): Promise<string> {
                     reject(new Error('Aborted by user'));
                     return;
                 }
+                if (char === '\u007f' || char === '\b') {
+                    if (value.length > 0) {
+                        value = value.slice(0, -1);
+                        process.stdout.write('\b \b');
+                    }
+                    continue;
+                }
                 value += char;
                 process.stdout.write('*');
             }
