@@ -41,7 +41,14 @@ describe('set command', () => {
             values: { database: { password: new SecretRef('database/password') } }
         });
 
-        await SetCommand.run(['--env', 'dev', 'database/password', 'mysecret', '--config-dir', configDir]);
+        await SetCommand.run([
+            '--env',
+            'dev',
+            'database/password',
+            'mysecret',
+            '--config-dir',
+            configDir
+        ]);
 
         const provider = new LocalProvider(configDir);
         const stored = await provider.get('dev', 'database/password');
@@ -80,7 +87,14 @@ describe('set command', () => {
 
         const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-        await SetCommand.run(['--env', 'dev', 'database/password', 'newvalue', '--config-dir', configDir]);
+        await SetCommand.run([
+            '--env',
+            'dev',
+            'database/password',
+            'newvalue',
+            '--config-dir',
+            configDir
+        ]);
 
         expect(stderrSpy).toHaveBeenCalledWith(
             expect.stringContaining('Overwriting plain value at database/password')
@@ -145,7 +159,14 @@ describe('set command', () => {
 
     it('errors with helpful message if environment does not exist', async () => {
         await expect(
-            SetCommand.run(['--env', 'nonexistent', 'some/path', 'value', '--config-dir', configDir])
+            SetCommand.run([
+                '--env',
+                'nonexistent',
+                'some/path',
+                'value',
+                '--config-dir',
+                configDir
+            ])
         ).rejects.toThrow(/nonexistent/);
     });
 });
