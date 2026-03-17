@@ -34,42 +34,43 @@ jobs:
                   project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
                   coverage-reports: coverage/lcov.info
 
-    release:
+    release-please:
         if: github.event_name == 'push'
-        needs: test
         runs-on: ubuntu-latest
         permissions:
             contents: write
             pull-requests: write
-
+        outputs:
+            release_created: ${{ steps.release.outputs.release_created }}
         steps:
-            - uses: google-github-actions/release-please-action@v4
+            - uses: googleapis/release-please-action@v4
               id: release
               with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
+                  release-type: node
 
+    publish:
+        if: ${{ needs.release-please.outputs.release_created }}
+        needs: [test, release-please]
+        runs-on: ubuntu-latest
+        permissions:
+            id-token: write
+        steps:
             - uses: actions/checkout@v4
-              if: ${{ steps.release.outputs.release_created }}
 
             - uses: actions/setup-node@v4
-              if: ${{ steps.release.outputs.release_created }}
               with:
                   node-version: 20
                   cache: npm
                   registry-url: https://registry.npmjs.org
 
             - run: npm ci
-              if: ${{ steps.release.outputs.release_created }}
 
             - run: npm run build
-              if: ${{ steps.release.outputs.release_created }}
 
             - name: Verify the integrity of provenance attestations and registry signatures
               run: npm audit signatures
-              if: ${{ steps.release.outputs.release_created }}
 
             - name: Publish to npm
               run: npm publish --provenance --access public
-              if: ${{ steps.release.outputs.release_created }}
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
