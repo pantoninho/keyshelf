@@ -196,4 +196,103 @@ describe('set command', () => {
             ])
         ).rejects.toThrow(/nonexistent/);
     });
+
+    it('propagates through a 3-level chain (base → staging → prod)', async () => {
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { shared: { key: new SecretRef('shared/key') } }
+        });
+        await saveEnvironment(tmpDir, 'staging', {
+            imports: ['base'],
+            values: {}
+        });
+        await saveEnvironment(tmpDir, 'prod', {
+            imports: ['staging'],
+            values: {}
+        });
+
+        await SetCommand.run([
+            '--env',
+            'base',
+            'shared/key',
+            'deep-propagated',
+            '--config-dir',
+            configDir
+        ]);
+
+        const provider = new LocalProvider(configDir);
+        expect(await provider.get('base', 'shared/key')).toBe('deep-propagated');
+        expect(await provider.get('staging', 'shared/key')).toBe('deep-propagated');
+        expect(await provider.get('prod', 'shared/key')).toBe('deep-propagated');
+    });
+
+    it('propagates through diamond dependency without duplicating writes', async () => {
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { shared: { token: new SecretRef('shared/token') } }
+        });
+        await saveEnvironment(tmpDir, 'shared', {
+            imports: ['base'],
+            values: {}
+        });
+        await saveEnvironment(tmpDir, 'staging', {
+            imports: ['base'],
+            values: {}
+        });
+        await saveEnvironment(tmpDir, 'prod', {
+            imports: ['shared', 'staging'],
+            values: {}
+        });
+
+        const setSpy = vi.spyOn(LocalProvider.prototype, 'set');
+
+        await SetCommand.run([
+            '--env',
+            'base',
+            'shared/token',
+            'diamond-value',
+            '--config-dir',
+            configDir
+        ]);
+
+        const provider = new LocalProvider(configDir);
+        expect(await provider.get('base', 'shared/token')).toBe('diamond-value');
+        expect(await provider.get('shared', 'shared/token')).toBe('diamond-value');
+        expect(await provider.get('staging', 'shared/token')).toBe('diamond-value');
+        expect(await provider.get('prod', 'shared/token')).toBe('diamond-value');
+
+        const prodWrites = setSpy.mock.calls.filter(
+            ([env, secretPath]) => env === 'prod' && secretPath === 'shared/token'
+        );
+        expect(prodWrites).toHaveLength(1);
+    });
+
+    it('stops propagation mid-chain when provider.set throws', async () => {
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { db: { pass: new SecretRef('db/pass') } }
+        });
+        await saveEnvironment(tmpDir, 'staging', {
+            imports: ['base'],
+            values: {}
+        });
+        await saveEnvironment(tmpDir, 'prod', {
+            imports: ['staging'],
+            values: {}
+        });
+
+        const realSet = LocalProvider.prototype.set.bind(new LocalProvider(configDir));
+        vi.spyOn(LocalProvider.prototype, 'set').mockImplementation(
+            async (env, secretPath, value) => {
+                if (env === 'staging') {
+                    throw new Error('Provider unavailable for staging');
+                }
+                return realSet(env, secretPath, value);
+            }
+        );
+
+        await expect(
+            SetCommand.run(['--env', 'base', 'db/pass', 'secret', '--config-dir', configDir])
+        ).rejects.toThrow(/Provider unavailable for staging/);
+    });
 });
