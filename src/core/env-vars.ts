@@ -74,3 +74,23 @@ export function flattenToEnvRecord(
     }
     return result;
 }
+
+/**
+ * Classify each mapped env var as sensitive or not by checking
+ * whether its source path resolves to a SecretRef in the raw tree.
+ *
+ * @param rawValues - The raw (pre-secret-replacement) resolved values tree
+ * @param envMapping - Mapping of env var name to slash-delimited value path
+ * @returns Record mapping env var names to boolean sensitivity flags
+ */
+export function classifyEnvRecord(
+    rawValues: Record<string, unknown>,
+    envMapping: Record<string, string>
+): Record<string, boolean> {
+    const result: Record<string, boolean> = {};
+    for (const [varName, valuePath] of Object.entries(envMapping)) {
+        const raw = lookupPath(rawValues, valuePath);
+        result[varName] = raw instanceof SecretRef;
+    }
+    return result;
+}

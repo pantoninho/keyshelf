@@ -16,8 +16,15 @@ export type ProviderConfig =
     | { adapter: 'gcp-sm'; project: string }
     | { adapter: 'aws-sm' };
 
+/** Valid EAS environment names. */
+export type EasEnvironment = 'development' | 'preview' | 'production';
+
+/** Discriminated union for deploy target configuration. */
+export type TargetConfig = { adapter: 'eas'; environment: EasEnvironment };
+
 /** Project-level configuration from keyshelf.yml. */
 export interface KeyshelfConfig {
     name: string;
     provider: ProviderConfig;
+    targets?: Record<string, TargetConfig>;
 }

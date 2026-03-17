@@ -2,9 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
-import { KeyshelfConfig, ProviderConfig } from './types.js';
+import { KeyshelfConfig, ProviderConfig, TargetConfig, EasEnvironment } from './types.js';
 
 const KNOWN_ADAPTERS = ['local', 'gcp-sm', 'aws-sm'];
+const KNOWN_TARGET_ADAPTERS = ['eas'];
+const EAS_ENVIRONMENTS: EasEnvironment[] = ['development', 'preview', 'production'];
 
 /** Parse and validate a raw provider object into a ProviderConfig. */
 export function parseProviderConfig(
@@ -110,5 +112,62 @@ export function loadConfig(projectRoot: string): KeyshelfConfig {
     const provider = obj.provider as Record<string, unknown>;
     const providerConfig = parseProviderConfig(provider, 'keyshelf.yml');
 
-    return { name: obj.name, provider: providerConfig };
+    const targets = parseTargetsConfig(obj.targets, 'keyshelf.yml');
+
+    return { name: obj.name, provider: providerConfig, ...(targets && { targets }) };
+}
+
+/** Parse and validate a raw targets object into a Record of TargetConfig. */
+function parseTargetsConfig(
+    raw: unknown,
+    context: string
+): Record<string, TargetConfig> | undefined {
+    if (raw === undefined || raw === null) return undefined;
+
+    if (typeof raw !== 'object' || Array.isArray(raw)) {
+        throw new Error(`Invalid ${context}: "targets" must be a YAML mapping.`);
+    }
+
+    const targets: Record<string, TargetConfig> = {};
+    for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+            throw new Error(`Invalid ${context}: target "${name}" must be a YAML mapping.`);
+        }
+        targets[name] = parseTargetConfig(value as Record<string, unknown>, context, name);
+    }
+
+    return targets;
+}
+
+/** Parse and validate a single raw target entry into a TargetConfig. */
+function parseTargetConfig(
+    raw: Record<string, unknown>,
+    context: string,
+    name: string
+): TargetConfig {
+    if (!raw.adapter || typeof raw.adapter !== 'string') {
+        throw new Error(
+            `Invalid ${context}: target "${name}" is missing required field "adapter".`
+        );
+    }
+
+    if (!KNOWN_TARGET_ADAPTERS.includes(raw.adapter)) {
+        throw new Error(
+            `Invalid ${context}: target "${name}" has unknown adapter "${raw.adapter}". Available target adapters: ${KNOWN_TARGET_ADAPTERS.join(', ')}.`
+        );
+    }
+
+    if (!raw.environment || typeof raw.environment !== 'string') {
+        throw new Error(
+            `Invalid ${context}: target "${name}" is missing required field "environment".`
+        );
+    }
+
+    if (!EAS_ENVIRONMENTS.includes(raw.environment as EasEnvironment)) {
+        throw new Error(
+            `Invalid ${context}: target "${name}" has invalid environment "${raw.environment}". Must be one of: ${EAS_ENVIRONMENTS.join(', ')}.`
+        );
+    }
+
+    return { adapter: 'eas', environment: raw.environment as EasEnvironment };
 }
