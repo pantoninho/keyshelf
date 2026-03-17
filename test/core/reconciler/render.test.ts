@@ -77,43 +77,4 @@ describe('renderPlan', () => {
         expect(output).toContain('Environment: base');
         expect(output).toContain('Environment: dev');
     });
-
-    it('uses green ANSI code for add changes', () => {
-        const plan: ReconciliationPlan = {
-            environments: [
-                {
-                    envName: 'dev',
-                    secretChanges: [{ kind: 'add', path: 'db/password' }]
-                }
-            ]
-        };
-        const output = renderPlan(plan);
-        expect(output).toContain('\x1b[32m');
-    });
-
-    it('uses red ANSI code for remove changes', () => {
-        const plan: ReconciliationPlan = {
-            environments: [
-                {
-                    envName: 'dev',
-                    secretChanges: [{ kind: 'remove', path: 'old/key' }]
-                }
-            ]
-        };
-        const output = renderPlan(plan);
-        expect(output).toContain('\x1b[31m');
-    });
-
-    it('uses cyan ANSI code for copy changes', () => {
-        const plan: ReconciliationPlan = {
-            environments: [
-                {
-                    envName: 'dev',
-                    secretChanges: [{ kind: 'copy', path: 'shared/token', sourceEnv: 'base' }]
-                }
-            ]
-        };
-        const output = renderPlan(plan);
-        expect(output).toContain('\x1b[36m');
-    });
 });

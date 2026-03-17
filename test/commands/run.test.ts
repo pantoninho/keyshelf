@@ -160,6 +160,24 @@ describe('run command', () => {
         ).rejects.toThrow(/Environment "nonexistent" not found/);
     });
 
+    it('errors when spawned command does not exist (ENOENT)', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { key: 'val' }
+        });
+
+        await expect(
+            Run.run([
+                '--env',
+                'dev',
+                '--config-dir',
+                configDir,
+                '--',
+                'nonexistent-command-xyz-abc'
+            ])
+        ).rejects.toThrow(/Failed to run command/);
+    });
+
     it('includes inherited values from imports', async () => {
         await saveEnvironment(tmpDir, 'base', {
             imports: [],

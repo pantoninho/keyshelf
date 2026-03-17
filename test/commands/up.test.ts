@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
+import readline from 'node:readline';
 import Up from '../../src/commands/up.js';
 import { saveEnvironment } from '../../src/core/environment.js';
 import { LocalProvider } from '../../src/providers/local.js';
@@ -178,6 +179,27 @@ describe('up command', () => {
         const provider = new LocalProvider(configDir);
         const value = await provider.get('dev', 'db/password');
         expect(value).toBe('env-secret-value');
+    });
+
+    it('does not apply changes when --apply is not passed and user declines', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { db: { password: new SecretRef('db/password') } }
+        });
+
+        // Simulate user answering 'n' to the confirmation prompt
+        vi.spyOn(readline, 'createInterface').mockReturnValue({
+            question: (_prompt: string, cb: (answer: string) => void) => cb('n'),
+            close: vi.fn()
+        } as unknown as readline.Interface);
+
+        const setSpy = vi.spyOn(LocalProvider.prototype, 'set');
+
+        vi.spyOn(Up.prototype, 'log').mockImplementation(() => {});
+
+        await Up.run(['--config-dir', configDir]);
+
+        expect(setSpy).not.toHaveBeenCalled();
     });
 
     it('processes environments in topological order (parent before child)', async () => {

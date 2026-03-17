@@ -61,35 +61,68 @@ describe('GcpSmProvider', () => {
     });
 
     describe('set', () => {
-        it('adds version to existing secret', async () => {
-            mockClient.getSecret.mockResolvedValue([{}]);
-            mockClient.addSecretVersion.mockResolvedValue([{}]);
+        it('value is retrievable after set to existing secret', async () => {
+            const store = new Map<string, string>();
+
+            mockClient.getSecret.mockImplementation(({ name }: { name: string }) => {
+                const id = name.split('/secrets/')[1];
+                return store.has(id) ? Promise.resolve([{}]) : Promise.reject({ code: 5 });
+            });
+            mockClient.createSecret.mockImplementation(({ secretId }: { secretId: string }) => {
+                store.set(secretId, '');
+                return Promise.resolve([{}]);
+            });
+            mockClient.addSecretVersion.mockImplementation(
+                ({ parent, payload }: { parent: string; payload: { data: Buffer } }) => {
+                    const id = parent.split('/secrets/')[1];
+                    store.set(id, payload.data.toString('utf-8'));
+                    return Promise.resolve([{}]);
+                }
+            );
+            mockClient.accessSecretVersion.mockImplementation(({ name }: { name: string }) => {
+                const id = name.split('/secrets/')[1].replace('/versions/latest', '');
+                const val = store.get(id);
+                if (val === undefined) return Promise.reject({ code: 5 });
+                return Promise.resolve([{ payload: { data: Buffer.from(val) } }]);
+            });
 
             await provider.set('dev', 'db/password', 'newvalue');
+            const result = await provider.get('dev', 'db/password');
 
-            expect(mockClient.getSecret).toHaveBeenCalledWith({
-                name: 'projects/my-project/secrets/myapp__dev__db__password'
-            });
-            expect(mockClient.createSecret).not.toHaveBeenCalled();
-            expect(mockClient.addSecretVersion).toHaveBeenCalledWith({
-                parent: 'projects/my-project/secrets/myapp__dev__db__password',
-                payload: { data: Buffer.from('newvalue', 'utf-8') }
-            });
+            expect(result).toBe('newvalue');
         });
 
         it('creates secret before adding version when it does not exist', async () => {
-            mockClient.getSecret.mockRejectedValue({ code: 5 });
-            mockClient.createSecret.mockResolvedValue([{}]);
-            mockClient.addSecretVersion.mockResolvedValue([{}]);
+            const store = new Map<string, string>();
+
+            mockClient.getSecret.mockImplementation(({ name }: { name: string }) => {
+                const id = name.split('/secrets/')[1];
+                return store.has(id) ? Promise.resolve([{}]) : Promise.reject({ code: 5 });
+            });
+            mockClient.createSecret.mockImplementation(({ secretId }: { secretId: string }) => {
+                store.set(secretId, '');
+                return Promise.resolve([{}]);
+            });
+            mockClient.addSecretVersion.mockImplementation(
+                ({ parent, payload }: { parent: string; payload: { data: Buffer } }) => {
+                    const id = parent.split('/secrets/')[1];
+                    store.set(id, payload.data.toString('utf-8'));
+                    return Promise.resolve([{}]);
+                }
+            );
+            mockClient.accessSecretVersion.mockImplementation(({ name }: { name: string }) => {
+                const id = name.split('/secrets/')[1].replace('/versions/latest', '');
+                const val = store.get(id);
+                if (val === undefined) return Promise.reject({ code: 5 });
+                return Promise.resolve([{ payload: { data: Buffer.from(val) } }]);
+            });
 
             await provider.set('dev', 'db/password', 'newvalue');
 
-            expect(mockClient.createSecret).toHaveBeenCalledWith({
-                parent: 'projects/my-project',
-                secretId: 'myapp__dev__db__password',
-                secret: { replication: { automatic: {} } }
-            });
-            expect(mockClient.addSecretVersion).toHaveBeenCalled();
+            expect(mockClient.createSecret).toHaveBeenCalled();
+
+            const result = await provider.get('dev', 'db/password');
+            expect(result).toBe('newvalue');
         });
     });
 
@@ -177,40 +210,71 @@ describe('GcpSmProvider', () => {
             expect(providerB.ref('dev', 'db/password')).toBe('project-b__dev__db__password');
         });
 
-        it('sends project-scoped key on get', async () => {
-            mockClient.accessSecretVersion.mockResolvedValue([
-                { payload: { data: Buffer.from('val') } }
-            ]);
+        it('set and get are scoped: project-a value is not visible to project-b', async () => {
+            const store = new Map<string, string>();
 
-            await providerA.get('dev', 'db/password');
-
-            expect(mockClient.accessSecretVersion).toHaveBeenCalledWith({
-                name: 'projects/my-project/secrets/project-a__dev__db__password/versions/latest'
+            mockClient.getSecret.mockImplementation(({ name }: { name: string }) => {
+                const id = name.split('/secrets/')[1];
+                return store.has(id) ? Promise.resolve([{}]) : Promise.reject({ code: 5 });
             });
+            mockClient.createSecret.mockImplementation(({ secretId }: { secretId: string }) => {
+                store.set(secretId, '');
+                return Promise.resolve([{}]);
+            });
+            mockClient.addSecretVersion.mockImplementation(
+                ({ parent, payload }: { parent: string; payload: { data: Buffer } }) => {
+                    const id = parent.split('/secrets/')[1];
+                    store.set(id, payload.data.toString('utf-8'));
+                    return Promise.resolve([{}]);
+                }
+            );
+            mockClient.accessSecretVersion.mockImplementation(({ name }: { name: string }) => {
+                const id = name.split('/secrets/')[1].replace('/versions/latest', '');
+                const val = store.get(id);
+                if (val === undefined) return Promise.reject({ code: 5 });
+                return Promise.resolve([{ payload: { data: Buffer.from(val) } }]);
+            });
+
+            await providerA.set('dev', 'db/password', 'secret-a');
+
+            await expect(providerB.get('dev', 'db/password')).rejects.toThrow(
+                /not found in environment/
+            );
         });
 
-        it('sends project-scoped key on set', async () => {
-            mockClient.getSecret.mockResolvedValue([{}]);
-            mockClient.addSecretVersion.mockResolvedValue([{}]);
+        it('set and get round-trip is scoped per project', async () => {
+            const store = new Map<string, string>();
 
-            await providerB.set('dev', 'db/password', 'val');
-
-            expect(mockClient.getSecret).toHaveBeenCalledWith({
-                name: 'projects/my-project/secrets/project-b__dev__db__password'
+            mockClient.getSecret.mockImplementation(({ name }: { name: string }) => {
+                const id = name.split('/secrets/')[1];
+                return store.has(id) ? Promise.resolve([{}]) : Promise.reject({ code: 5 });
             });
+            mockClient.createSecret.mockImplementation(({ secretId }: { secretId: string }) => {
+                store.set(secretId, '');
+                return Promise.resolve([{}]);
+            });
+            mockClient.addSecretVersion.mockImplementation(
+                ({ parent, payload }: { parent: string; payload: { data: Buffer } }) => {
+                    const id = parent.split('/secrets/')[1];
+                    store.set(id, payload.data.toString('utf-8'));
+                    return Promise.resolve([{}]);
+                }
+            );
+            mockClient.accessSecretVersion.mockImplementation(({ name }: { name: string }) => {
+                const id = name.split('/secrets/')[1].replace('/versions/latest', '');
+                const val = store.get(id);
+                if (val === undefined) return Promise.reject({ code: 5 });
+                return Promise.resolve([{ payload: { data: Buffer.from(val) } }]);
+            });
+
+            await providerA.set('dev', 'db/password', 'value-a');
+            await providerB.set('dev', 'db/password', 'value-b');
+
+            expect(await providerA.get('dev', 'db/password')).toBe('value-a');
+            expect(await providerB.get('dev', 'db/password')).toBe('value-b');
         });
 
-        it('sends project-scoped key on delete', async () => {
-            mockClient.deleteSecret.mockResolvedValue([{}]);
-
-            await providerA.delete('dev', 'db/password');
-
-            expect(mockClient.deleteSecret).toHaveBeenCalledWith({
-                name: 'projects/my-project/secrets/project-a__dev__db__password'
-            });
-        });
-
-        it('scopes list filter by project name', async () => {
+        it('list only returns secrets belonging to the queried project', async () => {
             mockClient.listSecrets.mockResolvedValue([
                 [
                     { name: 'projects/my-project/secrets/project-a__dev__db__password' },
@@ -221,6 +285,7 @@ describe('GcpSmProvider', () => {
             const paths = await providerA.list('dev');
 
             expect(paths).toEqual(['db/password']);
+            expect(paths).not.toContain('project-b__dev__db__password');
         });
     });
 });

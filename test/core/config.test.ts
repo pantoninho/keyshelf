@@ -101,16 +101,6 @@ describe('config validation', () => {
         const config = loadConfig(tmpDir);
         expect(config.provider).toEqual({ adapter: 'aws-sm' });
     });
-
-    it('loads valid aws-sm config without optional fields', () => {
-        fs.writeFileSync(
-            path.join(tmpDir, 'keyshelf.yml'),
-            yaml.dump({ name: 'test', provider: { adapter: 'aws-sm' } })
-        );
-
-        const config = loadConfig(tmpDir);
-        expect(config.provider).toEqual({ adapter: 'aws-sm' });
-    });
 });
 
 describe('parseProviderConfig', () => {

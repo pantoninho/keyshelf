@@ -75,6 +75,43 @@ describe('makeCollector', () => {
         });
     });
 
+    describe('prompt source', () => {
+        it('reads value from stdin with a prompt derived from the secret path', async () => {
+            const mockStdin = {
+                setRawMode: vi.fn(),
+                on: vi.fn(),
+                removeListener: vi.fn(),
+                resume: vi.fn(),
+                pause: vi.fn()
+            };
+            const mockStdout = { write: vi.fn() };
+
+            const originalStdin = process.stdin;
+            const originalStdout = process.stdout;
+            Object.defineProperty(process, 'stdin', { value: mockStdin, configurable: true });
+            Object.defineProperty(process, 'stdout', { value: mockStdout, configurable: true });
+
+            let capturedHandler: ((chunk: Buffer) => void) | undefined;
+            mockStdin.on.mockImplementation((_event: string, handler: (chunk: Buffer) => void) => {
+                capturedHandler = handler;
+            });
+
+            const collect = makeCollector({ kind: 'prompt' });
+            const resultPromise = collect('api/token');
+
+            capturedHandler!(Buffer.from('my-secret\n'));
+
+            const result = await resultPromise;
+            expect(result).toBe('my-secret');
+
+            const promptArg = (mockStdout.write as ReturnType<typeof vi.fn>).mock.calls[0][0];
+            expect(promptArg).toContain('api/token');
+
+            Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
+            Object.defineProperty(process, 'stdout', { value: originalStdout, configurable: true });
+        });
+    });
+
     describe('file source', () => {
         it('returns value from file values for matching path', async () => {
             const collect = makeCollector({

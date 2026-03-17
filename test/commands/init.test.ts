@@ -74,12 +74,4 @@ describe('init command', () => {
         const config = yaml.load(content) as Record<string, unknown>;
         expect(config.provider).toEqual({ adapter: 'aws-sm' });
     });
-
-    it('--adapter aws-sm works without optional flags', async () => {
-        await Init.run(['--adapter', 'aws-sm']);
-
-        const content = fs.readFileSync(path.join(tmpDir, 'keyshelf.yml'), 'utf-8');
-        const config = yaml.load(content) as Record<string, unknown>;
-        expect(config.provider).toEqual({ adapter: 'aws-sm' });
-    });
 });

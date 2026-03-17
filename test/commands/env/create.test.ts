@@ -77,13 +77,6 @@ describe('env:create command', () => {
         expect(def.provider).toEqual({ adapter: 'aws-sm' });
     });
 
-    it('creates environment with --adapter aws-sm without optional flags', async () => {
-        await Create.run(['prod', '--adapter', 'aws-sm']);
-
-        const def = await loadEnvironment(tmpDir, 'prod');
-        expect(def.provider).toEqual({ adapter: 'aws-sm' });
-    });
-
     it('errors if environment already exists', async () => {
         await Create.run(['dev']);
         await expect(Create.run(['dev'])).rejects.toThrow(/already exists/);

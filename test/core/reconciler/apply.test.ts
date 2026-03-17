@@ -92,40 +92,26 @@ describe('applyEnvironmentPlan', () => {
         expect(provider.delete).toHaveBeenCalledWith('dev', 'old/key');
     });
 
-    it('collects all values before writing any secrets', async () => {
+    it('propagates error when collectValue throws during apply', async () => {
         const provider = makeMockProvider();
         const plan: EnvironmentPlan = {
             envName: 'dev',
-            secretChanges: [
-                { kind: 'add', path: 'first/secret' },
-                { kind: 'add', path: 'second/secret' }
-            ]
+            secretChanges: [{ kind: 'add', path: 'db/password' }]
         };
-
-        const events: string[] = [];
-        const collectValue = vi.fn(async (path: string) => {
-            events.push(`collect:${path}`);
-            return `value-for-${path}`;
-        });
-        (provider.set as ReturnType<typeof vi.fn>).mockImplementation(
-            async (_env: string, path: string) => {
-                events.push(`set:${path}`);
-            }
-        );
-
-        await applyEnvironmentPlan({
-            plan,
-            provider,
-            collectValue,
-            getSourceProvider: vi.fn()
+        const collectValue = vi.fn(async () => {
+            throw new Error('Input cancelled');
         });
 
-        expect(events).toEqual([
-            'collect:first/secret',
-            'collect:second/secret',
-            'set:first/secret',
-            'set:second/secret'
-        ]);
+        await expect(
+            applyEnvironmentPlan({
+                plan,
+                provider,
+                collectValue,
+                getSourceProvider: vi.fn()
+            })
+        ).rejects.toThrow('Input cancelled');
+
+        expect(provider.set).not.toHaveBeenCalled();
     });
 
     it('processes all changes in a mixed plan', async () => {

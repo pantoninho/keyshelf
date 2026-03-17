@@ -125,6 +125,52 @@ describe('import command', () => {
         expect(def.provider).toEqual({ adapter: 'local' });
     });
 
+    it('--secrets and --prefix combined nest secrets under the prefix path', async () => {
+        await saveEnvironment(tmpDir, 'dev', { imports: [], values: {} });
+        const envFile = path.join(tmpDir, '.env');
+        fs.writeFileSync(envFile, 'USER=admin\nPASS=s3cret\n');
+
+        await Import.run([
+            '--env',
+            'dev',
+            envFile,
+            '--secrets',
+            '--prefix',
+            'database',
+            '--config-dir',
+            configDir
+        ]);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.values).toEqual({
+            database: {
+                USER: expect.any(SecretRef),
+                PASS: expect.any(SecretRef)
+            }
+        });
+
+        const provider = new LocalProvider(configDir);
+        expect(await provider.get('dev', 'database/USER')).toBe('admin');
+        expect(await provider.get('dev', 'database/PASS')).toBe('s3cret');
+    });
+
+    it('merges new values into an environment that already has values', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { EXISTING_KEY: 'existing-value' }
+        });
+        const envFile = path.join(tmpDir, '.env');
+        fs.writeFileSync(envFile, 'NEW_KEY=new-value\n');
+
+        await Import.run(['--env', 'dev', envFile]);
+
+        const def = await loadEnvironment(tmpDir, 'dev');
+        expect(def.values).toEqual({
+            EXISTING_KEY: 'existing-value',
+            NEW_KEY: 'new-value'
+        });
+    });
+
     it('errors if env file not found', async () => {
         await saveEnvironment(tmpDir, 'dev', { imports: [], values: {} });
         await expect(Import.run(['--env', 'dev', '/nonexistent/.env'])).rejects.toThrow();

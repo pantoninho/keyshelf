@@ -81,4 +81,12 @@ describe('environment I/O', () => {
 
         expect(fs.existsSync(envDir)).toBe(true);
     });
+
+    it('saveEnvironment overwrites an existing file with new content', async () => {
+        await saveEnvironment(tmpDir, 'dev', { imports: [], values: { key: 'original' } });
+        await saveEnvironment(tmpDir, 'dev', { imports: [], values: { key: 'updated' } });
+
+        const loaded = await loadEnvironment(tmpDir, 'dev');
+        expect(loaded.values).toEqual({ key: 'updated' });
+    });
 });

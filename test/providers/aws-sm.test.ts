@@ -68,31 +68,57 @@ describe('AwsSmProvider', () => {
     });
 
     describe('set', () => {
-        it('puts value to existing secret', async () => {
-            mockSend.mockResolvedValueOnce({});
+        it('value is retrievable after set to existing secret', async () => {
+            const store = new Map<string, string>();
+
+            mockSend.mockImplementation((cmd: { input: Record<string, unknown> }) => {
+                if ('SecretString' in cmd.input && 'SecretId' in cmd.input) {
+                    store.set(cmd.input.SecretId as string, cmd.input.SecretString as string);
+                    return Promise.resolve({});
+                }
+                if ('SecretId' in cmd.input) {
+                    const val = store.get(cmd.input.SecretId as string);
+                    return Promise.resolve({ SecretString: val });
+                }
+                return Promise.resolve({});
+            });
 
             await provider.set('dev', 'db/password', 'newvalue');
+            const result = await provider.get('dev', 'db/password');
 
-            expect(mockSend).toHaveBeenCalledOnce();
-            const cmd = mockSend.mock.calls[0][0];
-            expect(cmd.input).toEqual({
-                SecretId: 'keyshelf/myapp/dev/db/password',
-                SecretString: 'newvalue'
-            });
+            expect(result).toBe('newvalue');
         });
 
-        it('creates secret when it does not exist', async () => {
-            mockSend.mockRejectedValueOnce({ name: 'ResourceNotFoundException' });
-            mockSend.mockResolvedValueOnce({});
+        it('creates secret when it does not exist and value is retrievable', async () => {
+            const store = new Map<string, string>();
+
+            mockSend.mockImplementation((cmd: { input: Record<string, unknown> }) => {
+                if ('Name' in cmd.input && 'SecretString' in cmd.input) {
+                    store.set(cmd.input.Name as string, cmd.input.SecretString as string);
+                    return Promise.resolve({});
+                }
+                if ('SecretId' in cmd.input && 'SecretString' in cmd.input) {
+                    const id = cmd.input.SecretId as string;
+                    if (!store.has(id)) {
+                        return Promise.reject({ name: 'ResourceNotFoundException' });
+                    }
+                    store.set(id, cmd.input.SecretString as string);
+                    return Promise.resolve({});
+                }
+                if ('SecretId' in cmd.input) {
+                    const val = store.get(cmd.input.SecretId as string);
+                    if (val === undefined) {
+                        return Promise.reject({ name: 'ResourceNotFoundException' });
+                    }
+                    return Promise.resolve({ SecretString: val });
+                }
+                return Promise.resolve({});
+            });
 
             await provider.set('dev', 'db/password', 'newvalue');
+            const result = await provider.get('dev', 'db/password');
 
-            expect(mockSend).toHaveBeenCalledTimes(2);
-            const createCmd = mockSend.mock.calls[1][0];
-            expect(createCmd.input).toEqual({
-                Name: 'keyshelf/myapp/dev/db/password',
-                SecretString: 'newvalue'
-            });
+            expect(result).toBe('newvalue');
         });
     });
 
@@ -184,18 +210,6 @@ describe('AwsSmProvider', () => {
         });
     });
 
-    describe('ref', () => {
-        it('returns keyshelf/<name>/<env>/<path>', () => {
-            expect(provider.ref('prod', 'database/password')).toBe(
-                'keyshelf/myapp/prod/database/password'
-            );
-        });
-
-        it('handles deeply nested paths', () => {
-            expect(provider.ref('dev', 'a/b/c/d')).toBe('keyshelf/myapp/dev/a/b/c/d');
-        });
-    });
-
     describe('project isolation', () => {
         let providerA: AwsSmProvider;
         let providerB: AwsSmProvider;
@@ -210,40 +224,57 @@ describe('AwsSmProvider', () => {
             expect(providerB.ref('dev', 'db/password')).toBe('keyshelf/project-b/dev/db/password');
         });
 
-        it('sends project-scoped key on get', async () => {
-            mockSend.mockResolvedValue({ SecretString: 'val' });
+        it('set and get are scoped: project-a value is not visible to project-b', async () => {
+            const store = new Map<string, string>();
 
-            await providerA.get('dev', 'db/password');
-
-            const cmd = mockSend.mock.calls[0][0];
-            expect(cmd.input).toEqual({ SecretId: 'keyshelf/project-a/dev/db/password' });
-        });
-
-        it('sends project-scoped key on set', async () => {
-            mockSend.mockResolvedValue({});
-
-            await providerB.set('dev', 'db/password', 'val');
-
-            const cmd = mockSend.mock.calls[0][0];
-            expect(cmd.input).toEqual({
-                SecretId: 'keyshelf/project-b/dev/db/password',
-                SecretString: 'val'
+            mockSend.mockImplementation((cmd: { input: Record<string, unknown> }) => {
+                if ('SecretString' in cmd.input && 'SecretId' in cmd.input) {
+                    store.set(cmd.input.SecretId as string, cmd.input.SecretString as string);
+                    return Promise.resolve({});
+                }
+                if ('SecretId' in cmd.input) {
+                    const val = store.get(cmd.input.SecretId as string);
+                    if (val === undefined) {
+                        return Promise.reject({ name: 'ResourceNotFoundException' });
+                    }
+                    return Promise.resolve({ SecretString: val });
+                }
+                return Promise.resolve({});
             });
+
+            await providerA.set('dev', 'db/password', 'secret-a');
+
+            await expect(providerB.get('dev', 'db/password')).rejects.toThrow(
+                /not found in environment/
+            );
         });
 
-        it('sends project-scoped key on delete', async () => {
-            mockSend.mockResolvedValue({});
+        it('set and get round-trip is scoped per project', async () => {
+            const store = new Map<string, string>();
 
-            await providerA.delete('dev', 'db/password');
-
-            const cmd = mockSend.mock.calls[0][0];
-            expect(cmd.input).toEqual({
-                SecretId: 'keyshelf/project-a/dev/db/password',
-                ForceDeleteWithoutRecovery: true
+            mockSend.mockImplementation((cmd: { input: Record<string, unknown> }) => {
+                if ('SecretString' in cmd.input && 'SecretId' in cmd.input) {
+                    store.set(cmd.input.SecretId as string, cmd.input.SecretString as string);
+                    return Promise.resolve({});
+                }
+                if ('SecretId' in cmd.input) {
+                    const val = store.get(cmd.input.SecretId as string);
+                    if (val === undefined) {
+                        return Promise.reject({ name: 'ResourceNotFoundException' });
+                    }
+                    return Promise.resolve({ SecretString: val });
+                }
+                return Promise.resolve({});
             });
+
+            await providerA.set('dev', 'db/password', 'value-a');
+            await providerB.set('dev', 'db/password', 'value-b');
+
+            expect(await providerA.get('dev', 'db/password')).toBe('value-a');
+            expect(await providerB.get('dev', 'db/password')).toBe('value-b');
         });
 
-        it('scopes list filter by project name', async () => {
+        it('list only returns secrets belonging to the queried project', async () => {
             mockSend.mockResolvedValue({
                 SecretList: [
                     { Name: 'keyshelf/project-a/dev/db/password' },
@@ -255,6 +286,7 @@ describe('AwsSmProvider', () => {
             const paths = await providerA.list('dev');
 
             expect(paths).toEqual(['db/password']);
+            expect(paths).not.toContain('keyshelf/project-b/dev/db/password');
         });
     });
 

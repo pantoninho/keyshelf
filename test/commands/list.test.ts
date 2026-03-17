@@ -100,4 +100,15 @@ describe('list command', () => {
     it('errors if env does not exist', async () => {
         await expect(List.run(['--env', 'nonexistent'])).rejects.toThrow(/nonexistent/);
     });
+
+    it('produces no output for an environment with no values', async () => {
+        await saveEnvironment(tmpDir, 'empty', {
+            imports: [],
+            values: {}
+        });
+
+        await List.run(['--env', 'empty']);
+
+        expect(logSpy).not.toHaveBeenCalled();
+    });
 });
