@@ -1,19 +1,19 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { loadEnvironment, saveEnvironment, listEnvironments } from '../../core/environment.js';
-import { loadConfig, defaultConfigDir } from '../../core/config.js';
-import { resolve } from '../../core/resolver.js';
-import { PathTree } from '../../core/path-tree.js';
-import { SecretRef, EnvironmentDefinition } from '../../core/types.js';
-import { resolveProvider } from '../../providers/index.js';
-import { readMaskedLine } from '../../core/input.js';
-import { topoSort } from '../../core/reconciler/topo-sort.js';
+import { loadEnvironment, saveEnvironment, listEnvironments } from '../core/environment.js';
+import { loadConfig, defaultConfigDir } from '../core/config.js';
+import { resolve } from '../core/resolver.js';
+import { PathTree } from '../core/path-tree.js';
+import { SecretRef, EnvironmentDefinition } from '../core/types.js';
+import { resolveProvider } from '../providers/index.js';
+import { readMaskedLine } from '../core/input.js';
+import { topoSort } from '../core/reconciler/topo-sort.js';
 
-export default class SecretSet extends Command {
+export default class SetCommand extends Command {
     static override description = 'Set a secret value in an environment';
 
     static override examples = [
-        '<%= config.bin %> secret:set --env dev database/password',
-        '<%= config.bin %> secret:set --env dev database/password mysecret'
+        '<%= config.bin %> set --env dev database/password',
+        '<%= config.bin %> set --env dev database/password mysecret'
     ];
 
     static override args = {
@@ -27,7 +27,7 @@ export default class SecretSet extends Command {
     };
 
     async run(): Promise<void> {
-        const { args, flags } = await this.parse(SecretSet);
+        const { args, flags } = await this.parse(SetCommand);
         const cwd = process.cwd();
         const envName = flags.env;
 

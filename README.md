@@ -165,39 +165,37 @@ keyshelf import --env dev .env --prefix database       # nest under database/
 keyshelf import --env dev .env.secrets --secrets        # store as secrets
 ```
 
-### `keyshelf config:get <env> <path>`
+### `keyshelf get --env <env> <path>`
 
-Get a resolved config value (follows imports).
+Get a resolved value from an environment. If the path points to a secret, fetches it from the provider. If it points to a plain value, prints it directly.
 
 ```bash
-keyshelf config:get dev database/host
-keyshelf config:get dev database          # returns subtree as YAML
+keyshelf get --env dev database/host        # plain config value
+keyshelf get --env dev database/password    # fetches secret from provider
 ```
 
-### `keyshelf config:list <env>`
+### `keyshelf list --env <env>`
 
-List all config paths in a resolved environment (excludes secrets).
+List all paths in a resolved environment. Secret paths are marked with a `(secret)` suffix.
 
 ```bash
-keyshelf config:list dev
-keyshelf config:list dev --prefix database
+keyshelf list --env dev
 ```
 
-### `keyshelf secret:get <env> <path>`
-
-Retrieve a secret value from the provider.
-
-```bash
-keyshelf secret:get dev database/password
+```
+database/host
+database/port
+database/password (secret)
+api/key (secret)
 ```
 
-### `keyshelf secret:list <env>`
+### `keyshelf set --env <env> <path> [value]`
 
-List all secret paths in a resolved environment.
+Set a secret value in an environment. If the path doesn't have a `!secret` reference yet, one is created automatically. The value is propagated to all environments that transitively import this one.
 
 ```bash
-keyshelf secret:list dev
-keyshelf secret:list dev --prefix database
+keyshelf set --env dev database/password            # prompts for value
+keyshelf set --env dev database/password mysecret    # inline value
 ```
 
 ### `keyshelf run --env <env> -- <command>`
