@@ -1,5 +1,5 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { loadEnvironment, listEnvironments } from '../core/environment.js';
+import { loadEnvironment, saveEnvironment, listEnvironments } from '../core/environment.js';
 import { loadConfig, defaultConfigDir } from '../core/config.js';
 import { resolve } from '../core/resolver.js';
 import { PathTree } from '../core/path-tree.js';
@@ -35,12 +35,17 @@ export default class SetCommand extends Command {
         const resolvedTree = PathTree.fromJSON(resolved.values);
         const existing = resolvedTree.get(args.path);
 
-        if (!(existing instanceof SecretRef)) {
-            const msg =
-                existing === undefined
-                    ? `Path "${args.path}" not found in environment "${envName}". Add it to your YAML config and run "keyshelf up" first.`
-                    : `Path "${args.path}" in environment "${envName}" is a plain value, not a secret reference. Change it to a !secret tag and run "keyshelf up" first.`;
-            this.error(msg);
+        if (existing !== undefined && !(existing instanceof SecretRef)) {
+            this.error(
+                `Path "${args.path}" in environment "${envName}" is a plain value, not a secret reference. Change it to a !secret tag first.`
+            );
+        }
+
+        if (existing === undefined) {
+            const envDef = await loadEnvironment(cwd, envName);
+            const tree = PathTree.fromJSON(envDef.values);
+            tree.set(args.path, new SecretRef(args.path));
+            await saveEnvironment(cwd, envName, { ...envDef, values: tree.toJSON() });
         }
 
         const value = args.value ?? (await readMaskedLine(`Enter value for "${args.path}": `));

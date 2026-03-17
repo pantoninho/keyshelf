@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
 import SetCommand from '../../src/commands/set.js';
-import { saveEnvironment } from '../../src/core/environment.js';
+import { saveEnvironment, loadEnvironment } from '../../src/core/environment.js';
 import { LocalProvider } from '../../src/providers/local.js';
 import { SecretRef } from '../../src/core/types.js';
 import * as inputModule from '../../src/core/input.js';
@@ -55,22 +55,27 @@ describe('set command', () => {
         expect(stored).toBe('mysecret');
     });
 
-    it('errors when path does not exist in config', async () => {
+    it('creates SecretRef in YAML and sets value when path does not exist', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
             values: {}
         });
 
-        await expect(
-            SetCommand.run([
-                '--env',
-                'dev',
-                'database/password',
-                'newpassword',
-                '--config-dir',
-                configDir
-            ])
-        ).rejects.toThrow(/Path "database\/password" not found in environment "dev"/);
+        await SetCommand.run([
+            '--env',
+            'dev',
+            'database/password',
+            'newpassword',
+            '--config-dir',
+            configDir
+        ]);
+
+        const envDef = await loadEnvironment(tmpDir, 'dev');
+        const { database } = envDef.values as { database: { password: unknown } };
+        expect(database.password).toBeInstanceOf(SecretRef);
+
+        const provider = new LocalProvider(configDir);
+        expect(await provider.get('dev', 'database/password')).toBe('newpassword');
     });
 
     it('errors when path is a plain value, not a secret', async () => {
