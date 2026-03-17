@@ -51,8 +51,7 @@ export default class Import extends Command {
         let provider = null;
         if (flags.secrets) {
             const config = loadConfig(projectRoot);
-            const configDir =
-                flags['config-dir'] ?? defaultConfigDir(config);
+            const configDir = flags['config-dir'] ?? defaultConfigDir(config);
             provider = resolveProvider(def, config, configDir);
         }
 
