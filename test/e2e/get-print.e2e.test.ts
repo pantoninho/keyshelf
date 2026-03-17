@@ -4,13 +4,13 @@ import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
 import Get from '../../src/commands/get.js';
-import Print from '../../src/commands/print.js';
+import Show from '../../src/commands/show.js';
 import { saveEnvironment } from '../../src/core/environment.js';
 import { SecretRef } from '../../src/core/types.js';
 import { SecretProvider } from '../../src/providers/provider.js';
 import { providerConfig, providerLabel, createTestProvider } from './provider-fixture.js';
 
-describe(`get and print commands (e2e against ${providerLabel})`, () => {
+describe(`get and show commands (e2e against ${providerLabel})`, () => {
     let tmpDir: string;
     let origCwd: string;
     let configDir: string;
@@ -84,7 +84,7 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
         });
     });
 
-    describe('print --reveal', () => {
+    describe('show --reveal', () => {
         it('reveals secret values in yaml format', async () => {
             secretsToCleanup.push({ env: 'dev', path: 'api/key' });
             await provider.set('dev', 'api/key', 'revealed-aws-secret');
@@ -97,9 +97,9 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
             });
 
             const logSpy = vi.fn();
-            vi.spyOn(Print.prototype, 'log').mockImplementation(logSpy);
+            vi.spyOn(Show.prototype, 'log').mockImplementation(logSpy);
 
-            await Print.run(['--env', 'dev', '--config-dir', configDir, '--reveal']);
+            await Show.run(['--env', 'dev', '--config-dir', configDir, '--reveal']);
 
             const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
             expect(output).toContain('revealed-aws-secret');
@@ -120,9 +120,9 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
             });
 
             const logSpy = vi.fn();
-            vi.spyOn(Print.prototype, 'log').mockImplementation(logSpy);
+            vi.spyOn(Show.prototype, 'log').mockImplementation(logSpy);
 
-            await Print.run([
+            await Show.run([
                 '--env',
                 'dev',
                 '--config-dir',
@@ -149,11 +149,15 @@ describe(`get and print commands (e2e against ${providerLabel})`, () => {
                     app: { port: 3000 }
                 }
             });
+            fs.writeFileSync(
+                path.join(tmpDir, '.env.keyshelf'),
+                'API_KEY=api/key\nAPP_PORT=app/port\n'
+            );
 
             const logSpy = vi.fn();
-            vi.spyOn(Print.prototype, 'log').mockImplementation(logSpy);
+            vi.spyOn(Show.prototype, 'log').mockImplementation(logSpy);
 
-            await Print.run([
+            await Show.run([
                 '--env',
                 'dev',
                 '--config-dir',

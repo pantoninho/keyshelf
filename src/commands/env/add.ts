@@ -5,13 +5,13 @@ import { saveEnvironment } from '../../core/environment.js';
 import { EnvironmentDefinition, ProviderConfig } from '../../core/types.js';
 import { findProjectRoot } from '../../core/config.js';
 
-export default class EnvCreate extends Command {
-    static override description = 'Create a new environment';
+export default class EnvAdd extends Command {
+    static override description = 'Add a new environment';
 
     static override examples = [
-        '<%= config.bin %> env:create dev',
-        '<%= config.bin %> env:create staging --import base --import shared',
-        '<%= config.bin %> env:create production --adapter gcp-sm --project myapp-prod'
+        '<%= config.bin %> env:add dev',
+        '<%= config.bin %> env:add staging --import base --import shared',
+        '<%= config.bin %> env:add production --adapter gcp-sm --project myapp-prod'
     ];
 
     static override args = {
@@ -35,7 +35,7 @@ export default class EnvCreate extends Command {
     };
 
     async run(): Promise<void> {
-        const { args, flags } = await this.parse(EnvCreate);
+        const { args, flags } = await this.parse(EnvAdd);
         const projectRoot = findProjectRoot(process.cwd());
         if (!projectRoot) {
             this.error('keyshelf.yml not found in current directory or any parent directory.');
