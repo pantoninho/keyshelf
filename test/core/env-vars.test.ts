@@ -78,79 +78,47 @@ describe('lookupPath', () => {
 });
 
 describe('flattenToEnvRecord', () => {
-    it('flattens nested objects with underscore separator and uppercased keys', () => {
+    it('returns only mapped variables', () => {
+        const obj = { database: { host: 'localhost', port: 5432 }, api: { key: 'abc' } };
+        const mapping = { DB_HOST: 'database/host', API_KEY: 'api/key' };
+
+        const result = flattenToEnvRecord(obj, mapping);
+
+        expect(result).toEqual({ DB_HOST: 'localhost', API_KEY: 'abc' });
+    });
+
+    it('converts mapped values to strings', () => {
+        const obj = { db: { port: 5432 } };
+        const mapping = { DB_PORT: 'db/port' };
+
+        const result = flattenToEnvRecord(obj, mapping);
+
+        expect(result).toEqual({ DB_PORT: '5432' });
+    });
+
+    it('uses exact var names from mapping without uppercasing', () => {
+        const obj = { api: { url: 'https://example.com' } };
+        const mapping = { my_custom_var: 'api/url' };
+
+        const result = flattenToEnvRecord(obj, mapping);
+
+        expect(result).toEqual({ my_custom_var: 'https://example.com' });
+    });
+
+    it('returns empty record when mapping is empty', () => {
         const obj = { database: { host: 'localhost', port: 5432 } };
 
-        const result = flattenToEnvRecord(obj);
+        const result = flattenToEnvRecord(obj, {});
 
-        expect(result).toEqual({
-            DATABASE_HOST: 'localhost',
-            DATABASE_PORT: '5432'
-        });
+        expect(result).toEqual({});
     });
 
-    it('handles flat objects', () => {
-        const obj = { name: 'myapp', version: '1.0' };
+    it('throws when mapping references a non-existent path', () => {
+        const obj = { api: {} };
+        const mapping = { MISSING: 'api/key' };
 
-        const result = flattenToEnvRecord(obj);
-
-        expect(result).toEqual({
-            NAME: 'myapp',
-            VERSION: '1.0'
-        });
-    });
-
-    it('handles deeply nested objects', () => {
-        const obj = { a: { b: { c: 'deep' } } };
-
-        const result = flattenToEnvRecord(obj);
-
-        expect(result).toEqual({ A_B_C: 'deep' });
-    });
-
-    it('converts all values to strings', () => {
-        const obj = { count: 42, enabled: true };
-
-        const result = flattenToEnvRecord(obj);
-
-        expect(result).toEqual({ COUNT: '42', ENABLED: 'true' });
-    });
-
-    describe('with envMapping', () => {
-        it('returns only mapped variables', () => {
-            const obj = { database: { host: 'localhost', port: 5432 }, api: { key: 'abc' } };
-            const mapping = { DB_HOST: 'database/host', API_KEY: 'api/key' };
-
-            const result = flattenToEnvRecord(obj, mapping);
-
-            expect(result).toEqual({ DB_HOST: 'localhost', API_KEY: 'abc' });
-        });
-
-        it('converts mapped values to strings', () => {
-            const obj = { db: { port: 5432 } };
-            const mapping = { DB_PORT: 'db/port' };
-
-            const result = flattenToEnvRecord(obj, mapping);
-
-            expect(result).toEqual({ DB_PORT: '5432' });
-        });
-
-        it('uses exact var names from mapping without uppercasing', () => {
-            const obj = { api: { url: 'https://example.com' } };
-            const mapping = { my_custom_var: 'api/url' };
-
-            const result = flattenToEnvRecord(obj, mapping);
-
-            expect(result).toEqual({ my_custom_var: 'https://example.com' });
-        });
-
-        it('throws when mapping references a non-existent path', () => {
-            const obj = { api: {} };
-            const mapping = { MISSING: 'api/key' };
-
-            expect(() => flattenToEnvRecord(obj, mapping)).toThrow(
-                /Env mapping "MISSING" references path "api\/key" which does not exist/
-            );
-        });
+        expect(() => flattenToEnvRecord(obj, mapping)).toThrow(
+            /Env mapping "MISSING" references path "api\/key" which does not exist/
+        );
     });
 });

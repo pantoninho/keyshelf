@@ -118,54 +118,6 @@ describe('YAML parser', () => {
         });
     });
 
-    describe('env section', () => {
-        it('parses env section into Record<string, string>', () => {
-            const result = parseEnvironment(
-                'env:\n  DATABASE_URL: database/url\n  API_KEY: api/key\nvalues:\n  key: val'
-            );
-            expect(result.env).toEqual({ DATABASE_URL: 'database/url', API_KEY: 'api/key' });
-        });
-
-        it('returns undefined env when env section is absent', () => {
-            const result = parseEnvironment('values:\n  key: val');
-            expect(result.env).toBeUndefined();
-        });
-
-        it('serializes env section between provider and values', () => {
-            const serialized = serializeEnvironment({
-                imports: [],
-                env: { DATABASE_URL: 'database/url' },
-                values: { key: 'val' }
-            });
-            expect(serialized).toContain('DATABASE_URL: database/url');
-            const providerIdx = serialized.indexOf('provider:');
-            const envIdx = serialized.indexOf('env:');
-            const valuesIdx = serialized.indexOf('values:');
-            // env comes after provider (or start) and before values
-            expect(envIdx).toBeLessThan(valuesIdx);
-            if (providerIdx !== -1) {
-                expect(envIdx).toBeGreaterThan(providerIdx);
-            }
-        });
-
-        it('omits env key when env is undefined', () => {
-            const serialized = serializeEnvironment({ imports: [], values: { key: 'val' } });
-            expect(serialized).not.toContain('env:');
-        });
-
-        it('round-trips env section', () => {
-            const original: Parameters<typeof serializeEnvironment>[0] = {
-                imports: [],
-                env: { DATABASE_URL: 'database/url', API_KEY: 'api/key' },
-                values: { host: 'localhost' }
-            };
-            const serialized = serializeEnvironment(original);
-            const reparsed = parseEnvironment(serialized);
-            expect(reparsed.env).toEqual({ DATABASE_URL: 'database/url', API_KEY: 'api/key' });
-            expect(reparsed.values).toEqual({ host: 'localhost' });
-        });
-    });
-
     describe('round-trip', () => {
         it('parse then serialize preserves !secret refs', () => {
             const original = 'values:\n  password: !secret database/password\n';

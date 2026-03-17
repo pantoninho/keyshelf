@@ -7,6 +7,7 @@ import { replaceSecrets, flattenToEnvRecord } from '../core/env-vars.js';
 import { SecretRef } from '../core/types.js';
 import { SecretProvider } from '../providers/provider.js';
 import { resolveProvider } from '../providers/index.js';
+import { loadEnvMapping } from '../core/env-keyshelf.js';
 
 export default class Print extends Command {
     static override description = 'Print resolved environment config';
@@ -60,7 +61,13 @@ export default class Print extends Command {
                 this.log(JSON.stringify(output, null, 2));
                 break;
             case 'env': {
-                const record = flattenToEnvRecord(output, envDef.env);
+                const envMapping = loadEnvMapping(cwd);
+                if (Object.keys(envMapping).length === 0) {
+                    this.warn(
+                        'No .env.keyshelf file found — no environment variables will be injected.'
+                    );
+                }
+                const record = flattenToEnvRecord(output, envMapping);
                 for (const [key, value] of Object.entries(record)) {
                     this.log(`${key}=${value}`);
                 }

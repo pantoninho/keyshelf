@@ -52,6 +52,10 @@ describe('keyshelf/preload', () => {
             imports: [],
             values: { database: { host: 'localhost', port: 5432 } }
         });
+        fs.writeFileSync(
+            path.join(tmpDir, '.env.keyshelf'),
+            'DATABASE_HOST=database/host\nDATABASE_PORT=database/port\n'
+        );
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.DATABASE_HOST + ":" + process.env.DATABASE_PORT)`;
         const result = runPreload(script, {
@@ -73,6 +77,7 @@ describe('keyshelf/preload', () => {
                 api: { key: new SecretRef('api/key'), url: 'https://api.example.com' }
             }
         });
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'API_KEY=api/key\nAPI_URL=api/url\n');
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.API_KEY + "|" + process.env.API_URL)`;
         const result = runPreload(script, {
@@ -104,6 +109,7 @@ describe('keyshelf/preload', () => {
             imports: ['base'],
             values: { local: 'from-dev' }
         });
+        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'SHARED=shared\nLOCAL=local\n');
 
         const script = `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(outFile)}, process.env.SHARED + "|" + process.env.LOCAL)`;
         const result = runPreload(script, {

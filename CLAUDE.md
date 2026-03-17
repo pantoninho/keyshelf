@@ -33,4 +33,5 @@ npm run format:check # prettier --check .
 - Tests in `test/` mirroring `src/` structure, using vitest (`describe`/`it`/`expect`)
 - Config values live in version-controlled YAML; secrets live in external providers
 - YAML files reference secrets via `!secret` custom tags (safe to commit)
+- Env var mappings live in `.env.keyshelf` (consumer-side), not in environment YAML
 - Secret values must never appear in error messages, logs, or stack traces
