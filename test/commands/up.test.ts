@@ -197,4 +197,164 @@ describe('up command', () => {
         const devIdx = allOutput.indexOf('Environment: dev');
         expect(baseIdx).toBeLessThan(devIdx);
     });
+
+    it('copies secret from grandparent through intermediate when intermediate already has it in provider', async () => {
+        const provider = new LocalProvider(configDir);
+        await provider.set('base', 'shared/token', 'grandparent-token');
+        // staging already has the token (from a previous up run or set) so prod can copy from it
+        await provider.set('staging', 'shared/token', 'grandparent-token');
+
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { shared: { token: new SecretRef('shared/token') } }
+        });
+        await saveEnvironment(tmpDir, 'staging', {
+            imports: ['base'],
+            values: { shared: { token: new SecretRef('shared/token') } }
+        });
+        await saveEnvironment(tmpDir, 'prod', {
+            imports: ['staging'],
+            values: { shared: { token: new SecretRef('shared/token') } }
+        });
+
+        vi.spyOn(Up.prototype, 'log').mockImplementation(() => {});
+
+        await Up.run(['--apply', '--config-dir', configDir]);
+
+        const prodToken = await provider.get('prod', 'shared/token');
+        expect(prodToken).toBe('grandparent-token');
+    });
+
+    it('removes secret from all inheriting children when removed from parent YAML', async () => {
+        const provider = new LocalProvider(configDir);
+        await provider.set('base', 'old/secret', 'stale-value');
+        await provider.set('staging', 'old/secret', 'stale-value');
+        await provider.set('prod', 'old/secret', 'stale-value');
+
+        // Parent no longer has the secret ref — it was removed from the YAML
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { other: { key: 'plain-value' } }
+        });
+        await saveEnvironment(tmpDir, 'staging', {
+            imports: ['base'],
+            values: {}
+        });
+        await saveEnvironment(tmpDir, 'prod', {
+            imports: ['staging'],
+            values: {}
+        });
+
+        vi.spyOn(Up.prototype, 'log').mockImplementation(() => {});
+
+        await Up.run(['--apply', '--config-dir', configDir]);
+
+        await expect(provider.get('base', 'old/secret')).rejects.toThrow(/not found/);
+        await expect(provider.get('staging', 'old/secret')).rejects.toThrow(/not found/);
+        await expect(provider.get('prod', 'old/secret')).rejects.toThrow(/not found/);
+    });
+
+    it('uses first parent as copy source when multiple parents export the same secret path', async () => {
+        const provider = new LocalProvider(configDir);
+        await provider.set('shared', 'api/key', 'value-from-shared');
+        await provider.set('staging', 'api/key', 'value-from-staging');
+
+        await saveEnvironment(tmpDir, 'shared', {
+            imports: [],
+            values: { api: { key: new SecretRef('api/key') } }
+        });
+        await saveEnvironment(tmpDir, 'staging', {
+            imports: [],
+            values: { api: { key: new SecretRef('api/key') } }
+        });
+        // prod imports shared first, then staging — shared should win
+        await saveEnvironment(tmpDir, 'prod', {
+            imports: ['shared', 'staging'],
+            values: { api: { key: new SecretRef('api/key') } }
+        });
+
+        vi.spyOn(Up.prototype, 'log').mockImplementation(() => {});
+
+        await Up.run(['--apply', '--config-dir', configDir]);
+
+        const prodValue = await provider.get('prod', 'api/key');
+        expect(prodValue).toBe('value-from-shared');
+    });
+
+    it('copies from direct parent in a 3-level chain when each level is pre-populated', async () => {
+        const provider = new LocalProvider(configDir);
+        // base and staging are already reconciled; prod needs to be populated from staging
+        await provider.set('base', 'db/password', 'base-secret');
+        await provider.set('staging', 'db/password', 'base-secret');
+
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { db: { password: new SecretRef('db/password') } }
+        });
+        await saveEnvironment(tmpDir, 'staging', {
+            imports: ['base'],
+            values: { db: { password: new SecretRef('db/password') } }
+        });
+        await saveEnvironment(tmpDir, 'prod', {
+            imports: ['staging'],
+            values: { db: { password: new SecretRef('db/password') } }
+        });
+
+        vi.spyOn(Up.prototype, 'log').mockImplementation(() => {});
+
+        await Up.run(['--apply', '--config-dir', configDir]);
+
+        expect(await provider.get('prod', 'db/password')).toBe('base-secret');
+    });
+
+    it('propagates apply through diamond dependency when intermediates already have the secret', async () => {
+        const provider = new LocalProvider(configDir);
+        await provider.set('base', 'shared/token', 'base-token');
+        // infra and app already have the token so prod can copy from its direct parents
+        await provider.set('infra', 'shared/token', 'base-token');
+        await provider.set('app', 'shared/token', 'base-token');
+
+        await saveEnvironment(tmpDir, 'base', {
+            imports: [],
+            values: { shared: { token: new SecretRef('shared/token') } }
+        });
+        await saveEnvironment(tmpDir, 'infra', {
+            imports: ['base'],
+            values: { shared: { token: new SecretRef('shared/token') } }
+        });
+        await saveEnvironment(tmpDir, 'app', {
+            imports: ['base'],
+            values: { shared: { token: new SecretRef('shared/token') } }
+        });
+        await saveEnvironment(tmpDir, 'prod', {
+            imports: ['infra', 'app'],
+            values: { shared: { token: new SecretRef('shared/token') } }
+        });
+
+        vi.spyOn(Up.prototype, 'log').mockImplementation(() => {});
+
+        await Up.run(['--apply', '--config-dir', configDir]);
+
+        expect(await provider.get('prod', 'shared/token')).toBe('base-token');
+    });
+
+    it('surfaces provider error when set throws during apply', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { db: { password: new SecretRef('db/password') } }
+        });
+
+        vi.spyOn(LocalProvider.prototype, 'set').mockRejectedValue(
+            new Error('Provider connection refused')
+        );
+
+        vi.spyOn(Up.prototype, 'log').mockImplementation(() => {});
+
+        const secretsFile = path.join(tmpDir, 'secrets.env');
+        fs.writeFileSync(secretsFile, 'db/password=test-value\n');
+
+        await expect(
+            Up.run(['--apply', '--from-file', secretsFile, '--config-dir', configDir])
+        ).rejects.toThrow(/Provider connection refused/);
+    });
 });
