@@ -5,7 +5,7 @@ CLI tool for managing hierarchical config values and secrets across environments
 ## Architecture
 
 - **CLI framework**: oclif (`@oclif/core`), topic separator is `:`
-- **Commands**: `src/commands/<topic>/<verb>.ts` — oclif discovers them from `dist/commands/`
+- **Commands**: `src/commands/<command>.ts` or `src/commands/<topic>/<verb>.ts` — oclif discovers them from `dist/commands/`
 - **Core logic**: `src/core/` — PathTree, YAML parsing, environment resolver
 - **Providers**: `src/providers/` — SecretProvider implementations (local filesystem, etc.)
 - **Types**: `src/core/types.ts` — `SecretRef`, `EnvironmentDefinition`, `KeyshelfConfig`
