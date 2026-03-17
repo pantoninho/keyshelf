@@ -13,7 +13,7 @@ const secretType = new yaml.Type('!secret', {
     }
 });
 
-const SCHEMA = yaml.DEFAULT_SCHEMA.extend([secretType]);
+const SCHEMA = yaml.CORE_SCHEMA.extend([secretType]);
 
 /** Parse a YAML environment file into an EnvironmentDefinition. */
 export function parseEnvironment(content: string): EnvironmentDefinition {

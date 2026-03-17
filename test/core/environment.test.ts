@@ -59,6 +59,24 @@ describe('environment I/O', () => {
         await expect(loadEnvironment(tmpDir, 'nonexistent')).rejects.toThrow(/nonexistent/);
     });
 
+    it('loadEnvironment rejects path traversal via env name', async () => {
+        await expect(loadEnvironment(tmpDir, '../../etc/cron.d/evil')).rejects.toThrow(
+            /Invalid environment name/
+        );
+    });
+
+    it('saveEnvironment rejects path traversal via env name', async () => {
+        await expect(
+            saveEnvironment(tmpDir, '../../etc/cron.d/evil', { imports: [], values: {} })
+        ).rejects.toThrow(/Invalid environment name/);
+    });
+
+    it('loadEnvironment accepts names with letters, digits, hyphens, underscores', async () => {
+        await saveEnvironment(tmpDir, 'prod-v2_us', { imports: [], values: { key: 'val' } });
+        const loaded = await loadEnvironment(tmpDir, 'prod-v2_us');
+        expect(loaded.values).toEqual({ key: 'val' });
+    });
+
     it('list environments returns names from .keyshelf/environments/', async () => {
         await saveEnvironment(tmpDir, 'dev', { imports: [], values: {} });
         await saveEnvironment(tmpDir, 'staging', { imports: [], values: {} });

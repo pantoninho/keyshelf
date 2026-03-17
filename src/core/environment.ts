@@ -4,8 +4,16 @@ import { EnvironmentDefinition } from './types.js';
 import { parseEnvironment, serializeEnvironment } from './yaml.js';
 
 const ENVIRONMENTS_DIR = path.join('.keyshelf', 'environments');
+const SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+
+function assertSafeEnvName(name: string): void {
+    if (!SAFE_NAME_RE.test(name)) {
+        throw new Error(`Invalid environment name "${name}". Names must match /^[a-zA-Z0-9_-]+$/.`);
+    }
+}
 
 function envFilePath(projectRoot: string, name: string): string {
+    assertSafeEnvName(name);
     return path.join(projectRoot, ENVIRONMENTS_DIR, `${name}.yml`);
 }
 

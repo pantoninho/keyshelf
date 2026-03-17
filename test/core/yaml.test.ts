@@ -9,6 +9,18 @@ describe('YAML parser', () => {
             expect(result.values).toEqual({ database: { host: 'localhost' } });
         });
 
+        it('does not coerce ISO date strings to Date objects', () => {
+            const result = parseEnvironment('values:\n  created: "2024-01-15T10:00:00Z"');
+            expect(typeof result.values.created).toBe('string');
+            expect(result.values.created).toBe('2024-01-15T10:00:00Z');
+        });
+
+        it('does not coerce unquoted date-like strings to Date objects', () => {
+            const result = parseEnvironment('values:\n  date: 2024-01-15');
+            expect(typeof result.values.date).toBe('string');
+            expect(result.values.date).toBe('2024-01-15');
+        });
+
         it('parses !secret tag into SecretRef', () => {
             const result = parseEnvironment('values:\n  password: !secret database/password');
             expect(result.values.password).toBeInstanceOf(SecretRef);

@@ -81,6 +81,12 @@ export function loadConfig(projectRoot: string): KeyshelfConfig {
         throw new Error('Invalid keyshelf.yml: missing required field "name".');
     }
 
+    if (!/^[a-zA-Z0-9_-]+$/.test(obj.name)) {
+        throw new Error(
+            `Invalid keyshelf.yml: "name" value "${obj.name}" contains unsafe characters. Names must match /^[a-zA-Z0-9_-]+$/.`
+        );
+    }
+
     if (!obj.provider || typeof obj.provider !== 'object' || Array.isArray(obj.provider)) {
         throw new Error('Invalid keyshelf.yml: missing required field "provider".');
     }

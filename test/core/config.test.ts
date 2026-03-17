@@ -47,6 +47,35 @@ describe('config validation', () => {
         expect(() => loadConfig(tmpDir)).toThrow(/missing required field "name"/);
     });
 
+    it('name with path traversal characters is rejected', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: '../../.ssh', provider: { adapter: 'local' } })
+        );
+
+        expect(() => loadConfig(tmpDir)).toThrow(/unsafe characters/);
+        expect(() => loadConfig(tmpDir)).toThrow(/name/);
+    });
+
+    it('name with spaces is rejected', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'my project', provider: { adapter: 'local' } })
+        );
+
+        expect(() => loadConfig(tmpDir)).toThrow(/unsafe characters/);
+    });
+
+    it('name with hyphens and underscores is accepted', () => {
+        fs.writeFileSync(
+            path.join(tmpDir, 'keyshelf.yml'),
+            yaml.dump({ name: 'my-project_v2', provider: { adapter: 'local' } })
+        );
+
+        const config = loadConfig(tmpDir);
+        expect(config.name).toBe('my-project_v2');
+    });
+
     it('missing provider field shows specific error', () => {
         fs.writeFileSync(path.join(tmpDir, 'keyshelf.yml'), yaml.dump({ name: 'test' }));
 
