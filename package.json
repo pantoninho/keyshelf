@@ -1,6 +1,6 @@
 {
     "name": "keyshelf",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "description": "CLI tool for managing hierarchical config values and secrets across environments",
     "type": "module",
     "main": "dist/index.js",

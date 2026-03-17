@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/pantoninho/keyshelf/compare/v2.0.1...v2.0.2) (2026-03-17)
+
+
+### Bug Fixes
+
+* add repository field to package.json for npm provenance ([f84aec9](https://github.com/pantoninho/keyshelf/commit/f84aec931f905fef7699bfbd686e12876e2093e0))
+
 ## [2.0.1](https://github.com/pantoninho/keyshelf/compare/v2.0.0...v2.0.1) (2026-03-17)
 
 
