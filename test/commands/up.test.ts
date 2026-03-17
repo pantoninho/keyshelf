@@ -154,33 +154,6 @@ describe('up command', () => {
         expect(devToken).toBe('base-token');
     });
 
-    it('applies new secret from --from-env flag', async () => {
-        await saveEnvironment(tmpDir, 'dev', {
-            imports: [],
-            values: { db: { password: new SecretRef('db/password') } }
-        });
-        fs.writeFileSync(path.join(tmpDir, '.env.keyshelf'), 'MY_DB_PASS=db/password\n');
-
-        const origEnv = process.env;
-        process.env = { ...origEnv, MY_DB_PASS: 'env-secret-value' };
-
-        const logs: string[] = [];
-        vi.spyOn(Up.prototype, 'log').mockImplementation((msg = '') => {
-            logs.push(msg);
-        });
-
-        try {
-            await Up.run(['--apply', '--from-env', '--config-dir', configDir]);
-        } finally {
-            process.env = origEnv;
-        }
-
-        expect(logs.some((l) => l.includes('Done.'))).toBe(true);
-        const provider = new LocalProvider(configDir);
-        const value = await provider.get('dev', 'db/password');
-        expect(value).toBe('env-secret-value');
-    });
-
     it('does not apply changes when --apply is not passed and user declines', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],

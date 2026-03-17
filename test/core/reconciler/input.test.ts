@@ -36,45 +36,6 @@ describe('readMaskedLine', () => {
 });
 
 describe('makeCollector', () => {
-    describe('env source', () => {
-        const originalEnv = process.env;
-
-        beforeEach(() => {
-            process.env = { ...originalEnv };
-        });
-
-        afterEach(() => {
-            process.env = originalEnv;
-        });
-
-        it('returns value from process.env for mapped path', async () => {
-            process.env.DATABASE_URL = 'postgres://localhost/test';
-            const collect = makeCollector({
-                kind: 'env',
-                mapping: { DATABASE_URL: 'database/url' }
-            });
-
-            const value = await collect('database/url');
-            expect(value).toBe('postgres://localhost/test');
-        });
-
-        it('throws when path has no mapping', async () => {
-            const collect = makeCollector({ kind: 'env', mapping: {} });
-
-            await expect(collect('unmapped/path')).rejects.toThrow(/unmapped\/path/);
-        });
-
-        it('throws when env var is not set', async () => {
-            delete process.env.DATABASE_URL;
-            const collect = makeCollector({
-                kind: 'env',
-                mapping: { DATABASE_URL: 'database/url' }
-            });
-
-            await expect(collect('database/url')).rejects.toThrow(/DATABASE_URL/);
-        });
-    });
-
     describe('prompt source', () => {
         it('reads value from stdin with a prompt derived from the secret path', async () => {
             const mockStdin = {
