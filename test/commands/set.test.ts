@@ -3,20 +3,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
-import SecretSet from '../../../src/commands/secret/set.js';
-import { saveEnvironment, loadEnvironment } from '../../../src/core/environment.js';
-import { LocalProvider } from '../../../src/providers/local.js';
-import { SecretRef } from '../../../src/core/types.js';
-import * as inputModule from '../../../src/core/input.js';
+import SetCommand from '../../src/commands/set.js';
+import { saveEnvironment, loadEnvironment } from '../../src/core/environment.js';
+import { LocalProvider } from '../../src/providers/local.js';
+import { SecretRef } from '../../src/core/types.js';
+import * as inputModule from '../../src/core/input.js';
 
-describe('secret:set command', () => {
+describe('set command', () => {
     let tmpDir: string;
     let origCwd: string;
     let configDir: string;
     let logSpy: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
-        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-secret-set-'));
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-set-'));
         configDir = path.join(tmpDir, '.config');
         origCwd = process.cwd();
         process.chdir(tmpDir);
@@ -26,7 +26,7 @@ describe('secret:set command', () => {
             yaml.dump({ name: 'test-project', provider: { adapter: 'local' } })
         );
         logSpy = vi.fn();
-        vi.spyOn(SecretSet.prototype, 'log').mockImplementation(logSpy);
+        vi.spyOn(SetCommand.prototype, 'log').mockImplementation(logSpy);
     });
 
     afterEach(() => {
@@ -41,14 +41,7 @@ describe('secret:set command', () => {
             values: { database: { password: new SecretRef('database/password') } }
         });
 
-        await SecretSet.run([
-            '--env',
-            'dev',
-            'database/password',
-            'mysecret',
-            '--config-dir',
-            configDir
-        ]);
+        await SetCommand.run(['--env', 'dev', 'database/password', 'mysecret', '--config-dir', configDir]);
 
         const provider = new LocalProvider(configDir);
         const stored = await provider.get('dev', 'database/password');
@@ -61,7 +54,7 @@ describe('secret:set command', () => {
             values: {}
         });
 
-        await SecretSet.run([
+        await SetCommand.run([
             '--env',
             'dev',
             'database/password',
@@ -87,14 +80,7 @@ describe('secret:set command', () => {
 
         const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-        await SecretSet.run([
-            '--env',
-            'dev',
-            'database/password',
-            'newvalue',
-            '--config-dir',
-            configDir
-        ]);
+        await SetCommand.run(['--env', 'dev', 'database/password', 'newvalue', '--config-dir', configDir]);
 
         expect(stderrSpy).toHaveBeenCalledWith(
             expect.stringContaining('Overwriting plain value at database/password')
@@ -119,7 +105,7 @@ describe('secret:set command', () => {
             values: {}
         });
 
-        await SecretSet.run([
+        await SetCommand.run([
             '--env',
             'base',
             'shared/key',
@@ -148,7 +134,7 @@ describe('secret:set command', () => {
 
         vi.spyOn(inputModule, 'readMaskedLine').mockResolvedValue('prompted-secret');
 
-        await SecretSet.run(['--env', 'dev', 'api/key', '--config-dir', configDir]);
+        await SetCommand.run(['--env', 'dev', 'api/key', '--config-dir', configDir]);
 
         expect(inputModule.readMaskedLine).toHaveBeenCalledWith(expect.stringContaining('api/key'));
 
@@ -159,7 +145,7 @@ describe('secret:set command', () => {
 
     it('errors with helpful message if environment does not exist', async () => {
         await expect(
-            SecretSet.run(['--env', 'nonexistent', 'some/path', 'value', '--config-dir', configDir])
+            SetCommand.run(['--env', 'nonexistent', 'some/path', 'value', '--config-dir', configDir])
         ).rejects.toThrow(/nonexistent/);
     });
 });

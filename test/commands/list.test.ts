@@ -3,17 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import yaml from 'js-yaml';
-import SecretList from '../../../src/commands/secret/list.js';
-import { saveEnvironment } from '../../../src/core/environment.js';
-import { SecretRef } from '../../../src/core/types.js';
+import List from '../../src/commands/list.js';
+import { saveEnvironment } from '../../src/core/environment.js';
+import { SecretRef } from '../../src/core/types.js';
 
-describe('secret:list command', () => {
+describe('list command', () => {
     let tmpDir: string;
     let origCwd: string;
     let logSpy: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
-        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-secret-list-'));
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keyshelf-list-'));
         origCwd = process.cwd();
         process.chdir(tmpDir);
         fs.mkdirSync(path.join(tmpDir, '.keyshelf', 'environments'), { recursive: true });
@@ -22,7 +22,7 @@ describe('secret:list command', () => {
             yaml.dump({ name: 'test-project', provider: { adapter: 'local' } })
         );
         logSpy = vi.fn();
-        vi.spyOn(SecretList.prototype, 'log').mockImplementation(logSpy);
+        vi.spyOn(List.prototype, 'log').mockImplementation(logSpy);
     });
 
     afterEach(() => {
@@ -31,7 +31,7 @@ describe('secret:list command', () => {
         vi.restoreAllMocks();
     });
 
-    it('lists all secret paths in resolved environment', async () => {
+    it('lists all paths (both config and secret) in resolved environment', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
             values: {
@@ -43,44 +43,61 @@ describe('secret:list command', () => {
             }
         });
 
-        await SecretList.run(['dev']);
+        await List.run(['--env', 'dev']);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        expect(output).toContain('database/host');
         expect(output).toContain('database/password');
         expect(output).toContain('api/key');
-        expect(output).not.toContain('database/host');
     });
 
-    it('lists secrets under a prefix', async () => {
+    it('shows (secret) suffix for SecretRef paths', async () => {
         await saveEnvironment(tmpDir, 'dev', {
             imports: [],
             values: {
-                database: { password: new SecretRef('database/password') },
-                api: { key: new SecretRef('api/key') }
+                database: {
+                    password: new SecretRef('database/password')
+                }
             }
         });
 
-        await SecretList.run(['dev', '--prefix', 'database']);
+        await List.run(['--env', 'dev']);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-        expect(output).toContain('database/password');
-        expect(output).not.toContain('api/key');
+        expect(output).toContain('database/password (secret)');
     });
 
-    it('shows inherited secrets from imports', async () => {
+    it('does NOT show (secret) for plain config paths', async () => {
+        await saveEnvironment(tmpDir, 'dev', {
+            imports: [],
+            values: { database: { host: 'localhost' } }
+        });
+
+        await List.run(['--env', 'dev']);
+
+        const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        expect(output).toContain('database/host');
+        expect(output).not.toContain('(secret)');
+    });
+
+    it('shows inherited values from imports', async () => {
         await saveEnvironment(tmpDir, 'base', {
             imports: [],
-            values: { shared: { secret: new SecretRef('shared/secret') } }
+            values: { shared: 'from-base' }
         });
         await saveEnvironment(tmpDir, 'dev', {
             imports: ['base'],
-            values: { local: { key: new SecretRef('local/key') } }
+            values: { local: 'from-dev' }
         });
 
-        await SecretList.run(['dev']);
+        await List.run(['--env', 'dev']);
 
         const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
-        expect(output).toContain('shared/secret');
-        expect(output).toContain('local/key');
+        expect(output).toContain('shared');
+        expect(output).toContain('local');
+    });
+
+    it('errors if env does not exist', async () => {
+        await expect(List.run(['--env', 'nonexistent'])).rejects.toThrow(/nonexistent/);
     });
 });
