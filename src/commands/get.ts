@@ -1,56 +1,45 @@
-import { Args, Command, Flags } from '@oclif/core';
-import { loadEnvironment } from '../core/environment.js';
-import { loadConfig, defaultConfigDir, findProjectRoot } from '../core/config.js';
-import { resolve } from '../core/resolver.js';
-import { PathTree } from '../core/path-tree.js';
-import { SecretRef } from '../core/types.js';
-import { resolveProvider } from '../providers/index.js';
+import { defineCommand } from "citty";
+import { readSchema } from "@/schema";
+import { resolveValue, buildProviders } from "@/resolver";
+import type { ProviderContext } from "@/types";
 
-export default class Get extends Command {
-    static override description = 'Get a value from an environment';
-
-    static override examples = ['<%= config.bin %> get --env dev database/password'];
-
-    static override args = {
-        path: Args.string({ description: 'Path (slash-delimited)', required: true })
-    };
-
-    static override flags = {
-        env: Flags.string({ description: 'Environment name', required: true }),
-        'config-dir': Flags.string({ description: 'Override config directory', hidden: true })
-    };
-
-    async run(): Promise<void> {
-        const { args, flags } = await this.parse(Get);
-        const projectRoot = findProjectRoot(process.cwd());
-        if (!projectRoot) {
-            this.error('keyshelf.yml not found in current directory or any parent directory.');
-        }
-
-        const resolved = await resolve(flags.env, (name) => loadEnvironment(projectRoot, name));
-        const tree = PathTree.fromJSON(resolved.values);
-        const value = tree.get(args.path);
-
-        if (value === undefined) {
-            this.error(
-                `Path "${args.path}" not found in environment "${flags.env}". Run "keyshelf list --env ${flags.env}" to see available paths.`
-            );
-        }
-
-        if (typeof value === 'object' && value !== null && !(value instanceof SecretRef)) {
-            this.error(`Path "${args.path}" is not a leaf value.`);
-        }
-
-        if (value instanceof SecretRef) {
-            const envDef = await loadEnvironment(projectRoot, flags.env);
-            const config = loadConfig(projectRoot);
-            const configDir = flags['config-dir'] ?? defaultConfigDir(config);
-            const provider = resolveProvider(envDef, config, configDir);
-            const secret = await provider.get(flags.env, value.path);
-            this.log(secret);
-            return;
-        }
-
-        this.log(String(value));
+export const getCommand = defineCommand({
+  meta: { description: "Decrypt and print a single value" },
+  args: {
+    key: {
+      type: "positional",
+      description: "Key path (e.g. database/url)",
+      required: true,
+    },
+    env: {
+      type: "string",
+      description: "Target environment",
+      default: "default",
+    },
+  },
+  async run({ args }) {
+    const schema = await readSchema();
+    const entry = schema.keys[args.key];
+    if (!entry) {
+      throw new Error(`Key '${args.key}' not found in keyshelf.yaml.`);
     }
-}
+
+    const value = entry[args.env] ?? entry.default;
+    if (value === undefined) {
+      throw new Error(
+        `Key '${args.key}' has no value for env '${args.env}' and no default.`
+      );
+    }
+
+    const context: ProviderContext = {
+      projectName: schema.project,
+      publicKey: schema.publicKey,
+      keyPath: args.key,
+      env: args.env,
+    };
+
+    const providers = buildProviders(schema);
+    const resolved = await resolveValue(value, context, providers);
+    process.stdout.write(resolved);
+  },
+});

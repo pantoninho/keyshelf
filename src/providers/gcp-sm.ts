@@ -1,114 +1,74 @@
-import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
-import { SecretProvider } from './provider.js';
+import { execSync } from "node:child_process";
+import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
+import type { Provider, ProviderContext } from "@/types";
 
-const MAX_SECRET_ID_LENGTH = 255;
+/** Resolve the GCP project from env var or gcloud CLI */
+export function getGcpProject(): string {
+  if (process.env.GOOGLE_CLOUD_PROJECT) return process.env.GOOGLE_CLOUD_PROJECT;
 
-/** Stores secrets in GCP Secret Manager using ADC for authentication. */
-export class GcpSmProvider implements SecretProvider {
-    private readonly client: SecretManagerServiceClient;
-    private readonly project: string;
-    private readonly name: string;
+  try {
+    const project = execSync("gcloud config get-value project", { encoding: "utf-8" }).trim();
+    if (project && project !== "(unset)") return project;
+  } catch {
+    // gcloud not installed or failed — fall through to error
+  }
 
-    constructor(name: string, project: string) {
-        this.name = name;
-        this.project = project;
-        this.client = new SecretManagerServiceClient();
-    }
-
-    ref(env: string, secretPath: string): string {
-        return buildSecretId(this.name, env, secretPath);
-    }
-
-    async get(env: string, secretPath: string): Promise<string> {
-        const secretId = buildSecretId(this.name, env, secretPath);
-        const name = `projects/${this.project}/secrets/${secretId}/versions/latest`;
-
-        try {
-            const [version] = await this.client.accessSecretVersion({ name });
-            return version.payload?.data?.toString() ?? '';
-        } catch (err: unknown) {
-            if (isNotFoundError(err)) {
-                throw new Error(`Secret "${secretPath}" not found in environment "${env}"`);
-            }
-            throw err;
-        }
-    }
-
-    async set(env: string, secretPath: string, value: string): Promise<void> {
-        const secretId = buildSecretId(this.name, env, secretPath);
-        const parent = `projects/${this.project}`;
-        const secretName = `${parent}/secrets/${secretId}`;
-
-        try {
-            await this.client.getSecret({ name: secretName });
-        } catch (err: unknown) {
-            if (isNotFoundError(err)) {
-                await this.client.createSecret({
-                    parent,
-                    secretId,
-                    secret: { replication: { automatic: {} } }
-                });
-            } else {
-                throw err;
-            }
-        }
-
-        await this.client.addSecretVersion({
-            parent: secretName,
-            payload: { data: Buffer.from(value, 'utf-8') }
-        });
-    }
-
-    async delete(env: string, secretPath: string): Promise<void> {
-        const secretId = buildSecretId(this.name, env, secretPath);
-        const name = `projects/${this.project}/secrets/${secretId}`;
-
-        try {
-            await this.client.deleteSecret({ name });
-        } catch (err: unknown) {
-            if (isNotFoundError(err)) {
-                throw new Error(`Secret "${secretPath}" not found in environment "${env}"`);
-            }
-            throw err;
-        }
-    }
-
-    async list(env: string, prefix?: string): Promise<string[]> {
-        const parent = `projects/${this.project}`;
-        const envPrefix = `${this.name}__${env}__`;
-        const paths: string[] = [];
-
-        const [secrets] = await this.client.listSecrets({ parent });
-        for (const secret of secrets) {
-            const id = secret.name?.split('/').pop();
-            if (!id || !id.startsWith(envPrefix)) continue;
-
-            const secretPath = id.slice(envPrefix.length).replaceAll('__', '/');
-            if (!prefix || secretPath === prefix || secretPath.startsWith(prefix + '/')) {
-                paths.push(secretPath);
-            }
-        }
-
-        return paths;
-    }
+  throw new Error(
+    "GCP project not found. Set GOOGLE_CLOUD_PROJECT env var or run 'gcloud config set project <project>'."
+  );
 }
 
-/** Encode project name, env and path into a GCP-safe secret ID. */
-export function buildSecretId(name: string, env: string, secretPath: string): string {
-    const id = `${name}__${env}__${secretPath.replaceAll('/', '__')}`;
-    if (id.length > MAX_SECRET_ID_LENGTH) {
-        throw new Error(
-            `Secret ID exceeds GCP's ${MAX_SECRET_ID_LENGTH}-character limit: "${id}" (${id.length} chars).`
-        );
-    }
-    return id;
+/** Derive a secret ID from provider context — slashes in keyPath become __ */
+export function buildSecretId(context: ProviderContext): string {
+  const sanitizedKeyPath = context.keyPath.replace(/\//g, "__");
+  return `${context.projectName}__${context.env}__${sanitizedKeyPath}`;
 }
 
-function isNotFoundError(err: unknown): boolean {
-    return (
-        typeof err === 'object' &&
-        err !== null &&
-        'code' in err &&
-        (err as { code: number }).code === 5
+async function getSecret(reference: string): Promise<string> {
+  const client = new SecretManagerServiceClient();
+  const [version] = await client.accessSecretVersion({ name: `${reference}/versions/latest` });
+
+  const payload = version.payload?.data?.toString();
+  if (!payload) {
+    throw new Error(
+      `Secret '${reference}' has an empty payload. Ensure the secret version contains a value.`
     );
+  }
+
+  return payload;
 }
+
+async function upsertSecret(secretId: string, value: string, gcpProject: string): Promise<string> {
+  const client = new SecretManagerServiceClient();
+  const parent = `projects/${gcpProject}`;
+  const name = `${parent}/secrets/${secretId}`;
+
+  try {
+    await client.createSecret({ parent, secretId, secret: { replication: { automatic: {} } } });
+  } catch (err: unknown) {
+    const code = (err as { code?: number }).code;
+    if (code !== 6) throw err;
+  }
+
+  await client.addSecretVersion({ parent: name, payload: { data: Buffer.from(value) } });
+  return name;
+}
+
+/** GCP Secret Manager provider */
+export const gcpSmProvider: Provider = {
+  async get(reference: string, _context: ProviderContext): Promise<string> {
+    return getSecret(reference);
+  },
+
+  async set(value: string, context: ProviderContext): Promise<string> {
+    if (context.keyPath.includes("__")) {
+      throw new Error(
+        "Key paths must not contain '__' (double underscore) when using the gcsm provider."
+      );
+    }
+
+    const secretId = buildSecretId(context);
+    const gcpProject = getGcpProject();
+    return upsertSecret(secretId, value, gcpProject);
+  },
+};

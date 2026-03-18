@@ -1,119 +1,82 @@
-import { Args, Command, Flags } from '@oclif/core';
-import { loadEnvironment, saveEnvironment, listEnvironments } from '../core/environment.js';
-import { loadConfig, defaultConfigDir, findProjectRoot } from '../core/config.js';
-import { resolve } from '../core/resolver.js';
-import { PathTree } from '../core/path-tree.js';
-import { SecretRef } from '../core/types.js';
-import { resolveProvider } from '../providers/index.js';
-import { readMaskedLine } from '../core/input.js';
-import { topoSort } from '../core/reconciler/topo-sort.js';
+import { defineCommand } from "citty";
+import { createInterface } from "node:readline";
+import { readSchema, writeSchema, findSchemaPath } from "@/schema";
+import { PROVIDERS } from "@/resolver";
+import type { ProviderContext, TaggedValue } from "@/types";
 
-export default class SetCommand extends Command {
-    static override description = 'Set a secret value in an environment';
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) {
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
+    return new Promise((resolve) => {
+      rl.question("Enter value: ", (answer) => {
+        rl.close();
+        resolve(answer);
+      });
+    });
+  }
 
-    static override examples = [
-        '<%= config.bin %> set --env dev database/password',
-        '<%= config.bin %> set --env dev database/password mysecret'
-    ];
-
-    static override args = {
-        path: Args.string({ description: 'Secret path (slash-delimited)', required: true }),
-        value: Args.string({ description: 'Secret value (prompted if omitted)', required: false })
-    };
-
-    static override flags = {
-        env: Flags.string({ description: 'Environment name', required: true }),
-        'config-dir': Flags.string({ description: 'Override config directory', hidden: true })
-    };
-
-    async run(): Promise<void> {
-        const { args, flags } = await this.parse(SetCommand);
-        const projectRoot = findProjectRoot(process.cwd());
-        if (!projectRoot) {
-            this.error('keyshelf.yml not found in current directory or any parent directory.');
-        }
-        const envName = flags.env;
-
-        const resolved = await resolve(envName, (name) => loadEnvironment(projectRoot, name));
-        const resolvedTree = PathTree.fromJSON(resolved.values);
-        const existing = resolvedTree.get(args.path);
-
-        if (existing !== undefined && !(existing instanceof SecretRef)) {
-            this.error(
-                `Path "${args.path}" in environment "${envName}" is a plain value, not a secret reference. Change it to a !secret tag first.`
-            );
-        }
-
-        if (existing === undefined) {
-            const envDef = await loadEnvironment(projectRoot, envName);
-            const tree = PathTree.fromJSON(envDef.values);
-            tree.set(args.path, new SecretRef(args.path));
-            await saveEnvironment(projectRoot, envName, { ...envDef, values: tree.toJSON() });
-        }
-
-        const value = args.value ?? (await readMaskedLine(`Enter value for "${args.path}": `));
-
-        const config = loadConfig(projectRoot);
-        const configDir = flags['config-dir'] ?? defaultConfigDir(config);
-        const envDef = await loadEnvironment(projectRoot, envName);
-        const provider = resolveProvider(envDef, config, configDir);
-        await provider.set(envName, args.path, value);
-
-        await this.propagateToImporters(projectRoot, envName, args.path, value, config, configDir);
-    }
-
-    private async propagateToImporters(
-        cwd: string,
-        envName: string,
-        secretPath: string,
-        value: string,
-        config: ReturnType<typeof loadConfig>,
-        configDir: string
-    ): Promise<void> {
-        const allEnvNames = await listEnvironments(cwd);
-        const envDefs = await this.loadAllEnvDefs(cwd, allEnvNames);
-        const sorted = topoSort(envDefs);
-        const importers = this.findTransitiveImporters(envDefs, envName, sorted);
-
-        for (const importerName of importers) {
-            const resolved = await resolve(importerName, (name) => loadEnvironment(cwd, name));
-            const tree = PathTree.fromJSON(resolved.values);
-            const ref = tree.get(secretPath);
-            if (!(ref instanceof SecretRef)) continue;
-
-            this.log(`↻ ${importerName} ${secretPath} (from ${envName})`);
-            const importerDef = await loadEnvironment(cwd, importerName);
-            const importerProvider = resolveProvider(importerDef, config, configDir);
-            await importerProvider.set(importerName, secretPath, value);
-        }
-    }
-
-    private async loadAllEnvDefs(
-        cwd: string,
-        envNames: string[]
-    ): Promise<Record<string, { imports: string[] }>> {
-        const entries = await Promise.all(
-            envNames.map(async (name) => {
-                const def = await loadEnvironment(cwd, name);
-                return [name, { imports: def.imports }] as const;
-            })
-        );
-        return Object.fromEntries(entries);
-    }
-
-    private findTransitiveImporters(
-        envDefs: Record<string, { imports: string[] }>,
-        targetEnv: string,
-        sorted: string[]
-    ): string[] {
-        const importers = new Set<string>();
-        for (const name of sorted) {
-            if (name === targetEnv) continue;
-            const { imports } = envDefs[name];
-            const importsTarget =
-                imports.includes(targetEnv) || imports.some((imp) => importers.has(imp));
-            if (importsTarget) importers.add(name);
-        }
-        return sorted.filter((name) => importers.has(name));
-    }
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf-8").trimEnd();
 }
+
+export const setCommand = defineCommand({
+  meta: { description: "Store a value (optionally encrypted)" },
+  args: {
+    key: {
+      type: "positional",
+      description: "Key path (e.g. database/url)",
+      required: true,
+    },
+    value: {
+      type: "positional",
+      description: "Value to store (reads from stdin if omitted)",
+      required: false,
+    },
+    env: {
+      type: "string",
+      description: "Target environment",
+      default: "default",
+    },
+    provider: {
+      type: "string",
+      description: "Provider (e.g. age, awssm)",
+    },
+  },
+  async run({ args }) {
+    const value = (args.value ?? await readStdin()).trimEnd();
+    const filePath = findSchemaPath();
+    const schema = await readSchema(filePath);
+
+    let entryValue: string | TaggedValue = value;
+
+    if (args.provider) {
+      const tag = `!${args.provider}`;
+      const provider = PROVIDERS[tag];
+      if (!provider?.set) {
+        const supported = Object.keys(PROVIDERS).map(t => t.slice(1)).join(", ");
+        throw new Error(`Unknown provider '${args.provider}'. Supported: ${supported}.`);
+      }
+
+      const context: ProviderContext = {
+        projectName: schema.project,
+        publicKey: schema.publicKey,
+        keyPath: args.key,
+        env: args.env,
+      };
+
+      const ref = await provider.set(value, context);
+      entryValue = { _tag: tag, value: ref };
+    }
+
+    if (!schema.keys[args.key]) {
+      schema.keys[args.key] = {};
+    }
+    schema.keys[args.key][args.env] = entryValue;
+
+    await writeSchema(schema, filePath);
+    console.log(`Set '${args.key}' for env '${args.env}'.`);
+  },
+});

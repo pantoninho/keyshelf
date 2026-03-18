@@ -1,14 +1,13 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
+import path from "path";
 
 export default defineConfig({
-    test: {
-        globals: true,
-        root: '.',
-        exclude: ['test/e2e/**', 'node_modules/**', '.claude/worktrees/**'],
-        coverage: {
-            provider: 'v8',
-            reporter: ['text', 'lcov', 'clover', 'json'],
-            reportsDirectory: './coverage'
-        }
-    }
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "src"),
+    },
+  },
+  test: {
+    exclude: [".claude/**", "node_modules/**"],
+  },
 });
