@@ -322,7 +322,7 @@ containers:
 
 Lambda supports wrapping the runtime entrypoint via `AWS_LAMBDA_EXEC_WRAPPER`. This works for all Lambda runtimes (Node.js, Python, Go, Java).
 
-**1. Create a wrapper script**
+#### 1. Create a wrapper script
 
 ```bash
 #!/bin/bash
@@ -331,7 +331,7 @@ export $(keyshelf export --env "${KEYSHELF_ENV:-prod}" --format dotenv | xargs)
 exec "$@"
 ```
 
-**2. Package as a Lambda Layer**
+#### 2. Package as a Lambda Layer
 
 ```bash
 mkdir -p layer/bin
@@ -349,7 +349,7 @@ aws lambda publish-layer-version \
   --compatible-runtimes nodejs20.x python3.12
 ```
 
-**3. Attach the layer and configure**
+#### 3. Attach the layer and configure
 
 ```bash
 aws lambda update-function-configuration \
