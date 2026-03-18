@@ -1,135 +1,51 @@
 import {
-    SecretsManagerClient,
-    GetSecretValueCommand,
-    PutSecretValueCommand,
-    CreateSecretCommand,
-    DeleteSecretCommand,
-    ListSecretsCommand
-} from '@aws-sdk/client-secrets-manager';
-import { SecretProvider } from './provider.js';
+  SecretsManagerClient,
+  CreateSecretCommand,
+  GetSecretValueCommand,
+  PutSecretValueCommand,
+  ResourceExistsException
+} from "@aws-sdk/client-secrets-manager";
+import type { Provider, ProviderContext } from "@/types";
 
-type AwsSmConfig = {
-    name: string;
-};
-
-/** Stores secrets in AWS Secrets Manager using configurable credentials. */
-export class AwsSmProvider implements SecretProvider {
-    private readonly client: SecretsManagerClient;
-    private readonly name: string;
-
-    constructor(config: AwsSmConfig) {
-        if (config.name.includes('/')) {
-            throw new Error(`project name must not contain "/": got "${config.name}"`);
-        }
-        this.name = config.name;
-        this.client = new SecretsManagerClient({});
-    }
-
-    ref(env: string, secretPath: string): string {
-        return buildSecretName(this.name, env, secretPath);
-    }
-
-    async get(env: string, secretPath: string): Promise<string> {
-        try {
-            const response = await this.client.send(
-                new GetSecretValueCommand({ SecretId: buildSecretName(this.name, env, secretPath) })
-            );
-            if (response.SecretString === undefined) {
-                throw new Error(
-                    `Secret "${secretPath}" in environment "${env}" is a binary secret, which is not supported.`
-                );
-            }
-            return response.SecretString;
-        } catch (err: unknown) {
-            if (isNotFoundError(err)) {
-                throw new Error(`Secret "${secretPath}" not found in environment "${env}"`);
-            }
-            throw err;
-        }
-    }
-
-    async set(env: string, secretPath: string, value: string): Promise<void> {
-        const secretId = buildSecretName(this.name, env, secretPath);
-
-        try {
-            await this.client.send(
-                new PutSecretValueCommand({ SecretId: secretId, SecretString: value })
-            );
-        } catch (err: unknown) {
-            if (!isNotFoundError(err)) throw err;
-            await this.client.send(
-                new CreateSecretCommand({ Name: secretId, SecretString: value })
-            );
-        }
-    }
-
-    async delete(env: string, secretPath: string): Promise<void> {
-        try {
-            await this.client.send(
-                new DeleteSecretCommand({
-                    SecretId: buildSecretName(this.name, env, secretPath),
-                    ForceDeleteWithoutRecovery: true
-                })
-            );
-        } catch (err: unknown) {
-            if (isNotFoundError(err)) {
-                throw new Error(`Secret "${secretPath}" not found in environment "${env}"`);
-            }
-            throw err;
-        }
-    }
-
-    async list(env: string, prefix?: string): Promise<string[]> {
-        const envPrefix = `keyshelf/${this.name}/${env}/`;
-        const paths: string[] = [];
-        let nextToken: string | undefined;
-
-        do {
-            const response = await this.client.send(
-                new ListSecretsCommand({
-                    Filters: [{ Key: 'name', Values: [envPrefix] }],
-                    NextToken: nextToken
-                })
-            );
-
-            for (const secret of response.SecretList ?? []) {
-                if (!secret.Name?.startsWith(envPrefix)) continue;
-                const secretPath = secret.Name.slice(envPrefix.length);
-                if (!secretPath) continue;
-                if (!prefix || secretPath === prefix || secretPath.startsWith(prefix + '/')) {
-                    paths.push(secretPath);
-                }
-            }
-
-            nextToken = response.NextToken;
-        } while (nextToken);
-
-        return paths;
-    }
+/** Derive a secret name from provider context */
+export function buildSecretName(context: ProviderContext): string {
+  return `${context.projectName}/${context.env}/${context.keyPath}`;
 }
 
-/**
- * Build the AWS Secrets Manager secret name for a given env and path.
- * @param name - Project name (must not contain `/`)
- * @param env - Environment name (must not contain `/`)
- * @param secretPath - `/`-delimited path to the secret
- * @returns The full secret name: `keyshelf/<name>/<env>/<secretPath>`
- */
-export function buildSecretName(name: string, env: string, secretPath: string): string {
-    if (name.includes('/')) {
-        throw new Error(`name must not contain "/": got "${name}"`);
-    }
-    if (env.includes('/')) {
-        throw new Error(`env must not contain "/": got "${env}"`);
-    }
-    return `keyshelf/${name}/${env}/${secretPath}`;
-}
+async function getSecret(reference: string): Promise<string> {
+  const client = new SecretsManagerClient({});
+  const result = await client.send(new GetSecretValueCommand({ SecretId: reference }));
 
-function isNotFoundError(err: unknown): boolean {
-    return (
-        typeof err === 'object' &&
-        err !== null &&
-        'name' in err &&
-        (err as { name: string }).name === 'ResourceNotFoundException'
+  if (result.SecretString === undefined) {
+    throw new Error(
+      `Secret '${reference}' is a binary secret, which is not supported. Store a string secret instead.`
     );
+  }
+
+  return result.SecretString;
 }
+
+async function upsertSecret(secretName: string, value: string): Promise<string> {
+  const client = new SecretsManagerClient({});
+
+  try {
+    await client.send(new CreateSecretCommand({ Name: secretName, SecretString: value }));
+  } catch (err) {
+    if (!(err instanceof ResourceExistsException)) throw err;
+    await client.send(new PutSecretValueCommand({ SecretId: secretName, SecretString: value }));
+  }
+
+  return secretName;
+}
+
+/** AWS Secrets Manager provider */
+export const awsSmProvider: Provider = {
+  async get(reference: string, _context: ProviderContext): Promise<string> {
+    return getSecret(reference);
+  },
+
+  async set(value: string, context: ProviderContext): Promise<string> {
+    const secretName = buildSecretName(context);
+    return upsertSecret(secretName, value);
+  }
+};

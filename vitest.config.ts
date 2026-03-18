@@ -1,14 +1,17 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-    test: {
-        globals: true,
-        root: '.',
-        exclude: ['test/e2e/**', 'node_modules/**', '.claude/worktrees/**'],
-        coverage: {
-            provider: 'v8',
-            reporter: ['text', 'lcov', 'clover', 'json'],
-            reportsDirectory: './coverage'
-        }
+  resolve: {
+    alias: {
+      "@": resolve(__dirname, "src")
     }
+  },
+  test: {
+    exclude: [".claude/**", "node_modules/**"],
+    testTimeout: 15000
+  }
 });

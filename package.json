@@ -1,75 +1,35 @@
 {
-    "name": "keyshelf",
-    "version": "2.1.0",
-    "description": "CLI tool for managing hierarchical config values and secrets across environments",
-    "type": "module",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "exports": {
-        ".": {
-            "import": "./dist/index.js",
-            "types": "./dist/index.d.ts"
-        },
-        "./preload": {
-            "import": "./dist/preload.js",
-            "types": "./dist/preload.d.ts"
-        }
-    },
-    "bin": {
-        "keyshelf": "./bin/run.js"
-    },
-    "engines": {
-        "node": ">=20"
-    },
-    "scripts": {
-        "build": "tsc",
-        "lint": "eslint src/",
-        "format": "prettier --write .",
-        "format:check": "prettier --check .",
-        "test": "vitest run",
-        "test:e2e": "vitest run --config vitest.e2e.config.ts",
-        "test:watch": "vitest",
-        "prepublishOnly": "npm run build"
-    },
-    "keywords": [
-        "config",
-        "secrets",
-        "cli",
-        "yaml"
-    ],
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/pantoninho/keyshelf"
-    },
-    "author": "pantoninho",
-    "license": "ISC",
-    "files": [
-        "dist",
-        "bin"
-    ],
-    "oclif": {
-        "bin": "keyshelf",
-        "dirname": "keyshelf",
-        "commands": "./dist/commands",
-        "topicSeparator": ":"
-    },
-    "devDependencies": {
-        "@eslint/js": "^9.39.3",
-        "@types/js-yaml": "^4.0.9",
-        "@types/node": "^25.3.1",
-        "@vitest/coverage-v8": "^4.0.18",
-        "eslint": "^9.39.3",
-        "eslint-config-prettier": "^10.1.8",
-        "prettier": "^3.8.1",
-        "tsup": "^8.5.1",
-        "typescript": "^5.9.3",
-        "typescript-eslint": "^8.56.1",
-        "vitest": "^4.0.18"
-    },
-    "dependencies": {
-        "@aws-sdk/client-secrets-manager": "^3.1009.0",
-        "@google-cloud/secret-manager": "^6.1.1",
-        "@oclif/core": "^4.8.1",
-        "js-yaml": "^4.1.1"
-    }
+  "name": "keyshelf",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "keyshelf": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "lint": "eslint src/",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1011.0",
+    "@google-cloud/secret-manager": "^6.1.1",
+    "age-encryption": "^0.3.0",
+    "citty": "^0.1.6",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.57.1",
+    "vitest": "^3.0.0"
+  }
 }

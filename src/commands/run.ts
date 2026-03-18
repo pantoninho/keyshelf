@@ -1,58 +1,32 @@
-import { Command, Flags } from '@oclif/core';
-import { spawnSync } from 'node:child_process';
-import { resolveEnv } from '../core/resolve-env.js';
-import { loadEnvMapping } from '../core/env-keyshelf.js';
-import { findProjectRoot } from '../core/config.js';
+import { defineCommand } from "citty";
+import { spawnSync } from "node:child_process";
+import { readSchema } from "@/schema";
+import { resolveAllKeys } from "@/resolver";
 
-export default class Run extends Command {
-    static override description =
-        'Run a command with resolved environment config and secrets as env vars';
-
-    static override examples = [
-        '<%= config.bin %> run --env prod -- node server.js',
-        '<%= config.bin %> run --env dev -- docker compose up'
-    ];
-
-    static override strict = false;
-
-    static override flags = {
-        env: Flags.string({ description: 'Environment name', required: true }),
-        'config-dir': Flags.string({ description: 'Override config directory', hidden: true })
-    };
-
-    async run(): Promise<void> {
-        const { argv, flags } = await this.parse(Run);
-        const command = argv as string[];
-
-        if (command.length === 0) {
-            this.error('No command specified. Provide a command after "--".');
-        }
-
-        const projectRoot = findProjectRoot(process.cwd());
-        if (!projectRoot) {
-            this.error('keyshelf.yml not found in current directory or any parent directory.');
-        }
-        const envMapping = loadEnvMapping(process.cwd());
-        if (Object.keys(envMapping).length === 0) {
-            this.warn('No .env.keyshelf file found — no environment variables will be injected.');
-        }
-        const envRecord = await resolveEnv({
-            env: flags.env,
-            projectDir: projectRoot,
-            configDir: flags['config-dir'],
-            envMapping
-        });
-
-        const [cmd, ...args] = command;
-        const result = spawnSync(cmd, args, {
-            stdio: 'inherit',
-            env: { ...process.env, ...envRecord }
-        });
-
-        if (result.error) {
-            this.error(`Failed to run command: ${result.error.message}`);
-        }
-
-        this.exit(result.status ?? 1);
+export const runCommand = defineCommand({
+  meta: { description: "Inject resolved values as env vars and run a command" },
+  args: {
+    env: {
+      type: "string",
+      description: "Target environment",
+      required: true
     }
-}
+  },
+  async run({ args }) {
+    const idx = process.argv.indexOf("--");
+    const cmd = idx >= 0 ? process.argv.slice(idx + 1) : [];
+    if (cmd.length === 0) {
+      throw new Error("No command specified. Usage: keyshelf run --env <env> -- <command>");
+    }
+
+    const schema = await readSchema();
+    const resolved = await resolveAllKeys(schema, args.env);
+
+    const result = spawnSync(cmd[0], cmd.slice(1), {
+      env: { ...process.env, ...resolved },
+      stdio: "inherit"
+    });
+
+    process.exit(result.status ?? 1);
+  }
+});

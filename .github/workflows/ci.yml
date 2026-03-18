@@ -1,76 +1,68 @@
 name: CI
 
 on:
-    push:
-        branches: [main]
-    pull_request:
-        branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-    test:
-        runs-on: ubuntu-latest
+  test:
+    runs-on: ubuntu-latest
 
-        steps:
-            - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-                  cache: npm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
-            - run: npm ci
+      - run: npm ci
 
-            - run: npm run build
+      - run: npm run lint
 
-            - run: npm run lint
+      - run: npm run format:check
 
-            - run: npm run format:check
+      - run: npm test
 
-            - run: npm test -- --coverage
+  release-please:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          release-type: node
 
-            - name: Upload coverage to Codacy
-              uses: codacy/codacy-coverage-reporter-action@v1
-              with:
-                  project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-                  coverage-reports: coverage/lcov.info
+  publish:
+    if: ${{ needs.release-please.outputs.release_created }}
+    needs: [test, release-please]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
 
-    release-please:
-        if: github.event_name == 'push'
-        runs-on: ubuntu-latest
-        permissions:
-            contents: write
-            pull-requests: write
-        outputs:
-            release_created: ${{ steps.release.outputs.release_created }}
-        steps:
-            - uses: googleapis/release-please-action@v4
-              id: release
-              with:
-                  release-type: node
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://registry.npmjs.org
 
-    publish:
-        if: ${{ needs.release-please.outputs.release_created }}
-        needs: [test, release-please]
-        runs-on: ubuntu-latest
-        permissions:
-            id-token: write
-        steps:
-            - uses: actions/checkout@v4
+      - run: npm ci
 
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-                  cache: npm
-                  registry-url: https://registry.npmjs.org
+      - run: npm run build
 
-            - run: npm ci
+      - name: Verify the integrity of provenance attestations and registry signatures
+        run: npm audit signatures
 
-            - run: npm run build
-
-            - name: Verify the integrity of provenance attestations and registry signatures
-              run: npm audit signatures
-
-            - name: Publish to npm
-              run: npm publish --provenance --access public
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
