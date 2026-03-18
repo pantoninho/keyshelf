@@ -37,8 +37,8 @@ describe("resolveAllKeys", () => {
       project: TEST_PROJECT,
       publicKey,
       keys: {
-        "database/url": { default: "postgres://localhost/db" },
-      },
+        "database/url": { default: "postgres://localhost/db" }
+      }
     };
 
     const result = await resolveAllKeys(schema, "default");
@@ -50,7 +50,7 @@ describe("resolveAllKeys", () => {
       projectName: TEST_PROJECT,
       publicKey,
       keyPath: "api/key",
-      env: "default",
+      env: "default"
     };
     const encrypted = await ageProvider.set!("my-secret", context);
 
@@ -58,8 +58,8 @@ describe("resolveAllKeys", () => {
       project: TEST_PROJECT,
       publicKey,
       keys: {
-        "api/key": { default: { _tag: "!age", value: encrypted } },
-      },
+        "api/key": { default: { _tag: "!age", value: encrypted } }
+      }
     };
 
     const result = await resolveAllKeys(schema, "default");
@@ -73,9 +73,9 @@ describe("resolveAllKeys", () => {
       keys: {
         "database/url": {
           default: "postgres://localhost/db",
-          staging: "postgres://staging-host/db",
-        },
-      },
+          staging: "postgres://staging-host/db"
+        }
+      }
     };
 
     const result = await resolveAllKeys(schema, "staging");
@@ -87,8 +87,8 @@ describe("resolveAllKeys", () => {
       project: TEST_PROJECT,
       publicKey,
       keys: {
-        "database/url": { default: "postgres://localhost/db" },
-      },
+        "database/url": { default: "postgres://localhost/db" }
+      }
     };
 
     const result = await resolveAllKeys(schema, "staging");
@@ -99,7 +99,7 @@ describe("resolveAllKeys", () => {
     const schema: KeyshelfSchema = {
       project: TEST_PROJECT,
       publicKey,
-      keys: {},
+      keys: {}
     };
     const result = await resolveAllKeys(schema, "default");
     expect(result).toEqual({});
@@ -110,8 +110,8 @@ describe("resolveAllKeys", () => {
       project: TEST_PROJECT,
       publicKey,
       keys: {
-        "api/key": { staging: "only-staging" },
-      },
+        "api/key": { staging: "only-staging" }
+      }
     };
 
     await expect(resolveAllKeys(schema, "prod")).rejects.toThrow(
@@ -126,7 +126,7 @@ describe("resolveValue", () => {
       projectName: TEST_PROJECT,
       publicKey,
       keyPath: "test/key",
-      env: "default",
+      env: "default"
     };
 
     const result = await resolveValue("plain-value", context);
@@ -138,12 +138,12 @@ describe("resolveValue", () => {
       projectName: TEST_PROJECT,
       publicKey,
       keyPath: "test/key",
-      env: "default",
+      env: "default"
     };
 
-    await expect(
-      resolveValue({ _tag: "!unknown", value: "ref" }, context)
-    ).rejects.toThrow("Unknown provider '!unknown'");
+    await expect(resolveValue({ _tag: "!unknown", value: "ref" }, context)).rejects.toThrow(
+      "Unknown provider '!unknown'"
+    );
   });
 });
 

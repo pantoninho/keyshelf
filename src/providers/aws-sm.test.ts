@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  SecretsManagerClient,
-  ResourceExistsException,
-} from "@aws-sdk/client-secrets-manager";
+import { SecretsManagerClient, ResourceExistsException } from "@aws-sdk/client-secrets-manager";
 import { awsSmProvider, buildSecretName } from "@/providers/aws-sm";
 import type { ProviderContext } from "@/types";
 
@@ -10,7 +7,7 @@ vi.mock("@aws-sdk/client-secrets-manager", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@aws-sdk/client-secrets-manager")>();
   return {
     ...actual,
-    SecretsManagerClient: vi.fn(),
+    SecretsManagerClient: vi.fn()
   };
 });
 
@@ -26,7 +23,7 @@ beforeEach(() => {
 const context: ProviderContext = {
   projectName: "my-project",
   env: "production",
-  keyPath: "database/password",
+  keyPath: "database/password"
 };
 
 describe("buildSecretName", () => {
@@ -66,7 +63,9 @@ describe("awsSmProvider.set", () => {
 
   it("updates an existing secret when ResourceExistsException is thrown", async () => {
     mockSend
-      .mockRejectedValueOnce(new ResourceExistsException({ message: "already exists", $metadata: {} }))
+      .mockRejectedValueOnce(
+        new ResourceExistsException({ message: "already exists", $metadata: {} })
+      )
       .mockResolvedValueOnce({});
 
     const ref = await awsSmProvider.set!("my-secret-value", context);
@@ -76,20 +75,22 @@ describe("awsSmProvider.set", () => {
 
   it("rethrows non-ResourceExistsException errors from CreateSecret", async () => {
     mockSend.mockRejectedValueOnce(new Error("AccessDeniedException"));
-    await expect(
-      awsSmProvider.set!("my-secret-value", context)
-    ).rejects.toThrow("AccessDeniedException");
+    await expect(awsSmProvider.set!("my-secret-value", context)).rejects.toThrow(
+      "AccessDeniedException"
+    );
     expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
   it("propagates PutSecretValue errors after ResourceExistsException", async () => {
     mockSend
-      .mockRejectedValueOnce(new ResourceExistsException({ message: "already exists", $metadata: {} }))
+      .mockRejectedValueOnce(
+        new ResourceExistsException({ message: "already exists", $metadata: {} })
+      )
       .mockRejectedValueOnce(new Error("InternalServiceError"));
 
-    await expect(
-      awsSmProvider.set!("my-secret-value", context)
-    ).rejects.toThrow("InternalServiceError");
+    await expect(awsSmProvider.set!("my-secret-value", context)).rejects.toThrow(
+      "InternalServiceError"
+    );
     expect(mockSend).toHaveBeenCalledTimes(2);
   });
 });

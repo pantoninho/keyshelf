@@ -23,9 +23,9 @@ describe("schema round-trip", () => {
       publicKey: "age1abc123",
       keys: {
         "database/url": {
-          default: "postgres://localhost:5432/app",
-        },
-      },
+          default: "postgres://localhost:5432/app"
+        }
+      }
     };
 
     const filePath = join(tempDir, "keyshelf.yaml");
@@ -44,10 +44,10 @@ describe("schema round-trip", () => {
           default: {
             _tag: "!age",
             value:
-              "-----BEGIN AGE ENCRYPTED FILE-----\nYWdlLWVuY3J5cHRpb24\n-----END AGE ENCRYPTED FILE-----\n",
-          },
-        },
-      },
+              "-----BEGIN AGE ENCRYPTED FILE-----\nYWdlLWVuY3J5cHRpb24\n-----END AGE ENCRYPTED FILE-----\n"
+          }
+        }
+      }
     };
 
     const filePath = join(tempDir, "keyshelf.yaml");
@@ -66,14 +66,14 @@ describe("schema round-trip", () => {
           default: "postgres://localhost:5432/app",
           staging: {
             _tag: "!age",
-            value: "-----BEGIN AGE ENCRYPTED FILE-----\nenc1\n-----END AGE ENCRYPTED FILE-----\n",
+            value: "-----BEGIN AGE ENCRYPTED FILE-----\nenc1\n-----END AGE ENCRYPTED FILE-----\n"
           },
           prod: {
             _tag: "!age",
-            value: "-----BEGIN AGE ENCRYPTED FILE-----\nenc2\n-----END AGE ENCRYPTED FILE-----\n",
-          },
-        },
-      },
+            value: "-----BEGIN AGE ENCRYPTED FILE-----\nenc2\n-----END AGE ENCRYPTED FILE-----\n"
+          }
+        }
+      }
     };
 
     const filePath = join(tempDir, "keyshelf.yaml");
@@ -91,10 +91,10 @@ describe("schema round-trip", () => {
         "database/password": {
           default: {
             _tag: "!awssm",
-            value: "my-project/production/database/password",
-          },
-        },
-      },
+            value: "my-project/production/database/password"
+          }
+        }
+      }
     };
 
     const filePath = join(tempDir, "keyshelf.yaml");
@@ -115,10 +115,10 @@ describe("schema round-trip", () => {
         "database/password": {
           default: {
             _tag: "!gcsm",
-            value: "projects/my-project/secrets/database-password/versions/latest",
-          },
-        },
-      },
+            value: "projects/my-project/secrets/database-password/versions/latest"
+          }
+        }
+      }
     };
 
     const filePath = join(tempDir, "keyshelf.yaml");
@@ -164,9 +164,9 @@ describe("schema round-trip", () => {
       project: "test-app",
       keys: {
         "secret/key": {
-          default: { _tag: "!age", value: "encrypted-data" },
-        },
-      },
+          default: { _tag: "!age", value: "encrypted-data" }
+        }
+      }
     };
 
     const filePath = join(tempDir, "keyshelf.yaml");

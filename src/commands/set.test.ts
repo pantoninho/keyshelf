@@ -120,9 +120,7 @@ describe("keyshelf set (multiple keys)", () => {
 
 describe("keyshelf set (error cases)", () => {
   it("errors when an unknown provider is specified", () => {
-    expect(() =>
-      cli(["set", "--provider", "unknown", "api/key", "value"])
-    ).toThrow();
+    expect(() => cli(["set", "--provider", "unknown", "api/key", "value"])).toThrow();
   });
 
   it("errors when no keyshelf.yaml exists", async () => {

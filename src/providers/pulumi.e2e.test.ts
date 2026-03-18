@@ -20,10 +20,10 @@ function cli(args: string[]): string {
       ...process.env,
       HOME: tempDir,
       PULUMI_CONFIG_PASSPHRASE: "",
-      PULUMI_BACKEND_URL: `file://${pulumiDir}/.pulumi-state`,
+      PULUMI_BACKEND_URL: `file://${pulumiDir}/.pulumi-state`
     },
     encoding: "utf-8",
-    timeout: 30000,
+    timeout: 30000
   });
 }
 
@@ -33,10 +33,10 @@ function pulumi(args: string[]): string {
     env: {
       ...process.env,
       PULUMI_CONFIG_PASSPHRASE: "",
-      PULUMI_BACKEND_URL: `file://${pulumiDir}/.pulumi-state`,
+      PULUMI_BACKEND_URL: `file://${pulumiDir}/.pulumi-state`
     },
     encoding: "utf-8",
-    timeout: 30000,
+    timeout: 30000
   });
 }
 
@@ -57,7 +57,7 @@ beforeAll(async () => {
       "outputs:",
       '  dbUrl: "postgres://localhost/testdb"',
       "  secretValue:",
-      '    fn::secret: "super-secret-value"',
+      '    fn::secret: "super-secret-value"'
     ].join("\n")
   );
 
@@ -76,7 +76,7 @@ beforeAll(async () => {
       "  database/url:",
       "    default: !pulumi test.dbUrl",
       "  api/secret:",
-      "    default: !pulumi test.secretValue",
+      "    default: !pulumi test.secretValue"
     ].join("\n")
   );
 });

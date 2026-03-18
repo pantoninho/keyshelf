@@ -40,11 +40,16 @@ function cli(args: string[], input?: string): string {
       ...process.env,
       HOME: tempDir,
       GOOGLE_CLOUD_PROJECT: GCP_PROJECT,
-      GOOGLE_APPLICATION_CREDENTIALS: join(homedir(), ".config", "gcloud", "application_default_credentials.json"),
+      GOOGLE_APPLICATION_CREDENTIALS: join(
+        homedir(),
+        ".config",
+        "gcloud",
+        "application_default_credentials.json"
+      )
     },
     encoding: "utf-8",
     input,
-    timeout: 30000,
+    timeout: 30000
   });
 }
 

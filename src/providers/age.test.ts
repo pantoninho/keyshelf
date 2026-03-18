@@ -21,7 +21,7 @@ describe("ageProvider", () => {
       projectName: TEST_PROJECT,
       publicKey,
       keyPath: "test/secret",
-      env: "default",
+      env: "default"
     };
   });
 
@@ -41,15 +41,13 @@ describe("ageProvider", () => {
 
   it("throws when publicKey is missing on set", async () => {
     const noKeyCtx = { ...context, publicKey: undefined };
-    await expect(ageProvider.set!("value", noKeyCtx)).rejects.toThrow(
-      "No publicKey"
-    );
+    await expect(ageProvider.set!("value", noKeyCtx)).rejects.toThrow("No publicKey");
   });
 
   it("throws when private key file does not exist", async () => {
     const missingKeyCtx: ProviderContext = {
       ...context,
-      projectName: "keyshelf-nonexistent-project-that-has-no-key",
+      projectName: "keyshelf-nonexistent-project-that-has-no-key"
     };
     const encrypted = await ageProvider.set!("value", context);
     await expect(ageProvider.get(encrypted, missingKeyCtx)).rejects.toThrow(

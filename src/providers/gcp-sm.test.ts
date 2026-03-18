@@ -7,25 +7,16 @@ vi.mock("@google-cloud/secret-manager", () => {
   const MockClient = vi.fn(() => ({
     createSecret: vi.fn(),
     addSecretVersion: vi.fn(),
-    accessSecretVersion: vi.fn(),
+    accessSecretVersion: vi.fn()
   }));
   return { SecretManagerServiceClient: MockClient };
 });
 
 vi.mock("node:child_process", () => ({
-  execSync: vi.fn(),
+  execSync: vi.fn()
 }));
 
 import { execSync } from "node:child_process";
-
-function getMockClient() {
-  const results = vi.mocked(SecretManagerServiceClient).mock.results;
-  return results[results.length - 1].value as {
-    createSecret: ReturnType<typeof vi.fn>;
-    addSecretVersion: ReturnType<typeof vi.fn>;
-    accessSecretVersion: ReturnType<typeof vi.fn>;
-  };
-}
 
 beforeEach(() => {
   vi.mocked(SecretManagerServiceClient).mockClear();
@@ -36,7 +27,7 @@ beforeEach(() => {
 const context: ProviderContext = {
   projectName: "my-app",
   env: "production",
-  keyPath: "database/password",
+  keyPath: "database/password"
 };
 
 describe("buildSecretId", () => {
@@ -58,7 +49,9 @@ describe("getGcpProject", () => {
   });
 
   it("throws when neither env var nor gcloud CLI is available", () => {
-    vi.mocked(execSync).mockImplementation(() => { throw new Error("gcloud not found"); });
+    vi.mocked(execSync).mockImplementation(() => {
+      throw new Error("gcloud not found");
+    });
     expect(() => getGcpProject()).toThrow("GCP project not found");
   });
 
@@ -78,11 +71,12 @@ describe("gcpSmProvider.get", () => {
     process.env.GOOGLE_CLOUD_PROJECT = "my-gcp-project";
     const reference = "projects/my-gcp-project/secrets/my-app__production__database__password";
 
-    const mockAccessSecretVersion = vi.fn().mockResolvedValueOnce([
-      { payload: { data: Buffer.from("my-secret-value") } },
-    ]);
+    const mockAccessSecretVersion = vi
+      .fn()
+      .mockResolvedValueOnce([{ payload: { data: Buffer.from("my-secret-value") } }]);
     vi.mocked(SecretManagerServiceClient).mockImplementationOnce(
-      () => ({ accessSecretVersion: mockAccessSecretVersion }) as unknown as SecretManagerServiceClient
+      () =>
+        ({ accessSecretVersion: mockAccessSecretVersion }) as unknown as SecretManagerServiceClient
     );
 
     const result = await gcpSmProvider.get(reference, context);
@@ -95,7 +89,7 @@ describe("gcpSmProvider.get", () => {
     vi.mocked(SecretManagerServiceClient).mockImplementationOnce(
       () =>
         ({
-          accessSecretVersion: vi.fn().mockResolvedValueOnce([{ payload: { data: null } }]),
+          accessSecretVersion: vi.fn().mockResolvedValueOnce([{ payload: { data: null } }])
         }) as unknown as SecretManagerServiceClient
     );
 
@@ -108,7 +102,7 @@ describe("gcpSmProvider.get", () => {
     vi.mocked(SecretManagerServiceClient).mockImplementationOnce(
       () =>
         ({
-          accessSecretVersion: vi.fn().mockRejectedValueOnce(new Error("PERMISSION_DENIED")),
+          accessSecretVersion: vi.fn().mockRejectedValueOnce(new Error("PERMISSION_DENIED"))
         }) as unknown as SecretManagerServiceClient
     );
 
@@ -129,7 +123,7 @@ describe("gcpSmProvider.set", () => {
       () =>
         ({
           createSecret: mockCreateSecret,
-          addSecretVersion: mockAddSecretVersion,
+          addSecretVersion: mockAddSecretVersion
         }) as unknown as SecretManagerServiceClient
     );
 
@@ -148,7 +142,7 @@ describe("gcpSmProvider.set", () => {
       () =>
         ({
           createSecret: mockCreateSecret,
-          addSecretVersion: mockAddSecretVersion,
+          addSecretVersion: mockAddSecretVersion
         }) as unknown as SecretManagerServiceClient
     );
 
@@ -167,11 +161,13 @@ describe("gcpSmProvider.set", () => {
       () =>
         ({
           createSecret: mockCreateSecret,
-          addSecretVersion: mockAddSecretVersion,
+          addSecretVersion: mockAddSecretVersion
         }) as unknown as SecretManagerServiceClient
     );
 
-    await expect(gcpSmProvider.set!("my-secret-value", context)).rejects.toThrow("PERMISSION_DENIED");
+    await expect(gcpSmProvider.set!("my-secret-value", context)).rejects.toThrow(
+      "PERMISSION_DENIED"
+    );
     expect(mockAddSecretVersion).not.toHaveBeenCalled();
   });
 
@@ -183,11 +179,13 @@ describe("gcpSmProvider.set", () => {
       () =>
         ({
           createSecret: mockCreateSecret,
-          addSecretVersion: mockAddSecretVersion,
+          addSecretVersion: mockAddSecretVersion
         }) as unknown as SecretManagerServiceClient
     );
 
-    await expect(gcpSmProvider.set!("my-secret-value", context)).rejects.toThrow("RESOURCE_EXHAUSTED");
+    await expect(gcpSmProvider.set!("my-secret-value", context)).rejects.toThrow(
+      "RESOURCE_EXHAUSTED"
+    );
     expect(mockCreateSecret).toHaveBeenCalledTimes(1);
     expect(mockAddSecretVersion).toHaveBeenCalledTimes(1);
   });

@@ -1,13 +1,7 @@
 import { mkdir, writeFile, readFile, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import {
-  Encrypter,
-  Decrypter,
-  generateIdentity,
-  identityToRecipient,
-  armor,
-} from "age-encryption";
+import { Encrypter, Decrypter, generateIdentity, identityToRecipient, armor } from "age-encryption";
 import type { Provider, ProviderContext } from "@/types";
 
 /** Path to the private key file for a project */
@@ -34,9 +28,7 @@ export async function loadPrivateKey(projectName: string): Promise<string> {
   try {
     return (await readFile(keyPath, "utf-8")).trim();
   } catch {
-    throw new Error(
-      `Private key not found at ${keyPath}. Run 'keyshelf init' to generate one.`
-    );
+    throw new Error(`Private key not found at ${keyPath}. Run 'keyshelf init' to generate one.`);
   }
 }
 
@@ -53,14 +45,12 @@ export const ageProvider: Provider = {
 
   async set(value: string, context: ProviderContext): Promise<string> {
     if (!context.publicKey) {
-      throw new Error(
-        "No publicKey in keyshelf.yaml. Run 'keyshelf init' to generate one."
-      );
+      throw new Error("No publicKey in keyshelf.yaml. Run 'keyshelf init' to generate one.");
     }
 
     const e = new Encrypter();
     e.addRecipient(context.publicKey);
     const ciphertext = await e.encrypt(value);
     return armor.encode(ciphertext);
-  },
+  }
 };

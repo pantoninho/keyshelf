@@ -9,13 +9,13 @@ export const getCommand = defineCommand({
     key: {
       type: "positional",
       description: "Key path (e.g. database/url)",
-      required: true,
+      required: true
     },
     env: {
       type: "string",
       description: "Target environment",
-      default: "default",
-    },
+      default: "default"
+    }
   },
   async run({ args }) {
     const schema = await readSchema();
@@ -26,20 +26,18 @@ export const getCommand = defineCommand({
 
     const value = entry[args.env] ?? entry.default;
     if (value === undefined) {
-      throw new Error(
-        `Key '${args.key}' has no value for env '${args.env}' and no default.`
-      );
+      throw new Error(`Key '${args.key}' has no value for env '${args.env}' and no default.`);
     }
 
     const context: ProviderContext = {
       projectName: schema.project,
       publicKey: schema.publicKey,
       keyPath: args.key,
-      env: args.env,
+      env: args.env
     };
 
     const providers = buildProviders(schema);
     const resolved = await resolveValue(value, context, providers);
     process.stdout.write(resolved);
-  },
+  }
 });

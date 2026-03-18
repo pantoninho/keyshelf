@@ -28,25 +28,25 @@ export const setCommand = defineCommand({
     key: {
       type: "positional",
       description: "Key path (e.g. database/url)",
-      required: true,
+      required: true
     },
     value: {
       type: "positional",
       description: "Value to store (reads from stdin if omitted)",
-      required: false,
+      required: false
     },
     env: {
       type: "string",
       description: "Target environment",
-      default: "default",
+      default: "default"
     },
     provider: {
       type: "string",
-      description: "Provider (e.g. age, awssm)",
-    },
+      description: "Provider (e.g. age, awssm)"
+    }
   },
   async run({ args }) {
-    const value = (args.value ?? await readStdin()).trimEnd();
+    const value = (args.value ?? (await readStdin())).trimEnd();
     const filePath = findSchemaPath();
     const schema = await readSchema(filePath);
 
@@ -56,7 +56,9 @@ export const setCommand = defineCommand({
       const tag = `!${args.provider}`;
       const provider = PROVIDERS[tag];
       if (!provider?.set) {
-        const supported = Object.keys(PROVIDERS).map(t => t.slice(1)).join(", ");
+        const supported = Object.keys(PROVIDERS)
+          .map((t) => t.slice(1))
+          .join(", ");
         throw new Error(`Unknown provider '${args.provider}'. Supported: ${supported}.`);
       }
 
@@ -64,7 +66,7 @@ export const setCommand = defineCommand({
         projectName: schema.project,
         publicKey: schema.publicKey,
         keyPath: args.key,
-        env: args.env,
+        env: args.env
       };
 
       const ref = await provider.set(value, context);
@@ -78,5 +80,5 @@ export const setCommand = defineCommand({
 
     await writeSchema(schema, filePath);
     console.log(`Set '${args.key}' for env '${args.env}'.`);
-  },
+  }
 });

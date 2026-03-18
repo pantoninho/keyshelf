@@ -48,14 +48,20 @@ describe("keyshelf run", () => {
   });
 
   it("errors when the command does not exist", () => {
-    expect(() =>
-      cli(["run", "--env", "default", "--", "nonexistent-command-xyz"])
-    ).toThrow();
+    expect(() => cli(["run", "--env", "default", "--", "nonexistent-command-xyz"])).toThrow();
   });
 
   it("decrypts age-encrypted values before injecting", () => {
     cli(["set", "--provider", "age", "encrypted/secret", "decrypted-value"]);
-    const output = cli(["run", "--env", "default", "--", "node", "-e", "process.stdout.write(process.env.ENCRYPTED_SECRET ?? '')"]);
+    const output = cli([
+      "run",
+      "--env",
+      "default",
+      "--",
+      "node",
+      "-e",
+      "process.stdout.write(process.env.ENCRYPTED_SECRET ?? '')"
+    ]);
     expect(output).toBe("decrypted-value");
   });
 
@@ -64,7 +70,15 @@ describe("keyshelf run", () => {
     // parent process env, then confirm keyshelf's value wins in the subprocess
     process.env.MY_TOKEN = "original-value";
     cli(["set", "my/token", "overridden-value"]);
-    const output = cli(["run", "--env", "default", "--", "node", "-e", "process.stdout.write(process.env.MY_TOKEN ?? '')"]);
+    const output = cli([
+      "run",
+      "--env",
+      "default",
+      "--",
+      "node",
+      "-e",
+      "process.stdout.write(process.env.MY_TOKEN ?? '')"
+    ]);
     delete process.env.MY_TOKEN;
     expect(output).toBe("overridden-value");
   });

@@ -9,15 +9,15 @@ const main = defineCommand({
   meta: {
     name: "keyshelf",
     version: "0.1.0",
-    description: "Config and secrets manager",
+    description: "Config and secrets manager"
   },
   subCommands: {
     init: initCommand,
     set: setCommand,
     get: getCommand,
     run: runCommand,
-    export: exportCommand,
-  },
+    export: exportCommand
+  }
 });
 
 runMain(main);

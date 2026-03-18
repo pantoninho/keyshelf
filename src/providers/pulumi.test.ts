@@ -4,7 +4,7 @@ import { createPulumiProvider, parseReference } from "@/providers/pulumi";
 import type { ProviderContext } from "@/types";
 
 vi.mock("node:child_process", () => ({
-  spawnSync: vi.fn(),
+  spawnSync: vi.fn()
 }));
 
 import { spawnSync } from "node:child_process";
@@ -18,7 +18,7 @@ beforeEach(() => {
 const context: ProviderContext = {
   projectName: "my-project",
   env: "production",
-  keyPath: "database/url",
+  keyPath: "database/url"
 };
 
 describe("parseReference", () => {
@@ -27,7 +27,10 @@ describe("parseReference", () => {
   });
 
   it("handles dots in output name", () => {
-    expect(parseReference("prod.nested.output")).toEqual({ stack: "prod", outputName: "nested.output" });
+    expect(parseReference("prod.nested.output")).toEqual({
+      stack: "prod",
+      outputName: "nested.output"
+    });
   });
 
   it("throws on missing dot", () => {
@@ -53,7 +56,7 @@ describe("createPulumiProvider", () => {
       stderr: "",
       pid: 0,
       output: [],
-      signal: null,
+      signal: null
     });
   }
 
@@ -64,7 +67,7 @@ describe("createPulumiProvider", () => {
       stderr,
       pid: 0,
       output: [],
-      signal: null,
+      signal: null
     });
   }
 
@@ -76,7 +79,17 @@ describe("createPulumiProvider", () => {
     expect(result).toBe("my-secret-value");
     expect(mockSpawnSync).toHaveBeenCalledWith(
       "pulumi",
-      ["stack", "output", "dbUrl", "--json", "--show-secrets", "-s", "dev", "-C", resolve("./infra")],
+      [
+        "stack",
+        "output",
+        "dbUrl",
+        "--json",
+        "--show-secrets",
+        "-s",
+        "dev",
+        "-C",
+        resolve("./infra")
+      ],
       expect.objectContaining({ encoding: "utf-8" })
     );
   });
@@ -102,16 +115,12 @@ describe("createPulumiProvider", () => {
   it("throws with stderr when CLI fails", async () => {
     mockFailure("error: stack 'dev' not found");
 
-    await expect(provider.get("dev.dbUrl", context)).rejects.toThrow(
-      "stack 'dev' not found"
-    );
+    await expect(provider.get("dev.dbUrl", context)).rejects.toThrow("stack 'dev' not found");
   });
 
   it("throws with exit code when CLI fails without stderr", async () => {
     mockFailure("");
 
-    await expect(provider.get("dev.dbUrl", context)).rejects.toThrow(
-      "pulumi exited with code 1"
-    );
+    await expect(provider.get("dev.dbUrl", context)).rejects.toThrow("pulumi exited with code 1");
   });
 });

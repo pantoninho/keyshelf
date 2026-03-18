@@ -3,17 +3,12 @@ import { ageProvider } from "@/providers/age";
 import { awsSmProvider } from "@/providers/aws-sm";
 import { gcpSmProvider } from "@/providers/gcp-sm";
 import { createPulumiProvider } from "@/providers/pulumi";
-import type {
-  EntryValue,
-  KeyshelfSchema,
-  Provider,
-  ProviderContext,
-} from "@/types";
+import type { EntryValue, KeyshelfSchema, Provider, ProviderContext } from "@/types";
 
 export const PROVIDERS: Record<string, Provider> = {
   "!age": ageProvider,
   "!awssm": awsSmProvider,
-  "!gcsm": gcpSmProvider,
+  "!gcsm": gcpSmProvider
 };
 
 /** Build the provider map, adding pulumi if schema has pulumi config */
@@ -50,26 +45,22 @@ export async function resolveAllKeys(
   const result: Record<string, string> = {};
   const providers = buildProviders(schema);
 
-  const entries = Object.entries(schema.keys).map(
-    async ([keyPath, entry]) => {
-      const value = entry[env] ?? entry.default;
-      if (value === undefined) {
-        throw new Error(
-          `Key '${keyPath}' has no value for env '${env}' and no default.`
-        );
-      }
-
-      const context: ProviderContext = {
-        projectName: schema.project,
-        publicKey: schema.publicKey,
-        keyPath,
-        env,
-      };
-
-      const resolved = await resolveValue(value, context, providers);
-      result[keyToEnvVar(keyPath)] = resolved;
+  const entries = Object.entries(schema.keys).map(async ([keyPath, entry]) => {
+    const value = entry[env] ?? entry.default;
+    if (value === undefined) {
+      throw new Error(`Key '${keyPath}' has no value for env '${env}' and no default.`);
     }
-  );
+
+    const context: ProviderContext = {
+      projectName: schema.project,
+      publicKey: schema.publicKey,
+      keyPath,
+      env
+    };
+
+    const resolved = await resolveValue(value, context, providers);
+    result[keyToEnvVar(keyPath)] = resolved;
+  });
 
   await Promise.all(entries);
   return result;

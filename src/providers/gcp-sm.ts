@@ -70,5 +70,5 @@ export const gcpSmProvider: Provider = {
     const secretId = buildSecretId(context);
     const gcpProject = getGcpProject();
     return upsertSecret(secretId, value, gcpProject);
-  },
+  }
 };

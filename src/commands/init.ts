@@ -11,8 +11,8 @@ export const initCommand = defineCommand({
     project: {
       type: "positional",
       description: "Project name",
-      required: true,
-    },
+      required: true
+    }
   },
   async run({ args }) {
     const filePath = resolve("keyshelf.yaml");
@@ -25,12 +25,12 @@ export const initCommand = defineCommand({
     const schema: KeyshelfSchema = {
       project: args.project,
       publicKey,
-      keys: {},
+      keys: {}
     };
     await writeSchema(schema, filePath);
 
     console.log(`Initialized project '${args.project}'.`);
     console.log(`Public key:  ${publicKey}`);
     console.log(`Private key: ${getKeyPath(args.project)}`);
-  },
+  }
 });

@@ -12,7 +12,7 @@ export function parseReference(reference: string): { stack: string; outputName: 
   }
   return {
     stack: reference.slice(0, dotIndex),
-    outputName: reference.slice(dotIndex + 1),
+    outputName: reference.slice(dotIndex + 1)
   };
 }
 
@@ -49,6 +49,6 @@ export function createPulumiProvider(cwd: string): Provider {
     async get(reference) {
       const { stack, outputName } = parseReference(reference);
       return getOutput(stack, outputName, cwd);
-    },
+    }
   };
 }

@@ -14,13 +14,13 @@ export const exportCommand = defineCommand({
     env: {
       type: "string",
       description: "Target environment",
-      required: true,
+      required: true
     },
     format: {
       type: "string",
       description: "Output format (dotenv or json)",
-      default: "dotenv",
-    },
+      default: "dotenv"
+    }
   },
   async run({ args }) {
     const schema = await readSchema();
@@ -33,5 +33,5 @@ export const exportCommand = defineCommand({
     } else {
       throw new Error(`Unknown format '${args.format}'. Use 'dotenv' or 'json'.`);
     }
-  },
+  }
 });

@@ -15,14 +15,19 @@ function buildCustomTags(): SchemaOptions["customTags"] {
     tag: `!${name}`,
     identify: (value: unknown) => isTaggedValue(value) && value._tag === `!${name}`,
     resolve: (str: string) => ({ _tag: `!${name}`, value: str }) as TaggedValue,
-    stringify(item: { value: TaggedValue }, ctx: unknown, onComment: unknown, onChompKeep: unknown) {
+    stringify(
+      item: { value: TaggedValue },
+      ctx: unknown,
+      onComment: unknown,
+      onChompKeep: unknown
+    ) {
       return stringifyString(
         { value: item.value.value } as { value: string },
         ctx as Parameters<typeof stringifyString>[1],
         onComment as Parameters<typeof stringifyString>[2],
         onChompKeep as Parameters<typeof stringifyString>[3]
       );
-    },
+    }
   }));
 }
 
@@ -37,9 +42,7 @@ export function findSchemaPath(from: string = process.cwd()): string {
 
     const parent = dirname(dir);
     if (parent === dir) {
-      throw new Error(
-        `Could not find ${SCHEMA_FILENAME}. Run 'keyshelf init' to create one.`
-      );
+      throw new Error(`Could not find ${SCHEMA_FILENAME}. Run 'keyshelf init' to create one.`);
     }
     dir = parent;
   }
@@ -68,7 +71,12 @@ export async function readSchema(filePath?: string): Promise<KeyshelfSchema> {
   }
 
   if (schema.pulumi !== undefined) {
-    if (typeof schema.pulumi !== "object" || schema.pulumi === null || typeof schema.pulumi.cwd !== "string" || !schema.pulumi.cwd) {
+    if (
+      typeof schema.pulumi !== "object" ||
+      schema.pulumi === null ||
+      typeof schema.pulumi.cwd !== "string" ||
+      !schema.pulumi.cwd
+    ) {
       throw new Error(`Invalid keyshelf.yaml: 'pulumi.cwd' must be a non-empty string.`);
     }
   }
@@ -77,10 +85,7 @@ export async function readSchema(filePath?: string): Promise<KeyshelfSchema> {
 }
 
 /** Stringify and write a KeyshelfSchema to disk */
-export async function writeSchema(
-  schema: KeyshelfSchema,
-  filePath: string
-): Promise<void> {
+export async function writeSchema(schema: KeyshelfSchema, filePath: string): Promise<void> {
   const doc = new Document(schema, { customTags: CUSTOM_TAGS });
   const yaml = doc.toString({ lineWidth: 0 });
   await writeFile(filePath, yaml, "utf-8");

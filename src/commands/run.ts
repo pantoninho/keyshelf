@@ -9,16 +9,14 @@ export const runCommand = defineCommand({
     env: {
       type: "string",
       description: "Target environment",
-      required: true,
-    },
+      required: true
+    }
   },
   async run({ args }) {
     const idx = process.argv.indexOf("--");
     const cmd = idx >= 0 ? process.argv.slice(idx + 1) : [];
     if (cmd.length === 0) {
-      throw new Error(
-        "No command specified. Usage: keyshelf run --env <env> -- <command>"
-      );
+      throw new Error("No command specified. Usage: keyshelf run --env <env> -- <command>");
     }
 
     const schema = await readSchema();
@@ -26,9 +24,9 @@ export const runCommand = defineCommand({
 
     const result = spawnSync(cmd[0], cmd.slice(1), {
       env: { ...process.env, ...resolved },
-      stdio: "inherit",
+      stdio: "inherit"
     });
 
     process.exit(result.status ?? 1);
-  },
+  }
 });

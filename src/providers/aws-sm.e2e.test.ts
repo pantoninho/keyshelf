@@ -4,10 +4,7 @@ import { join } from "node:path";
 import { tmpdir, homedir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import {
-  SecretsManagerClient,
-  DeleteSecretCommand,
-} from "@aws-sdk/client-secrets-manager";
+import { SecretsManagerClient, DeleteSecretCommand } from "@aws-sdk/client-secrets-manager";
 
 const PROJECT_ROOT = resolve(__dirname, "../..");
 const PROJECT_NAME = `keyshelf-e2e-test-${Date.now()}`;
@@ -28,9 +25,7 @@ afterAll(async () => {
   const client = new SecretsManagerClient({});
   await Promise.allSettled(
     createdSecrets.map((secretId) =>
-      client.send(
-        new DeleteSecretCommand({ SecretId: secretId, ForceDeleteWithoutRecovery: true })
-      )
+      client.send(new DeleteSecretCommand({ SecretId: secretId, ForceDeleteWithoutRecovery: true }))
     )
   );
 });
@@ -44,11 +39,11 @@ function cli(args: string[], input?: string): string {
       ...process.env,
       HOME: tempDir,
       AWS_CONFIG_FILE: join(homedir(), ".aws", "config"),
-      AWS_SHARED_CREDENTIALS_FILE: join(homedir(), ".aws", "credentials"),
+      AWS_SHARED_CREDENTIALS_FILE: join(homedir(), ".aws", "credentials")
     },
     encoding: "utf-8",
     input,
-    timeout: 30000,
+    timeout: 30000
   });
 }
 

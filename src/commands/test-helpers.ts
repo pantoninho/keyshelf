@@ -14,20 +14,20 @@ const ENTRY = join(PROJECT_ROOT, "src/index.ts");
  * @returns A function that invokes `tsx src/index.ts` with the given args.
  */
 export function createCli(cwd: string) {
-    return function cli(
-        args: string[],
-        options: Omit<ExecFileSyncOptions, "encoding"> & {
-            input?: string;
-        } = {},
-    ): string {
-        const { input, env, ...rest } = options;
-        return execFileSync(TSX, ["--tsconfig", TSCONFIG, ENTRY, ...args], {
-            cwd,
-            env: { ...process.env, HOME: cwd, ...env },
-            encoding: "utf-8",
-            input,
-            timeout: 15000,
-            ...rest,
-        });
-    };
+  return function cli(
+    args: string[],
+    options: Omit<ExecFileSyncOptions, "encoding"> & {
+      input?: string;
+    } = {}
+  ): string {
+    const { input, env, ...rest } = options;
+    return execFileSync(TSX, ["--tsconfig", TSCONFIG, ENTRY, ...args], {
+      cwd,
+      env: { ...process.env, HOME: cwd, ...env },
+      encoding: "utf-8",
+      input,
+      timeout: 15000,
+      ...rest
+    });
+  };
 }
