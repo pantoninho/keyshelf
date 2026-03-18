@@ -217,6 +217,173 @@ keyshelf export --env prod > .env
 keyshelf export --env staging --format json | jq .
 ```
 
+## Deployment Integrations
+
+`keyshelf run` is the universal mechanism for injecting secrets at runtime. The patterns below show how to wire it into different deployment targets.
+
+### Docker
+
+Any Docker-based platform (Cloud Run, ECS, Kubernetes, Fly.io) works the same way — add keyshelf to your image and use it as the entrypoint:
+
+```dockerfile
+FROM node:20-slim AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-slim
+WORKDIR /app
+COPY --from=build /app .
+RUN npm install -g keyshelf
+ENTRYPOINT ["keyshelf", "run", "--env", "prod", "--"]
+CMD ["node", "dist/server.js"]
+```
+
+`keyshelf.yaml` is already in the image (it's safe to commit). How you provide credentials depends on the provider:
+
+- **`!awssm` / `!gcsm`** — The service's IAM role or service account handles auth. No extra configuration needed.
+- **`!age`** — Mount the private key at runtime (see platform-specific examples below).
+
+### Cloud Run
+
+```bash
+docker build -t gcr.io/my-project/my-app .
+docker push gcr.io/my-project/my-app
+
+gcloud run deploy my-app \
+  --image gcr.io/my-project/my-app \
+  --region us-central1
+```
+
+For `!gcsm`, the Cloud Run service account needs the `Secret Manager Secret Accessor` role.
+
+For `!age`, mount the private key from GCP Secret Manager:
+
+```bash
+gcloud secrets create keyshelf-key --data-file=$HOME/.config/keyshelf/my-app/key
+
+gcloud run deploy my-app \
+  --image gcr.io/my-project/my-app \
+  --set-secrets="/root/.config/keyshelf/my-app/key=keyshelf-key:latest"
+```
+
+### ECS / Fargate
+
+Use keyshelf as the entrypoint in your task definition:
+
+```json
+{
+  "containerDefinitions": [
+    {
+      "name": "my-app",
+      "image": "123456789.dkr.ecr.us-east-1.amazonaws.com/my-app",
+      "entryPoint": ["keyshelf", "run", "--env", "prod", "--"],
+      "command": ["node", "dist/server.js"]
+    }
+  ]
+}
+```
+
+The task execution role needs `secretsmanager:GetSecretValue` for `!awssm` references.
+
+### Kubernetes
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: my-app
+          image: my-app:latest
+          command: ["keyshelf", "run", "--env", "prod", "--"]
+          args: ["node", "dist/server.js"]
+```
+
+For `!age`, create a secret and mount it:
+
+```yaml
+volumes:
+  - name: keyshelf-key
+    secret:
+      secretName: keyshelf-key
+containers:
+  - name: my-app
+    volumeMounts:
+      - name: keyshelf-key
+        mountPath: /root/.config/keyshelf/my-app
+        readOnly: true
+```
+
+### AWS Lambda
+
+Lambda supports wrapping the runtime entrypoint via `AWS_LAMBDA_EXEC_WRAPPER`. This works for all Lambda runtimes (Node.js, Python, Go, Java).
+
+**1. Create a wrapper script**
+
+```bash
+#!/bin/bash
+# keyshelf-wrapper
+export $(keyshelf export --env "${KEYSHELF_ENV:-prod}" --format dotenv | xargs)
+exec "$@"
+```
+
+**2. Package as a Lambda Layer**
+
+```bash
+mkdir -p layer/bin
+cp keyshelf-wrapper layer/bin/keyshelf-wrapper
+chmod +x layer/bin/keyshelf-wrapper
+
+# Include the keyshelf CLI
+npm pack keyshelf
+tar -xzf keyshelf-*.tgz -C layer/
+
+cd layer && zip -r ../keyshelf-layer.zip .
+aws lambda publish-layer-version \
+  --layer-name keyshelf \
+  --zip-file fileb://keyshelf-layer.zip \
+  --compatible-runtimes nodejs20.x python3.12
+```
+
+**3. Attach the layer and configure**
+
+```bash
+aws lambda update-function-configuration \
+  --function-name my-function \
+  --layers arn:aws:lambda:us-east-1:123456789:layer:keyshelf:1 \
+  --environment "Variables={AWS_LAMBDA_EXEC_WRAPPER=/opt/bin/keyshelf-wrapper,KEYSHELF_ENV=prod}"
+```
+
+The Lambda execution role needs `secretsmanager:GetSecretValue` for `!awssm` references. Include `keyshelf.yaml` in your function's deployment package.
+
+### CI/CD (deploy-time injection)
+
+If you prefer not to run keyshelf at runtime, use `keyshelf export` in your CI pipeline to set environment variables at deploy time:
+
+```bash
+# AWS Lambda
+keyshelf export --env prod --format json | \
+  jq -c '.' | \
+  xargs -I{} aws lambda update-function-configuration \
+    --function-name my-function \
+    --environment 'Variables={}'
+
+# Cloud Run
+keyshelf export --env prod --format dotenv > .env
+gcloud run services update my-app --update-env-vars-file .env
+rm .env
+
+# Kubernetes
+keyshelf export --env prod --format dotenv | \
+  kubectl create secret generic my-app-secrets --from-env-file=/dev/stdin
+```
+
+This resolves secrets once at deploy time. Rotation requires a redeploy.
+
 ## Development
 
 ```bash
