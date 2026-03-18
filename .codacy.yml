@@ -1,2 +1,2 @@
 exclude_paths:
-    - '.claude/plans/**'
+  - ".claude/plans/**"

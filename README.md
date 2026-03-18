@@ -76,12 +76,12 @@ keys:
     production: !gcsm projects/my-gcp-project/secrets/my-app__production__auth__token
 ```
 
-| Field | Description |
-|---|---|
-| `project` | Project name. Used as a prefix in cloud secret stores and to locate the age private key. |
-| `publicKey` | age public key (`age1...`). Required for the age provider. |
-| `pulumi` | Optional. `cwd` points to the Pulumi project directory. Required for the `!pulumi` provider. |
-| `keys` | Map of key paths to environment-specific values. |
+| Field       | Description                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------------- |
+| `project`   | Project name. Used as a prefix in cloud secret stores and to locate the age private key.     |
+| `publicKey` | age public key (`age1...`). Required for the age provider.                                   |
+| `pulumi`    | Optional. `cwd` points to the Pulumi project directory. Required for the `!pulumi` provider. |
+| `keys`      | Map of key paths to environment-specific values.                                             |
 
 ### Values
 
@@ -161,9 +161,9 @@ Creates `keyshelf.yaml` and generates an age keypair.
 
 Sets a key's value. If `value` is omitted, reads from stdin.
 
-| Flag | Description | Default |
-|---|---|---|
-| `--env` | Target environment | `default` |
+| Flag         | Description                              | Default          |
+| ------------ | ---------------------------------------- | ---------------- |
+| `--env`      | Target environment                       | `default`        |
 | `--provider` | Storage backend (`age`, `awssm`, `gcsm`) | none (plaintext) |
 
 ```bash
@@ -181,8 +181,8 @@ keyshelf set database/password hunter2 --env prod --provider awssm
 
 Resolves and prints a key's value to stdout.
 
-| Flag | Description | Default |
-|---|---|---|
+| Flag    | Description        | Default   |
+| ------- | ------------------ | --------- |
 | `--env` | Target environment | `default` |
 
 Falls back to the `default` environment if no env-specific value exists.
@@ -191,11 +191,11 @@ Falls back to the `default` environment if no env-specific value exists.
 
 Resolves all keys for the given environment and spawns the command with them as environment variables.
 
-| Key path | Env var |
-|---|---|
-| `database/url` | `DATABASE_URL` |
+| Key path         | Env var          |
+| ---------------- | ---------------- |
+| `database/url`   | `DATABASE_URL`   |
 | `api/secret-key` | `API_SECRET_KEY` |
-| `app.port` | `APP_PORT` |
+| `app.port`       | `APP_PORT`       |
 
 Exits with the subprocess's exit code.
 
@@ -208,8 +208,8 @@ keyshelf run --env staging -- docker compose up
 
 Resolves all keys and prints them to stdout.
 
-| Flag | Description | Default |
-|---|---|---|
+| Flag       | Description                      | Default  |
+| ---------- | -------------------------------- | -------- |
 | `--format` | Output format (`dotenv`, `json`) | `dotenv` |
 
 ```bash
