@@ -2,6 +2,7 @@ import { defineCommand, runMain } from "citty";
 import { initCommand } from "@/commands/init";
 import { setCommand } from "@/commands/set";
 import { getCommand } from "@/commands/get";
+import { rmCommand } from "@/commands/rm";
 import { runCommand } from "@/commands/run";
 import { exportCommand } from "@/commands/export";
 
@@ -15,6 +16,7 @@ const main = defineCommand({
     init: initCommand,
     set: setCommand,
     get: getCommand,
+    rm: rmCommand,
     run: runCommand,
     export: exportCommand
   }
