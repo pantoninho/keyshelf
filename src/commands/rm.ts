@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { createInterface } from "node:readline";
 import { findSchemaPath, readSchema, writeSchema } from "@/schema";
-import { buildProviders } from "@/resolver";
+import { PROVIDERS } from "@/resolver";
 import { isTaggedValue } from "@/types";
 import type { ProviderContext } from "@/types";
 
@@ -57,8 +57,7 @@ export const rmCommand = defineCommand({
     }
 
     if (isTaggedValue(value)) {
-      const providers = buildProviders(schema);
-      const provider = providers[value._tag];
+      const provider = PROVIDERS[value._tag];
 
       if (provider?.remove) {
         const context: ProviderContext = {
