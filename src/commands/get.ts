@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { readSchema } from "@/schema";
-import { resolveValue, buildProviders } from "@/resolver";
+import { resolveValue } from "@/resolver";
 import type { ProviderContext } from "@/types";
 
 export const getCommand = defineCommand({
@@ -36,8 +36,7 @@ export const getCommand = defineCommand({
       env: args.env
     };
 
-    const providers = buildProviders(schema);
-    const resolved = await resolveValue(value, context, providers);
+    const resolved = await resolveValue(value, context);
     process.stdout.write(resolved);
   }
 });
