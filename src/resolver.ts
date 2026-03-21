@@ -2,7 +2,6 @@ import { isTaggedValue } from "@/types";
 import { ageProvider } from "@/providers/age";
 import { awsSmProvider } from "@/providers/aws-sm";
 import { gcpSmProvider } from "@/providers/gcp-sm";
-import { createPulumiProvider } from "@/providers/pulumi";
 import type { EntryValue, KeyshelfSchema, Provider, ProviderContext } from "@/types";
 
 export const PROVIDERS: Record<string, Provider> = {
@@ -10,12 +9,6 @@ export const PROVIDERS: Record<string, Provider> = {
   "!awssm": awsSmProvider,
   "!gcsm": gcpSmProvider
 };
-
-/** Build the provider map, adding pulumi if schema has pulumi config */
-export function buildProviders(schema: KeyshelfSchema): Record<string, Provider> {
-  if (!schema.pulumi) return PROVIDERS;
-  return { ...PROVIDERS, "!pulumi": createPulumiProvider(schema.pulumi.cwd) };
-}
 
 /** Convert a key path to an environment variable name */
 export function keyToEnvVar(keyPath: string): string {
@@ -43,7 +36,7 @@ export async function resolveAllKeys(
   env: string
 ): Promise<Record<string, string>> {
   const result: Record<string, string> = {};
-  const providers = buildProviders(schema);
+  const providers = PROVIDERS;
 
   const entries = Object.entries(schema.keys).map(async ([keyPath, entry]) => {
     const value = entry[env] ?? entry.default;

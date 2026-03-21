@@ -9,7 +9,7 @@ CLI tool for managing hierarchical config values and secrets across environments
 - **Commands**: `src/commands/<command>.ts` — citty subcommands
 - **Schema**: `src/schema.ts` — YAML parsing/writing with custom tags
 - **Resolver**: `src/resolver.ts` — resolves key values through providers
-- **Providers**: `src/providers/` — age (local encryption), awssm, gcsm, pulumi
+- **Providers**: `src/providers/` — age (local encryption), awssm, gcsm
 - **Types**: `src/types.ts` — `KeyshelfSchema`, `Provider`, `TaggedValue`, etc.
 - **Path aliases**: `@/` maps to `src/` (configured in tsconfig, tsup, and vitest)
 
@@ -32,5 +32,5 @@ npm run dev     # tsx src/index.ts
 - 2-space indentation, double quotes, semicolons
 - Tests co-located with source using vitest (`describe`/`it`/`expect`)
 - Config values live in version-controlled `keyshelf.yaml`
-- Secrets referenced via custom YAML tags: `!age`, `!awssm`, `!gcsm`, `!pulumi`
+- Secrets referenced via custom YAML tags: `!age`, `!awssm`, `!gcsm`
 - Secret values must never appear in error messages, logs, or stack traces

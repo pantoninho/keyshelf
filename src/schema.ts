@@ -8,7 +8,7 @@ import { isTaggedValue } from "@/types";
 
 const SCHEMA_FILENAME = "keyshelf.yaml";
 
-const PROVIDER_TAGS = ["age", "awssm", "gcsm", "pulumi"];
+const PROVIDER_TAGS = ["age", "awssm", "gcsm"];
 
 function buildCustomTags(): SchemaOptions["customTags"] {
   return PROVIDER_TAGS.map((name) => ({
@@ -68,17 +68,6 @@ export async function readSchema(filePath?: string): Promise<KeyshelfSchema> {
   }
   if (typeof schema.keys !== "object" || schema.keys === null || Array.isArray(schema.keys)) {
     throw new Error(`Invalid ${SCHEMA_FILENAME}: missing or invalid 'keys' field.`);
-  }
-
-  if (schema.pulumi !== undefined) {
-    if (
-      typeof schema.pulumi !== "object" ||
-      schema.pulumi === null ||
-      typeof schema.pulumi.cwd !== "string" ||
-      !schema.pulumi.cwd
-    ) {
-      throw new Error(`Invalid keyshelf.yaml: 'pulumi.cwd' must be a non-empty string.`);
-    }
   }
 
   return schema as KeyshelfSchema;

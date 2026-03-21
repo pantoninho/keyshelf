@@ -17,7 +17,6 @@ export interface KeyEntry {
 export interface KeyshelfSchema {
   project: string;
   publicKey?: string;
-  pulumi?: { cwd: string };
   keys: Record<string, KeyEntry>;
 }
 
@@ -29,7 +28,7 @@ export interface ProviderContext {
   env: string;
 }
 
-/** Provider interface — get is required, set is optional (e.g., pulumi is read-only) */
+/** Provider interface — get is required, set is optional */
 export interface Provider {
   get(reference: string, context: ProviderContext): Promise<string>;
   set?(value: string, context: ProviderContext): Promise<string>;

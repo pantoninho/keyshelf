@@ -54,8 +54,6 @@ Key paths are converted to environment variables: `database/url` becomes `DATABA
 ```yaml
 project: my-app
 publicKey: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
-pulumi:
-  cwd: ./infra
 
 keys:
   database/url:
@@ -69,24 +67,20 @@ keys:
       YWdlLWVuY3J5cHRpb24...
       -----END AGE ENCRYPTED FILE-----
 
-  cdn/endpoint:
-    default: !pulumi prod.cdnEndpoint
-
   auth/token:
     production: !gcsm projects/my-gcp-project/secrets/my-app__production__auth__token
 ```
 
-| Field       | Description                                                                                  |
-| ----------- | -------------------------------------------------------------------------------------------- |
-| `project`   | Project name. Used as a prefix in cloud secret stores and to locate the age private key.     |
-| `publicKey` | age public key (`age1...`). Required for the age provider.                                   |
-| `pulumi`    | Optional. `cwd` points to the Pulumi project directory. Required for the `!pulumi` provider. |
-| `keys`      | Map of key paths to environment-specific values.                                             |
+| Field       | Description                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `project`   | Project name. Used as a prefix in cloud secret stores and to locate the age private key. |
+| `publicKey` | age public key (`age1...`). Required for the age provider.                               |
+| `keys`      | Map of key paths to environment-specific values.                                         |
 
 ### Values
 
 - **Plain strings** — stored and returned as-is, no encryption. Useful for non-sensitive defaults.
-- **Tagged values** — prefixed with a provider tag (`!age`, `!awssm`, `!gcsm`, `!pulumi`). Resolved at runtime by the corresponding provider.
+- **Tagged values** — prefixed with a provider tag (`!age`, `!awssm`, `!gcsm`). Resolved at runtime by the corresponding provider.
 
 ### Environments
 
@@ -132,21 +126,6 @@ keyshelf set database/password hunter2 --env production --provider gcsm
 ```
 
 Secret IDs use `__` as separators (e.g., `my-app__production__database__password`), so key paths must not contain `__`.
-
-### `!pulumi` — Pulumi Stack Outputs (read-only)
-
-Pulls values from Pulumi stack outputs. Requires the `pulumi` CLI on your PATH and a `pulumi.cwd` entry in your config.
-
-```yaml
-pulumi:
-  cwd: ./infra
-
-keys:
-  api/endpoint:
-    default: !pulumi prod.apiEndpoint
-```
-
-The reference format is `<stack>.<outputName>`. This provider is read-only — values are set through your Pulumi program, not through keyshelf.
 
 ## Commands
 
@@ -400,5 +379,4 @@ Cloud provider e2e tests are opt-in via environment variables:
 ```bash
 KEYSHELF_AWS_E2E=1 npm test    # run AWS Secrets Manager e2e tests
 KEYSHELF_GCP_E2E=1 npm test    # run GCP Secret Manager e2e tests
-KEYSHELF_PULUMI_E2E=1 npm test # run Pulumi e2e tests
 ```
