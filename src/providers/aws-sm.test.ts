@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SecretsManagerClient, ResourceExistsException } from "@aws-sdk/client-secrets-manager";
+import {
+  SecretsManagerClient,
+  DeleteSecretCommand,
+  ResourceExistsException
+} from "@aws-sdk/client-secrets-manager";
 import { awsSmProvider, buildSecretName } from "@/providers/aws-sm";
 import type { ProviderContext } from "@/types";
 
@@ -92,5 +96,27 @@ describe("awsSmProvider.set", () => {
       "InternalServiceError"
     );
     expect(mockSend).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("awsSmProvider.remove", () => {
+  it("deletes the secret with ForceDeleteWithoutRecovery", async () => {
+    mockSend.mockResolvedValueOnce({});
+    await awsSmProvider.remove!("my-project/production/database/password", context);
+
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    const command = mockSend.mock.calls[0][0];
+    expect(command).toBeInstanceOf(DeleteSecretCommand);
+    expect(command.input).toEqual({
+      SecretId: "my-project/production/database/password",
+      ForceDeleteWithoutRecovery: true
+    });
+  });
+
+  it("throws when SDK errors", async () => {
+    mockSend.mockRejectedValueOnce(new Error("AccessDeniedException"));
+    await expect(
+      awsSmProvider.remove!("my-project/production/database/password", context)
+    ).rejects.toThrow("AccessDeniedException");
   });
 });

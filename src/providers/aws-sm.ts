@@ -1,6 +1,7 @@
 import {
   SecretsManagerClient,
   CreateSecretCommand,
+  DeleteSecretCommand,
   GetSecretValueCommand,
   PutSecretValueCommand,
   ResourceExistsException
@@ -47,5 +48,12 @@ export const awsSmProvider: Provider = {
   async set(value: string, context: ProviderContext): Promise<string> {
     const secretName = buildSecretName(context);
     return upsertSecret(secretName, value);
+  },
+
+  async remove(reference: string, _context: ProviderContext): Promise<void> {
+    const client = new SecretsManagerClient({});
+    await client.send(
+      new DeleteSecretCommand({ SecretId: reference, ForceDeleteWithoutRecovery: true })
+    );
   }
 };

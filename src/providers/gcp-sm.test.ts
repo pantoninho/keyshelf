@@ -7,7 +7,8 @@ vi.mock("@google-cloud/secret-manager", () => {
   const MockClient = vi.fn(() => ({
     createSecret: vi.fn(),
     addSecretVersion: vi.fn(),
-    accessSecretVersion: vi.fn()
+    accessSecretVersion: vi.fn(),
+    deleteSecret: vi.fn()
   }));
   return { SecretManagerServiceClient: MockClient };
 });
@@ -195,5 +196,32 @@ describe("gcpSmProvider.set", () => {
     await expect(gcpSmProvider.set!("value", badContext)).rejects.toThrow(
       "Key paths must not contain '__'"
     );
+  });
+});
+
+describe("gcpSmProvider.remove", () => {
+  it("deletes the secret by reference", async () => {
+    const reference = "projects/my-gcp-project/secrets/my-app__production__database__password";
+    const mockDeleteSecret = vi.fn().mockResolvedValueOnce([{}]);
+
+    vi.mocked(SecretManagerServiceClient).mockImplementationOnce(
+      () => ({ deleteSecret: mockDeleteSecret }) as unknown as SecretManagerServiceClient
+    );
+
+    await gcpSmProvider.remove!(reference, context);
+    expect(mockDeleteSecret).toHaveBeenCalledWith({ name: reference });
+  });
+
+  it("throws when SDK errors", async () => {
+    const reference = "projects/my-gcp-project/secrets/my-app__production__database__password";
+
+    vi.mocked(SecretManagerServiceClient).mockImplementationOnce(
+      () =>
+        ({
+          deleteSecret: vi.fn().mockRejectedValueOnce(new Error("PERMISSION_DENIED"))
+        }) as unknown as SecretManagerServiceClient
+    );
+
+    await expect(gcpSmProvider.remove!(reference, context)).rejects.toThrow("PERMISSION_DENIED");
   });
 });

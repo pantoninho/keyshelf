@@ -70,5 +70,10 @@ export const gcpSmProvider: Provider = {
     const secretId = buildSecretId(context);
     const gcpProject = getGcpProject();
     return upsertSecret(secretId, value, gcpProject);
+  },
+
+  async remove(reference: string, _context: ProviderContext): Promise<void> {
+    const client = new SecretManagerServiceClient();
+    await client.deleteSecret({ name: reference });
   }
 };

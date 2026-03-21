@@ -28,10 +28,11 @@ export interface ProviderContext {
   env: string;
 }
 
-/** Provider interface — get is required, set is optional */
+/** Provider interface — get is required, set/remove are optional */
 export interface Provider {
   get(reference: string, context: ProviderContext): Promise<string>;
   set?(value: string, context: ProviderContext): Promise<string>;
+  remove?(reference: string, context: ProviderContext): Promise<void>;
 }
 
 /** Type guard for TaggedValue */

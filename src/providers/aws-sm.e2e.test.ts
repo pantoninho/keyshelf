@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { tmpdir, homedir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { SecretsManagerClient, DeleteSecretCommand } from "@aws-sdk/client-secrets-manager";
+import {
+  SecretsManagerClient,
+  DeleteSecretCommand,
+  GetSecretValueCommand
+} from "@aws-sdk/client-secrets-manager";
 
 const PROJECT_ROOT = resolve(__dirname, "../..");
 const PROJECT_NAME = `keyshelf-e2e-test-${Date.now()}`;
@@ -95,5 +99,18 @@ describe.skipIf(!process.env.KEYSHELF_AWS_E2E)("keyshelf awssm e2e", { timeout: 
 
     const output = cli(["run", "--env", "default", "--", "env"]);
     expect(output).toContain("API_KEY=injected-secret");
+  });
+
+  it("rm deletes the secret from AWS Secrets Manager", async () => {
+    cli(["set", "--provider", "awssm", "api/key", "doomed-secret"]);
+    const name = secretName("api/key");
+
+    cli(["rm", "api/key", "--yes"]);
+
+    const client = new SecretsManagerClient({});
+    await expect(client.send(new GetSecretValueCommand({ SecretId: name }))).rejects.toThrow();
+
+    const yaml = await readFile(join(tempDir, "keyshelf.yaml"), "utf-8");
+    expect(yaml).not.toContain("api/key");
   });
 });
