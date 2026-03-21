@@ -103,4 +103,17 @@ describe.skipIf(!process.env.KEYSHELF_GCP_E2E)("keyshelf gcsm e2e", { timeout: 6
     const output = cli(["run", "--env", "default", "--", "env"]);
     expect(output).toContain("API_KEY=injected-secret");
   });
+
+  it("rm deletes the secret from GCP Secret Manager", async () => {
+    cli(["set", "--provider", "gcsm", "api/key", "doomed-secret"]);
+
+    cli(["rm", "api/key", "--yes"]);
+
+    const client = new SecretManagerServiceClient();
+    const name = `projects/${GCP_PROJECT}/secrets/${secretId("api/key")}`;
+    await expect(client.accessSecretVersion({ name: `${name}/versions/latest` })).rejects.toThrow();
+
+    const yaml = await readFile(join(tempDir, "keyshelf.yaml"), "utf-8");
+    expect(yaml).not.toContain("api/key");
+  });
 });
