@@ -1,6 +1,9 @@
 import { defineCommand } from "citty";
 import { createInterface } from "node:readline";
 import { findSchemaPath, readSchema, writeSchema } from "@/schema";
+import { buildProviders } from "@/resolver";
+import { isTaggedValue } from "@/types";
+import type { ProviderContext } from "@/types";
 
 async function confirmRemoval(key: string, env: string): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stderr });
@@ -40,7 +43,8 @@ export const rmCommand = defineCommand({
       throw new Error(`Key '${args.key}' not found in keyshelf.yaml.`);
     }
 
-    if (schema.keys[args.key][args.env] === undefined) {
+    const value = schema.keys[args.key][args.env];
+    if (value === undefined) {
       throw new Error(`Key '${args.key}' has no value for env '${args.env}'.`);
     }
 
@@ -49,6 +53,21 @@ export const rmCommand = defineCommand({
       if (!confirmed) {
         process.stderr.write("Aborted.\n");
         return;
+      }
+    }
+
+    if (isTaggedValue(value)) {
+      const providers = buildProviders(schema);
+      const provider = providers[value._tag];
+
+      if (provider?.remove) {
+        const context: ProviderContext = {
+          projectName: schema.project,
+          publicKey: schema.publicKey,
+          keyPath: args.key,
+          env: args.env
+        };
+        await provider.remove(value.value, context);
       }
     }
 
