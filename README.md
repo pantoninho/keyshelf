@@ -37,6 +37,10 @@ keyshelf set database/password hunter2 --env production --provider awssm
 keyshelf get api/key
 keyshelf get database/password --env production
 
+# Remove a key
+keyshelf rm api/key
+keyshelf rm database/password --env production
+
 # Run a command with all keys injected as env vars
 keyshelf run --env production -- node server.js
 
@@ -165,6 +169,26 @@ Resolves and prints a key's value to stdout.
 | `--env` | Target environment | `default` |
 
 Falls back to the `default` environment if no env-specific value exists.
+
+### `keyshelf rm <key>`
+
+Removes a key's value for a given environment. If the value is stored in a cloud provider (`!awssm`, `!gcsm`), the remote secret is also deleted. If the key has no remaining environment values after removal, it is deleted entirely from `keyshelf.yaml`.
+
+| Flag    | Description        | Default   |
+| ------- | ------------------ | --------- |
+| `--env` | Target environment | `default` |
+| `--yes` | Skip confirmation  | `false`   |
+
+```bash
+# Remove a default value
+keyshelf rm database/url
+
+# Remove a production secret (also deletes from AWS Secrets Manager)
+keyshelf rm database/password --env production
+
+# Skip confirmation prompt
+keyshelf rm api/key --yes
+```
 
 ### `keyshelf run --env <env> -- <command...>`
 
