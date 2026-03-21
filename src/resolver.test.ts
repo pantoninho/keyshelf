@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { generateKeyPair, ageProvider } from "@/providers/age";
-import { keyToEnvVar, resolveValue, resolveAllKeys, PROVIDERS, buildProviders } from "@/resolver";
+import { keyToEnvVar, resolveValue, resolveAllKeys, PROVIDERS } from "@/resolver";
 import type { KeyshelfSchema, ProviderContext } from "@/types";
 
 const TEST_PROJECT = `keyshelf-resolver-test-${Date.now()}`;
@@ -152,22 +152,5 @@ describe("PROVIDERS", () => {
     expect(Object.keys(PROVIDERS)).toContain("!age");
     expect(Object.keys(PROVIDERS)).toContain("!awssm");
     expect(Object.keys(PROVIDERS)).toContain("!gcsm");
-  });
-});
-
-describe("buildProviders", () => {
-  it("returns static providers when schema has no pulumi config", () => {
-    const schema = { project: "test", keys: {} };
-    const providers = buildProviders(schema);
-    expect(providers["!pulumi"]).toBeUndefined();
-    expect(providers["!age"]).toBeDefined();
-  });
-
-  it("includes pulumi provider when schema has pulumi config", () => {
-    const schema = { project: "test", pulumi: { cwd: "./infra" }, keys: {} };
-    const providers = buildProviders(schema);
-    expect(providers["!pulumi"]).toBeDefined();
-    expect(providers["!pulumi"].get).toBeInstanceOf(Function);
-    expect(providers["!pulumi"].set).toBeUndefined();
   });
 });
