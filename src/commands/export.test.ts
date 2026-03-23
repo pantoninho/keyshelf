@@ -3,8 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createCli } from "@/commands/test-helpers";
-import { rmSync } from "node:fs";
-import { mkdtempSync } from "node:fs";
+import { rmSync, mkdtempSync, writeFileSync } from "node:fs";
 
 let tempDir: string;
 let cli: ReturnType<typeof createCli>;
@@ -75,5 +74,28 @@ describe("keyshelf export", () => {
     } finally {
       rmSync(emptyDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("keyshelf export with .env.keyshelf", () => {
+  it("exports only mapped keys in dotenv format", () => {
+    writeFileSync(join(tempDir, ".env.keyshelf"), "MY_API=api/key\n");
+    const output = cli(["export", "--env", "default"]);
+    expect(output).toContain('MY_API="secret-123"');
+    expect(output).not.toContain("DATABASE_URL");
+    expect(output).not.toContain("API_KEY");
+  });
+
+  it("exports only mapped keys in json format", () => {
+    writeFileSync(join(tempDir, ".env.keyshelf"), "DB=database/url\n");
+    const output = cli(["export", "--env", "default", "--format", "json"]);
+    const parsed = JSON.parse(output);
+    expect(parsed.DB).toBe("postgres://localhost/db");
+    expect(parsed.API_KEY).toBeUndefined();
+  });
+
+  it("errors when .env.keyshelf references a nonexistent key", () => {
+    writeFileSync(join(tempDir, ".env.keyshelf"), "MISSING=no/such/key\n");
+    expect(() => cli(["export", "--env", "default"])).toThrow();
   });
 });

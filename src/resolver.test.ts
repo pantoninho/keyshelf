@@ -3,7 +3,13 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { generateKeyPair, ageProvider } from "@/providers/age";
-import { keyToEnvVar, resolveValue, resolveAllKeys, PROVIDERS } from "@/resolver";
+import {
+  keyToEnvVar,
+  resolveValue,
+  resolveAllKeys,
+  resolveMappedKeys,
+  PROVIDERS
+} from "@/resolver";
 import type { KeyshelfSchema, ProviderContext } from "@/types";
 
 const TEST_PROJECT = `keyshelf-resolver-test-${Date.now()}`;
@@ -143,6 +149,97 @@ describe("resolveValue", () => {
 
     await expect(resolveValue({ _tag: "!unknown", value: "ref" }, context)).rejects.toThrow(
       "Unknown provider '!unknown'"
+    );
+  });
+});
+
+describe("resolveMappedKeys", () => {
+  it("resolves mapped keys with custom env var names", async () => {
+    const schema: KeyshelfSchema = {
+      project: TEST_PROJECT,
+      publicKey,
+      keys: {
+        "database/url": { default: "postgres://localhost/db" },
+        "api/key": { default: "secret-123" }
+      }
+    };
+    const mapping = { DB_CONNECTION: "database/url", MY_API_KEY: "api/key" };
+
+    const result = await resolveMappedKeys(schema, "default", mapping);
+    expect(result).toEqual({
+      DB_CONNECTION: "postgres://localhost/db",
+      MY_API_KEY: "secret-123"
+    });
+  });
+
+  it("only returns mapped keys, not all schema keys", async () => {
+    const schema: KeyshelfSchema = {
+      project: TEST_PROJECT,
+      publicKey,
+      keys: {
+        "database/url": { default: "postgres://localhost/db" },
+        "api/key": { default: "secret-123" }
+      }
+    };
+    const mapping = { DB_CONNECTION: "database/url" };
+
+    const result = await resolveMappedKeys(schema, "default", mapping);
+    expect(Object.keys(result)).toEqual(["DB_CONNECTION"]);
+  });
+
+  it("picks env-specific value over default", async () => {
+    const schema: KeyshelfSchema = {
+      project: TEST_PROJECT,
+      publicKey,
+      keys: {
+        "database/url": { default: "postgres://localhost/db", staging: "postgres://staging/db" }
+      }
+    };
+    const mapping = { DB_URL: "database/url" };
+
+    const result = await resolveMappedKeys(schema, "staging", mapping);
+    expect(result).toEqual({ DB_URL: "postgres://staging/db" });
+  });
+
+  it("falls back to default when env value is missing", async () => {
+    const schema: KeyshelfSchema = {
+      project: TEST_PROJECT,
+      publicKey,
+      keys: {
+        "database/url": { default: "postgres://localhost/db" }
+      }
+    };
+    const mapping = { DB_URL: "database/url" };
+
+    const result = await resolveMappedKeys(schema, "staging", mapping);
+    expect(result).toEqual({ DB_URL: "postgres://localhost/db" });
+  });
+
+  it("throws when key path is not in schema", async () => {
+    const schema: KeyshelfSchema = {
+      project: TEST_PROJECT,
+      publicKey,
+      keys: {}
+    };
+    const mapping = { DB_URL: "database/url" };
+
+    await expect(resolveMappedKeys(schema, "default", mapping)).rejects.toThrow(
+      "Key 'database/url' referenced in .env.keyshelf not found in keyshelf.yaml"
+    );
+  });
+
+  it("throws when key has no value for env and no default", async () => {
+    const schema: KeyshelfSchema = {
+      project: TEST_PROJECT,
+      publicKey,
+      keys: {
+        "api/key": { staging: "only-staging" }
+      }
+    };
+    const mapping = { MY_KEY: "api/key" };
+
+    await expect(resolveMappedKeys(schema, "prod", mapping)).rejects.toThrow(
+      "Key 'api/key' has no value for env 'prod' and no default"
     );
   });
 });

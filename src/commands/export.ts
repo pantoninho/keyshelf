@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { readSchema } from "@/schema";
-import { resolveAllKeys } from "@/resolver";
+import { resolveAllKeys, resolveMappedKeys } from "@/resolver";
+import { readEnvKeyshelf } from "@/env-keyshelf";
 
 function formatDotenv(record: Record<string, string>): string {
   return Object.entries(record)
@@ -24,7 +25,10 @@ export const exportCommand = defineCommand({
   },
   async run({ args }) {
     const schema = await readSchema();
-    const resolved = await resolveAllKeys(schema, args.env);
+    const mapping = await readEnvKeyshelf();
+    const resolved = mapping
+      ? await resolveMappedKeys(schema, args.env, mapping)
+      : await resolveAllKeys(schema, args.env);
 
     if (args.format === "json") {
       process.stdout.write(JSON.stringify(resolved, null, 2));

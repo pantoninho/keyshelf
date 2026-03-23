@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { createCli } from "@/commands/test-helpers";
 
 let tempDir: string;
@@ -81,5 +82,36 @@ describe("keyshelf run", () => {
     ]);
     delete process.env.MY_TOKEN;
     expect(output).toBe("overridden-value");
+  });
+});
+
+describe("keyshelf run with .env.keyshelf", () => {
+  it("injects only mapped keys with custom env var names", () => {
+    writeFileSync(join(tempDir, ".env.keyshelf"), "MY_API=api/key\n");
+    const output = cli(["run", "--env", "default", "--", "env"]);
+    expect(output).toContain("MY_API=secret-123");
+    expect(output).not.toContain("DATABASE_URL=");
+    expect(output).not.toContain("API_KEY=");
+  });
+
+  it("excludes unmapped keys from the subprocess env", () => {
+    writeFileSync(join(tempDir, ".env.keyshelf"), "DB=database/url\n");
+    const output = cli([
+      "run",
+      "--env",
+      "default",
+      "--",
+      "node",
+      "-e",
+      "process.stdout.write(JSON.stringify({ DB: process.env.DB, API_KEY: process.env.API_KEY }))"
+    ]);
+    const parsed = JSON.parse(output);
+    expect(parsed.DB).toBe("postgres://localhost/db");
+    expect(parsed.API_KEY).toBeUndefined();
+  });
+
+  it("errors when .env.keyshelf references a nonexistent key", () => {
+    writeFileSync(join(tempDir, ".env.keyshelf"), "MISSING=no/such/key\n");
+    expect(() => cli(["run", "--env", "default", "--", "env"])).toThrow();
   });
 });
