@@ -26,7 +26,8 @@ export function buildSecretId(context: ProviderContext): string {
 
 async function getSecret(reference: string): Promise<string> {
   const client = new SecretManagerServiceClient();
-  const [version] = await client.accessSecretVersion({ name: `${reference}/versions/latest` });
+  const name = `projects/${reference}/versions/latest`;
+  const [version] = await client.accessSecretVersion({ name });
 
   const payload = version.payload?.data?.toString();
   if (!payload) {
@@ -51,7 +52,7 @@ async function upsertSecret(secretId: string, value: string, gcpProject: string)
   }
 
   await client.addSecretVersion({ parent: name, payload: { data: Buffer.from(value) } });
-  return name;
+  return `${gcpProject}/secrets/${secretId}`;
 }
 
 /** GCP Secret Manager provider */
@@ -74,6 +75,6 @@ export const gcpSmProvider: Provider = {
 
   async remove(reference: string, _context: ProviderContext): Promise<void> {
     const client = new SecretManagerServiceClient();
-    await client.deleteSecret({ name: reference });
+    await client.deleteSecret({ name: `projects/${reference}` });
   }
 };
