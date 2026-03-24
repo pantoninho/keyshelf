@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.1](https://github.com/pantoninho/keyshelf/compare/v3.0.0...v3.0.1) (2026-03-24)
+
+
+### Bug Fixes
+
+* add repository url to package.json for npm provenance ([0ed7305](https://github.com/pantoninho/keyshelf/commit/0ed7305b7a01d87ec3b99ce55396c80085b1627e))
+
 ## [3.0.0](https://github.com/pantoninho/keyshelf/compare/v2.1.0...v3.0.0) (2026-03-24)
 
 
