@@ -1,7 +1,8 @@
 import { defineCommand } from "citty";
 import { spawnSync } from "node:child_process";
 import { readSchema } from "@/schema";
-import { resolveAllKeys } from "@/resolver";
+import { resolveAllKeys, resolveMappedKeys } from "@/resolver";
+import { readEnvKeyshelf } from "@/env-keyshelf";
 
 export const runCommand = defineCommand({
   meta: { description: "Inject resolved values as env vars and run a command" },
@@ -20,7 +21,10 @@ export const runCommand = defineCommand({
     }
 
     const schema = await readSchema();
-    const resolved = await resolveAllKeys(schema, args.env);
+    const mapping = await readEnvKeyshelf();
+    const resolved = mapping
+      ? await resolveMappedKeys(schema, args.env, mapping)
+      : await resolveAllKeys(schema, args.env);
 
     const result = spawnSync(cmd[0], cmd.slice(1), {
       env: { ...process.env, ...resolved },
