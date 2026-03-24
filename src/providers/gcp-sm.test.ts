@@ -70,7 +70,7 @@ describe("getGcpProject", () => {
 describe("gcpSmProvider.get", () => {
   it("returns the secret string value", async () => {
     process.env.GOOGLE_CLOUD_PROJECT = "my-gcp-project";
-    const reference = "projects/my-gcp-project/secrets/my-app__production__database__password";
+    const reference = "my-gcp-project/secrets/my-app__production__database__password";
 
     const mockAccessSecretVersion = vi
       .fn()
@@ -85,7 +85,7 @@ describe("gcpSmProvider.get", () => {
   });
 
   it("throws when payload is empty", async () => {
-    const reference = "projects/my-gcp-project/secrets/my-app__production__database__password";
+    const reference = "my-gcp-project/secrets/my-app__production__database__password";
 
     vi.mocked(SecretManagerServiceClient).mockImplementationOnce(
       () =>
@@ -98,7 +98,7 @@ describe("gcpSmProvider.get", () => {
   });
 
   it("throws when SDK errors", async () => {
-    const reference = "projects/my-gcp-project/secrets/my-app__production__database__password";
+    const reference = "my-gcp-project/secrets/my-app__production__database__password";
 
     vi.mocked(SecretManagerServiceClient).mockImplementationOnce(
       () =>
@@ -129,7 +129,7 @@ describe("gcpSmProvider.set", () => {
     );
 
     const ref = await gcpSmProvider.set!("my-secret-value", context);
-    expect(ref).toBe("projects/my-gcp-project/secrets/my-app__production__database__password");
+    expect(ref).toBe("my-gcp-project/secrets/my-app__production__database__password");
     expect(mockCreateSecret).toHaveBeenCalledTimes(1);
     expect(mockAddSecretVersion).toHaveBeenCalledTimes(1);
   });
@@ -148,7 +148,7 @@ describe("gcpSmProvider.set", () => {
     );
 
     const ref = await gcpSmProvider.set!("my-secret-value", context);
-    expect(ref).toBe("projects/my-gcp-project/secrets/my-app__production__database__password");
+    expect(ref).toBe("my-gcp-project/secrets/my-app__production__database__password");
     expect(mockCreateSecret).toHaveBeenCalledTimes(1);
     expect(mockAddSecretVersion).toHaveBeenCalledTimes(1);
   });
@@ -201,7 +201,7 @@ describe("gcpSmProvider.set", () => {
 
 describe("gcpSmProvider.remove", () => {
   it("deletes the secret by reference", async () => {
-    const reference = "projects/my-gcp-project/secrets/my-app__production__database__password";
+    const reference = "my-gcp-project/secrets/my-app__production__database__password";
     const mockDeleteSecret = vi.fn().mockResolvedValueOnce([{}]);
 
     vi.mocked(SecretManagerServiceClient).mockImplementationOnce(
@@ -209,11 +209,11 @@ describe("gcpSmProvider.remove", () => {
     );
 
     await gcpSmProvider.remove!(reference, context);
-    expect(mockDeleteSecret).toHaveBeenCalledWith({ name: reference });
+    expect(mockDeleteSecret).toHaveBeenCalledWith({ name: `projects/${reference}` });
   });
 
   it("throws when SDK errors", async () => {
-    const reference = "projects/my-gcp-project/secrets/my-app__production__database__password";
+    const reference = "my-gcp-project/secrets/my-app__production__database__password";
 
     vi.mocked(SecretManagerServiceClient).mockImplementationOnce(
       () =>
