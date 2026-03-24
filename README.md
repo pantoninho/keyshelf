@@ -72,7 +72,7 @@ keys:
       -----END AGE ENCRYPTED FILE-----
 
   auth/token:
-    production: !gcsm projects/my-gcp-project/secrets/my-app__production__auth__token
+    production: !gcsm my-gcp-project/secrets/my-app__production__auth__token
 ```
 
 | Field       | Description                                                                              |
