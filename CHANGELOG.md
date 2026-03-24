@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.2](https://github.com/pantoninho/keyshelf/compare/v3.0.1...v3.0.2) (2026-03-24)
+
+
+### Bug Fixes
+
+* drop `projects/` prefix from gcsm references ([#41](https://github.com/pantoninho/keyshelf/issues/41)) ([59eee66](https://github.com/pantoninho/keyshelf/commit/59eee66b09ebd122b410573720c54db64d77b97d))
+
 ## [3.0.1](https://github.com/pantoninho/keyshelf/compare/v3.0.0...v3.0.1) (2026-03-24)
 
 
