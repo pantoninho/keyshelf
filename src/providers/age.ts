@@ -1,12 +1,7 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import {
-  Encrypter,
-  Decrypter,
-  generateIdentity,
-  identityToRecipient,
-} from 'age-encryption';
-import type { Provider, ProviderContext } from './types.js';
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
+import type { Provider, ProviderContext } from "./types.js";
 
 export interface AgeProviderOptions {
   identityFile: string;
@@ -14,7 +9,7 @@ export interface AgeProviderOptions {
 }
 
 function keyPathToFileName(keyPath: string): string {
-  return keyPath.replace(/\//g, '_');
+  return keyPath.replace(/\//g, "_");
 }
 
 function secretFilePath(secretsDir: string, keyPath: string): string {
@@ -22,26 +17,22 @@ function secretFilePath(secretsDir: string, keyPath: string): string {
 }
 
 async function readIdentity(identityFile: string): Promise<string> {
-  const content = await readFile(identityFile, 'utf-8');
+  const content = await readFile(identityFile, "utf-8");
   return content.trim();
 }
 
 export class AgeProvider implements Provider {
-  name = 'age';
+  name = "age";
 
   private resolveOptions(ctx: ProviderContext): AgeProviderOptions {
     const identityFile = ctx.config.identityFile;
     const secretsDir = ctx.config.secretsDir;
 
-    if (typeof identityFile !== 'string') {
-      throw new Error(
-        `age provider requires "identityFile" config for "${ctx.keyPath}"`,
-      );
+    if (typeof identityFile !== "string") {
+      throw new Error(`age provider requires "identityFile" config for "${ctx.keyPath}"`);
     }
-    if (typeof secretsDir !== 'string') {
-      throw new Error(
-        `age provider requires "secretsDir" config for "${ctx.keyPath}"`,
-      );
+    if (typeof secretsDir !== "string") {
+      throw new Error(`age provider requires "secretsDir" config for "${ctx.keyPath}"`);
     }
 
     return { identityFile, secretsDir };
@@ -55,7 +46,7 @@ export class AgeProvider implements Provider {
     const ciphertext = await readFile(filePath);
     const decrypter = new Decrypter();
     decrypter.addIdentity(identity);
-    return await decrypter.decrypt(ciphertext, 'text');
+    return await decrypter.decrypt(ciphertext, "text");
   }
 
   async validate(ctx: ProviderContext): Promise<boolean> {

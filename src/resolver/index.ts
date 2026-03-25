@@ -1,8 +1,8 @@
-import type { KeyDefinition } from '../config/schema.js';
-import type { EnvConfig } from '../config/environment.js';
-import { isTaggedValue, type TaggedValue } from '../config/yaml-tags.js';
-import type { ProviderRegistry } from '../providers/registry.js';
-import type { ResolvedKey, ValidationError } from './types.js';
+import type { KeyDefinition } from "../config/schema.js";
+import type { EnvConfig } from "../config/environment.js";
+import { isTaggedValue, type TaggedValue } from "../config/yaml-tags.js";
+import type { ProviderRegistry } from "../providers/registry.js";
+import type { ResolvedKey, ValidationError } from "./types.js";
 
 export interface ResolveOptions {
   schema: KeyDefinition[];
@@ -11,9 +11,7 @@ export interface ResolveOptions {
   registry: ProviderRegistry;
 }
 
-export async function validate(
-  options: ResolveOptions,
-): Promise<ValidationError[]> {
+export async function validate(options: ResolveOptions): Promise<ValidationError[]> {
   const { schema, env, envName, registry } = options;
   const errors: ValidationError[] = [];
 
@@ -23,7 +21,7 @@ export async function validate(
     } catch (err) {
       errors.push({
         path: key.path,
-        message: err instanceof Error ? err.message : String(err),
+        message: err instanceof Error ? err.message : String(err)
       });
     }
   }
@@ -49,7 +47,7 @@ async function resolveKey(
   key: KeyDefinition,
   env: EnvConfig,
   envName: string,
-  registry: ProviderRegistry,
+  registry: ProviderRegistry
 ): Promise<string | undefined> {
   const override = env.overrides[key.path];
 
@@ -74,7 +72,7 @@ async function resolveKey(
     const ctx = {
       keyPath: key.path,
       envName,
-      config: { ...env.defaultProvider.options },
+      config: { ...env.defaultProvider.options }
     };
     try {
       return await provider.resolve(ctx);
@@ -102,17 +100,15 @@ async function resolveViaProvider(
   tagged: TaggedValue,
   env: EnvConfig,
   envName: string,
-  registry: ProviderRegistry,
+  registry: ProviderRegistry
 ): Promise<string> {
   const provider = registry.get(tagged.tag);
   const baseConfig =
-    env.defaultProvider?.name === tagged.tag
-      ? { ...env.defaultProvider.options }
-      : {};
+    env.defaultProvider?.name === tagged.tag ? { ...env.defaultProvider.options } : {};
   const ctx = {
     keyPath,
     envName,
-    config: { ...baseConfig, ...tagged.config },
+    config: { ...baseConfig, ...tagged.config }
   };
   return provider.resolve(ctx);
 }

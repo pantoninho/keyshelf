@@ -41,12 +41,12 @@ In `src/resolver/index.ts`, `resolveKey()` step 3 (lines 67–75) unconditionall
 if (key.isSecret && env.defaultProvider) {
   const provider = registry.get(env.defaultProvider.name);
   const ctx = { keyPath: key.path, envName, config: { ...env.defaultProvider.options } };
-  return provider.resolve(ctx);  // throws if secret doesn't exist
+  return provider.resolve(ctx); // throws if secret doesn't exist
 }
 
 // 5. Error (required secret) or skip (optional secret)
 if (key.optional) {
-  return undefined;  // never reached for optional secrets with a default provider
+  return undefined; // never reached for optional secrets with a default provider
 }
 ```
 

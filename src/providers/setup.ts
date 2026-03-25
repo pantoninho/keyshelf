@@ -1,7 +1,7 @@
-import { ProviderRegistry } from './registry.js';
-import { PlaintextProvider } from './plaintext.js';
-import { AgeProvider } from './age.js';
-import { GcpSmProvider } from './gcp-sm.js';
+import { ProviderRegistry } from "./registry.js";
+import { PlaintextProvider } from "./plaintext.js";
+import { AgeProvider } from "./age.js";
+import { GcpSmProvider } from "./gcp-sm.js";
 
 export function createDefaultRegistry(): ProviderRegistry {
   const registry = new ProviderRegistry();

@@ -1,16 +1,16 @@
-import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
-import type { Provider, ProviderContext } from './types.js';
+import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
+import type { Provider, ProviderContext } from "./types.js";
 
 export interface GcpSmProviderOptions {
   project: string;
 }
 
 function toSecretId(envName: string, keyPath: string): string {
-  return `keyshelf__${envName}__${keyPath.replace(/\//g, '__')}`;
+  return `keyshelf__${envName}__${keyPath.replace(/\//g, "__")}`;
 }
 
 export class GcpSmProvider implements Provider {
-  name = 'gcp';
+  name = "gcp";
 
   private client: SecretManagerServiceClient;
 
@@ -21,10 +21,8 @@ export class GcpSmProvider implements Provider {
   private resolveOptions(ctx: ProviderContext): GcpSmProviderOptions {
     const project = ctx.config.project;
 
-    if (typeof project !== 'string') {
-      throw new Error(
-        `gcp provider requires "project" config for "${ctx.keyPath}"`,
-      );
+    if (typeof project !== "string") {
+      throw new Error(`gcp provider requires "project" config for "${ctx.keyPath}"`);
     }
 
     return { project };
@@ -35,19 +33,15 @@ export class GcpSmProvider implements Provider {
     const secretId = toSecretId(ctx.envName, ctx.keyPath);
 
     const [version] = await this.client.accessSecretVersion({
-      name: `projects/${opts.project}/secrets/${secretId}/versions/latest`,
+      name: `projects/${opts.project}/secrets/${secretId}/versions/latest`
     });
 
     const payload = version.payload?.data;
     if (!payload) {
-      throw new Error(
-        `Secret "${secretId}" in project "${opts.project}" has no payload`,
-      );
+      throw new Error(`Secret "${secretId}" in project "${opts.project}" has no payload`);
     }
 
-    return typeof payload === 'string'
-      ? payload
-      : Buffer.from(payload).toString('utf-8');
+    return typeof payload === "string" ? payload : Buffer.from(payload).toString("utf-8");
   }
 
   async validate(ctx: ProviderContext): Promise<boolean> {
@@ -56,7 +50,7 @@ export class GcpSmProvider implements Provider {
       const secretId = toSecretId(ctx.envName, ctx.keyPath);
 
       await this.client.getSecret({
-        name: `projects/${opts.project}/secrets/${secretId}`,
+        name: `projects/${opts.project}/secrets/${secretId}`
       });
       return true;
     } catch {
@@ -74,7 +68,7 @@ export class GcpSmProvider implements Provider {
       await this.client.createSecret({
         parent,
         secretId,
-        secret: { replication: { automatic: {} } },
+        secret: { replication: { automatic: {} } }
       });
     } catch (err: unknown) {
       const code = (err as { code?: number }).code;
@@ -87,7 +81,7 @@ export class GcpSmProvider implements Provider {
     // Add new version
     await this.client.addSecretVersion({
       parent: `${parent}/secrets/${secretId}`,
-      payload: { data: Buffer.from(value, 'utf-8') },
+      payload: { data: Buffer.from(value, "utf-8") }
     });
   }
 }

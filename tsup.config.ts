@@ -1,10 +1,10 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ['src/index.ts', 'bin/keyshelf.ts'],
-  format: ['esm'],
-  target: 'node20',
+  entry: ["src/index.ts", "bin/keyshelf.ts"],
+  format: ["esm"],
+  target: "node20",
   clean: true,
   sourcemap: true,
-  dts: { entry: 'src/index.ts' },
+  dts: { entry: "src/index.ts" }
 });

@@ -1,20 +1,18 @@
-import type { Provider, ProviderContext } from './types.js';
+import type { Provider, ProviderContext } from "./types.js";
 
 export class PlaintextProvider implements Provider {
-  name = 'plaintext';
+  name = "plaintext";
 
   async resolve(ctx: ProviderContext): Promise<string> {
     const value = ctx.config.value;
-    if (typeof value !== 'string') {
-      throw new Error(
-        `Plaintext provider requires a string value for "${ctx.keyPath}"`,
-      );
+    if (typeof value !== "string") {
+      throw new Error(`Plaintext provider requires a string value for "${ctx.keyPath}"`);
     }
     return value;
   }
 
   async validate(ctx: ProviderContext): Promise<boolean> {
-    return typeof ctx.config.value === 'string';
+    return typeof ctx.config.value === "string";
   }
 
   async set(): Promise<void> {
