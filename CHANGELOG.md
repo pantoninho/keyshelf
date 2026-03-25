@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.0.0](https://github.com/pantoninho/keyshelf/compare/v3.0.2...v4.0.0) (2026-03-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* rewrite keyshelf with monorepo-first architecture ([#43](https://github.com/pantoninho/keyshelf/issues/43))
+
+### Features
+
+* rewrite keyshelf with monorepo-first architecture ([#43](https://github.com/pantoninho/keyshelf/issues/43)) ([1681a57](https://github.com/pantoninho/keyshelf/commit/1681a57f4be1a6ac7547ef0ea7b96b92ed4c369b))
+
 ## [3.0.2](https://github.com/pantoninho/keyshelf/compare/v3.0.1...v3.0.2) (2026-03-24)
 
 
