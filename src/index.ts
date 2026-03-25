@@ -1,27 +1,29 @@
-import { defineCommand, runMain } from "citty";
-import { initCommand } from "@/commands/init";
-import { setCommand } from "@/commands/set";
-import { getCommand } from "@/commands/get";
-import { rmCommand } from "@/commands/rm";
-import { runCommand } from "@/commands/run";
-import { exportCommand } from "@/commands/export";
-import { lsCommand } from "@/commands/ls";
+export {
+  parseSchema,
+  type KeyDefinition,
+  type ParsedSchema,
+  type SchemaConfig
+} from "./config/schema.js";
+export {
+  parseEnvironment,
+  parseProviderBlock,
+  type EnvConfig,
+  type ProviderConfig
+} from "./config/environment.js";
+export { parseAppMapping, type AppMapping } from "./config/app-mapping.js";
+export { loadConfig, findRootDir, type LoadedConfig } from "./config/loader.js";
+export { KEYSHELF_SCHEMA, isTaggedValue, type TaggedValue } from "./config/yaml-tags.js";
 
-const main = defineCommand({
-  meta: {
-    name: "keyshelf",
-    version: "0.1.0",
-    description: "Config and secrets manager"
-  },
-  subCommands: {
-    init: initCommand,
-    set: setCommand,
-    get: getCommand,
-    rm: rmCommand,
-    ls: lsCommand,
-    run: runCommand,
-    export: exportCommand
-  }
-});
+export { resolve, validate, type ResolveOptions } from "./resolver/index.js";
+export type { ResolvedKey, ValidationError } from "./resolver/types.js";
 
-runMain(main);
+export type { Provider, ProviderContext } from "./providers/types.js";
+export { ProviderRegistry } from "./providers/registry.js";
+export { PlaintextProvider } from "./providers/plaintext.js";
+export { AgeProvider, generateIdentity, identityToRecipient } from "./providers/age.js";
+export { GcpSmProvider, type GcpSmProviderOptions } from "./providers/gcp-sm.js";
+export { createDefaultRegistry } from "./providers/setup.js";
+
+export { flattenKeys, setNestedValue } from "./utils/paths.js";
+
+export { createProgram } from "./cli/index.js";

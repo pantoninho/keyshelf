@@ -1,56 +1,78 @@
-import { mkdir, writeFile, readFile, chmod } from "node:fs/promises";
-import { join } from "node:path";
-import { homedir } from "node:os";
-import { Encrypter, Decrypter, generateIdentity, identityToRecipient, armor } from "age-encryption";
-import type { Provider, ProviderContext } from "@/types";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
+import type { Provider, ProviderContext } from "./types.js";
 
-/** Path to the private key file for a project */
-export function getKeyPath(projectName: string): string {
-  return join(homedir(), ".config", "keyshelf", projectName, "key");
+export interface AgeProviderOptions {
+  identityFile: string;
+  secretsDir: string;
 }
 
-/** Generate an age keypair, store private key on disk, return public key */
-export async function generateKeyPair(projectName: string): Promise<string> {
-  const identity = await generateIdentity();
-  const recipient = identityToRecipient(identity);
-
-  const keyPath = getKeyPath(projectName);
-  await mkdir(join(keyPath, ".."), { recursive: true });
-  await writeFile(keyPath, identity, "utf-8");
-  await chmod(keyPath, 0o600);
-
-  return recipient;
+function keyPathToFileName(keyPath: string): string {
+  return keyPath.replace(/\//g, "_");
 }
 
-/** Load the private key (identity) from disk */
-export async function loadPrivateKey(projectName: string): Promise<string> {
-  const keyPath = getKeyPath(projectName);
-  try {
-    return (await readFile(keyPath, "utf-8")).trim();
-  } catch {
-    throw new Error(`Private key not found at ${keyPath}. Run 'keyshelf init' to generate one.`);
-  }
+function secretFilePath(secretsDir: string, keyPath: string): string {
+  return join(secretsDir, `${keyPathToFileName(keyPath)}.age`);
 }
 
-/** age encryption/decryption provider */
-export const ageProvider: Provider = {
-  async get(reference: string, context: ProviderContext): Promise<string> {
-    const identity = await loadPrivateKey(context.projectName);
-    const ciphertext = armor.decode(reference);
+async function readIdentity(identityFile: string): Promise<string> {
+  const content = await readFile(identityFile, "utf-8");
+  return content.trim();
+}
 
-    const d = new Decrypter();
-    d.addIdentity(identity);
-    return d.decrypt(ciphertext, "text");
-  },
+export class AgeProvider implements Provider {
+  name = "age";
 
-  async set(value: string, context: ProviderContext): Promise<string> {
-    if (!context.publicKey) {
-      throw new Error("No publicKey in keyshelf.yaml. Run 'keyshelf init' to generate one.");
+  private resolveOptions(ctx: ProviderContext): AgeProviderOptions {
+    const identityFile = ctx.config.identityFile;
+    const secretsDir = ctx.config.secretsDir;
+
+    if (typeof identityFile !== "string") {
+      throw new Error(`age provider requires "identityFile" config for "${ctx.keyPath}"`);
+    }
+    if (typeof secretsDir !== "string") {
+      throw new Error(`age provider requires "secretsDir" config for "${ctx.keyPath}"`);
     }
 
-    const e = new Encrypter();
-    e.addRecipient(context.publicKey);
-    const ciphertext = await e.encrypt(value);
-    return armor.encode(ciphertext);
+    return { identityFile, secretsDir };
   }
-};
+
+  async resolve(ctx: ProviderContext): Promise<string> {
+    const opts = this.resolveOptions(ctx);
+    const filePath = secretFilePath(opts.secretsDir, ctx.keyPath);
+    const identity = await readIdentity(opts.identityFile);
+
+    const ciphertext = await readFile(filePath);
+    const decrypter = new Decrypter();
+    decrypter.addIdentity(identity);
+    return await decrypter.decrypt(ciphertext, "text");
+  }
+
+  async validate(ctx: ProviderContext): Promise<boolean> {
+    try {
+      const opts = this.resolveOptions(ctx);
+      const filePath = secretFilePath(opts.secretsDir, ctx.keyPath);
+      await readFile(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async set(ctx: ProviderContext, value: string): Promise<void> {
+    const opts = this.resolveOptions(ctx);
+    const identity = await readIdentity(opts.identityFile);
+    const recipient = await identityToRecipient(identity);
+
+    const encrypter = new Encrypter();
+    encrypter.addRecipient(recipient);
+    const ciphertext = await encrypter.encrypt(value);
+
+    const filePath = secretFilePath(opts.secretsDir, ctx.keyPath);
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, ciphertext);
+  }
+}
+
+export { generateIdentity, identityToRecipient };

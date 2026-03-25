@@ -1,14 +1,10 @@
 import { defineConfig } from "tsup";
-import type { BuildOptions } from "esbuild";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "bin/keyshelf.ts"],
   format: ["esm"],
-  dts: true,
-  clean: true,
   target: "node20",
-  banner: { js: "#!/usr/bin/env node" },
-  esbuildOptions(options: BuildOptions) {
-    options.alias = { "@": "./src" };
-  }
+  clean: true,
+  sourcemap: true,
+  dts: { entry: "src/index.ts" }
 });
