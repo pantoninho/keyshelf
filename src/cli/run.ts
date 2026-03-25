@@ -1,14 +1,14 @@
-import { Command } from 'commander';
-import spawn from 'cross-spawn';
-import { loadConfig } from '../config/loader.js';
-import { resolve, validate } from '../resolver/index.js';
-import { createDefaultRegistry } from '../providers/setup.js';
+import { Command } from "commander";
+import spawn from "cross-spawn";
+import { loadConfig } from "../config/loader.js";
+import { resolve, validate } from "../resolver/index.js";
+import { createDefaultRegistry } from "../providers/setup.js";
 
-export const runCommand = new Command('run')
-  .description('Resolve secrets and run a command with env vars injected')
-  .requiredOption('--env <env>', 'Environment name')
-  .option('--map <file>', 'Path to app mapping file (default: .env.keyshelf)')
-  .argument('<command...>', 'Command to run')
+export const runCommand = new Command("run")
+  .description("Resolve secrets and run a command with env vars injected")
+  .requiredOption("--env <env>", "Environment name")
+  .option("--map <file>", "Path to app mapping file (default: .env.keyshelf)")
+  .argument("<command...>", "Command to run")
   .allowExcessArguments(true)
   .action(async (commandArgs: string[], opts: { env: string; map?: string }) => {
     const appDir = process.cwd();
@@ -19,12 +19,12 @@ export const runCommand = new Command('run')
       schema: config.schema,
       env: config.env,
       envName: opts.env,
-      registry,
+      registry
     };
 
     const errors = await validate(resolveOpts);
     if (errors.length > 0) {
-      console.error('Validation errors:');
+      console.error("Validation errors:");
       for (const err of errors) {
         console.error(`  - ${err.path}: ${err.message}`);
       }
@@ -42,22 +42,22 @@ export const runCommand = new Command('run')
         envVars[mapping.envVar] = value;
       } else {
         console.error(
-          `warning: ${mapping.envVar} maps to "${mapping.keyPath}" which is not defined in schema`,
+          `warning: ${mapping.envVar} maps to "${mapping.keyPath}" which is not defined in schema`
         );
       }
     }
 
     const [cmd, ...args] = commandArgs;
     const child = spawn(cmd, args, {
-      stdio: 'inherit',
-      env: { ...process.env, ...envVars },
+      stdio: "inherit",
+      env: { ...envVars, ...process.env }
     });
 
-    child.on('close', (code) => {
+    child.on("close", (code) => {
       process.exit(code ?? 1);
     });
 
-    child.on('error', (err) => {
+    child.on("error", (err) => {
       console.error(`Failed to start command: ${err.message}`);
       process.exit(1);
     });

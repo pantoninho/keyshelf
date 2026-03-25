@@ -108,10 +108,15 @@ For each key, values are resolved in this order:
 
 Resolve all values, map through `.env.keyshelf`, and run a command with env vars injected. Forwards the child process exit code.
 
+Environment variables already set in your shell take precedence over resolved values. This means you can always override any key by setting the corresponding env var explicitly:
+
 ```bash
 keyshelf run --env dev -- npm start
 keyshelf run --env production -- node server.js
 keyshelf run --env dev --map ./custom-mapping.env.keyshelf -- npm start
+
+# Override a resolved value
+DB_HOST=localhost keyshelf run --env production -- node server.js
 ```
 
 ### `keyshelf set`
