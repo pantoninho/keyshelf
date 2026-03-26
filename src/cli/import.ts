@@ -82,17 +82,17 @@ export const importCommand = new Command("import")
       }
 
       const isSecret = secretPaths.has(keyPath);
+      const providerName =
+        opts.provider ?? (isSecret ? config?.env.defaultProvider?.name : undefined);
 
-      if (isSecret && opts.provider) {
-        const provider = registry.get(opts.provider);
-        const providerBlock = envDoc["default-provider"] as Record<string, unknown> | undefined;
+      if (isSecret && providerName) {
+        const provider = registry.get(providerName);
         const providerConfig: Record<string, unknown> = {};
-        if (providerBlock && providerBlock.name === opts.provider) {
-          Object.assign(providerConfig, providerBlock);
-          delete providerConfig.name;
+        if (config?.env.defaultProvider && config.env.defaultProvider.name === providerName) {
+          Object.assign(providerConfig, config.env.defaultProvider.options);
         }
         await provider.set({ keyPath, envName: opts.env, config: providerConfig }, value);
-        console.log(`  secret: ${envVar} -> ${keyPath} (via ${opts.provider})`);
+        console.log(`  secret: ${envVar} -> ${keyPath} (via ${providerName})`);
       } else {
         setNestedValue(envDoc, keyPath, value);
         console.log(`  config: ${envVar} -> ${keyPath}`);

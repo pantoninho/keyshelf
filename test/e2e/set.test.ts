@@ -73,6 +73,27 @@ describe("keyshelf set (age)", () => {
     const plaintext = await decryptFile(join(secretsDir, "db_password.age"));
     expect(plaintext).toBe("updated-age-value");
   });
+
+  it("uses default provider for secret keys when --provider is omitted", async () => {
+    execFileSync(
+      TSX,
+      [CLI, "set", "--env", envName, "--value", "default-provider-value", "db/password"],
+      { cwd: root, encoding: "utf-8" }
+    );
+
+    const plaintext = await decryptFile(join(secretsDir, "db_password.age"));
+    expect(plaintext).toBe("default-provider-value");
+  });
+
+  it("stores config keys as plaintext even when default provider is configured", async () => {
+    execFileSync(TSX, [CLI, "set", "--env", envName, "--value", "new-host", "db/host"], {
+      cwd: root,
+      encoding: "utf-8"
+    });
+
+    const content = await readFile(join(root, ".keyshelf", `${envName}.yaml`), "utf-8");
+    expect(content).toContain("new-host");
+  });
 });
 
 describe.skipIf(!GCP_PROJECT)("keyshelf set (gcp)", { timeout: 30_000 }, () => {
