@@ -24,6 +24,6 @@ export { AgeProvider, generateIdentity, identityToRecipient } from "./providers/
 export { GcpSmProvider, type GcpSmProviderOptions } from "./providers/gcp-sm.js";
 export { createDefaultRegistry } from "./providers/setup.js";
 
-export { flattenKeys, setNestedValue } from "./utils/paths.js";
+export { flattenKeys, setNestedValue, deleteNestedValue } from "./utils/paths.js";
 
 export { createProgram } from "./cli/index.js";

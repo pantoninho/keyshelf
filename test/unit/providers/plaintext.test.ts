@@ -30,4 +30,8 @@ describe("PlaintextProvider", () => {
   it("set is a no-op", async () => {
     await expect(provider.set({ keyPath: "k", config: {} }, "v")).resolves.toBeUndefined();
   });
+
+  it("delete is a no-op", async () => {
+    await expect(provider.delete({ keyPath: "k", config: {} })).resolves.toBeUndefined();
+  });
 });

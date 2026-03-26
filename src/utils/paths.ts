@@ -33,3 +33,37 @@ export function setNestedValue(obj: Record<string, unknown>, path: string, value
 
   current[parts[parts.length - 1]] = value;
 }
+
+export function deleteNestedValue(obj: Record<string, unknown>, path: string): boolean {
+  const parts = path.split("/");
+  const stack: { parent: Record<string, unknown>; key: string }[] = [];
+  let current = obj;
+
+  for (let i = 0; i < parts.length - 1; i++) {
+    const key = parts[i];
+    if (current[key] === undefined || current[key] === null || typeof current[key] !== "object") {
+      return false;
+    }
+    stack.push({ parent: current, key });
+    current = current[key] as Record<string, unknown>;
+  }
+
+  const lastKey = parts[parts.length - 1];
+  if (!(lastKey in current)) {
+    return false;
+  }
+
+  delete current[lastKey];
+
+  // Clean up empty parent objects
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const { parent, key } = stack[i];
+    if (Object.keys(parent[key] as Record<string, unknown>).length === 0) {
+      delete parent[key];
+    } else {
+      break;
+    }
+  }
+
+  return true;
+}

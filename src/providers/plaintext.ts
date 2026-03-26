@@ -18,4 +18,8 @@ export class PlaintextProvider implements Provider {
   async set(): Promise<void> {
     // No-op: plaintext values are stored directly in env files
   }
+
+  async delete(): Promise<void> {
+    // No-op: plaintext values are stored directly in env files
+  }
 }

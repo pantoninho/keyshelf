@@ -9,4 +9,5 @@ export interface Provider {
   resolve(ctx: ProviderContext): Promise<string>;
   validate(ctx: ProviderContext): Promise<boolean>;
   set(ctx: ProviderContext, value: string): Promise<void>;
+  delete(ctx: ProviderContext): Promise<void>;
 }
