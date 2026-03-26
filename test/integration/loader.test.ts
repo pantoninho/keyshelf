@@ -76,12 +76,17 @@ describe("loadConfig", () => {
     await expect(loadConfig(appDir, "staging")).rejects.toThrow("Environment file not found");
   });
 
-  it("throws for missing app mapping file", async () => {
+  it("returns empty app mapping when default file is missing", async () => {
     const noMappingDir = join(root, "apps", "other");
     await mkdir(noMappingDir, { recursive: true });
-    await expect(loadConfig(noMappingDir, "production")).rejects.toThrow(
-      "App mapping file not found"
-    );
+    const config = await loadConfig(noMappingDir, "production");
+    expect(config.appMapping).toEqual([]);
+  });
+
+  it("throws when explicit mappingFile is missing", async () => {
+    await expect(
+      loadConfig(appDir, "production", { mappingFile: "/no/such/file" })
+    ).rejects.toThrow("App mapping file not found");
   });
 
   it("loads mapping from custom mappingFile path", async () => {

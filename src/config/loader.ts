@@ -66,11 +66,15 @@ export async function loadConfig(
     appMapping = parseAppMapping(mappingContent);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(`App mapping file not found: ${mappingPath}`, {
-        cause: err
-      });
+      if (options?.mappingFile) {
+        throw new Error(`App mapping file not found: ${mappingPath}`, {
+          cause: err
+        });
+      }
+      appMapping = [];
+    } else {
+      throw err;
     }
-    throw err;
   }
 
   // Merge global provider config with env-level provider config
