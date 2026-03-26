@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.0.1](https://github.com/pantoninho/keyshelf/compare/v4.0.0...v4.0.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* make app mapping file optional when using --env ([#45](https://github.com/pantoninho/keyshelf/issues/45)) ([5438ada](https://github.com/pantoninho/keyshelf/commit/5438ada153ff8ff92bda26e4964963d8d7d331f1))
+* use default env provider for secret keys in set and import commands ([#48](https://github.com/pantoninho/keyshelf/issues/48)) ([3c9861f](https://github.com/pantoninho/keyshelf/commit/3c9861f7088cc91be4bd65a14c89d4febadb0f67))
+
 ## [4.0.0](https://github.com/pantoninho/keyshelf/compare/v3.0.2...v4.0.0) (2026-03-25)
 
 
