@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import yaml from "js-yaml";
-import { findRootDir } from "../config/loader.js";
+import { findRootDir, loadConfig } from "../config/loader.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { KEYSHELF_SCHEMA } from "../config/yaml-tags.js";
 import { setNestedValue } from "../utils/paths.js";
@@ -53,33 +53,30 @@ export const setCommand = new Command("set")
       value = await readHiddenInput(`Enter value for ${keyPath}: `);
     }
 
-    // If provider specified, store via provider
-    if (opts.provider) {
+    // Load config to check if key is a secret and resolve provider
+    const config = await loadConfig(rootDir, opts.env).catch(() => null);
+    const keyDef = config?.schema.find((k) => k.path === keyPath);
+    const isSecret = keyDef?.isSecret ?? false;
+
+    // Resolve provider: explicit --provider flag, or default-provider (if key is secret)
+    const providerName =
+      opts.provider ?? (isSecret ? config?.env.defaultProvider?.name : undefined);
+
+    if (providerName) {
       const registry = createDefaultRegistry();
-      const provider = registry.get(opts.provider);
+      const provider = registry.get(providerName);
 
-      // Load existing env file to get provider config
-      let envDoc: Record<string, unknown> = {};
-      try {
-        const content = await readFile(envFilePath, "utf-8");
-        envDoc = (yaml.load(content, { schema: KEYSHELF_SCHEMA }) ?? {}) as Record<string, unknown>;
-      } catch {
-        // File doesn't exist yet, start fresh
-      }
-
-      const providerBlock = envDoc["default-provider"] as Record<string, unknown> | undefined;
       const providerConfig: Record<string, unknown> = {};
-      if (providerBlock && providerBlock.name === opts.provider) {
-        Object.assign(providerConfig, providerBlock);
-        delete providerConfig.name;
+      if (config?.env.defaultProvider && config.env.defaultProvider.name === providerName) {
+        Object.assign(providerConfig, config.env.defaultProvider.options);
       }
 
       await provider.set({ keyPath, envName: opts.env, config: providerConfig }, value);
-      console.log(`Stored "${keyPath}" via ${opts.provider} provider for ${opts.env}`);
+      console.log(`Stored "${keyPath}" via ${providerName} provider for ${opts.env}`);
       return;
     }
 
-    // Otherwise store as plaintext in env file
+    // No provider, store as plaintext in env file
     let envDoc: Record<string, unknown> = {};
     try {
       const content = await readFile(envFilePath, "utf-8");
@@ -88,7 +85,6 @@ export const setCommand = new Command("set")
       // File doesn't exist yet, start fresh
     }
 
-    // Set the value using nested path
     setNestedValue(envDoc, keyPath, value);
 
     await writeFile(envFilePath, yaml.dump(envDoc), "utf-8");
