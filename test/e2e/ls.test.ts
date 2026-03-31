@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { writeAgeFixture } from "./helpers/age.js";
 
@@ -143,5 +144,54 @@ describe("keyshelf ls (age)", () => {
     const lines = result.trim().split("\n");
     expect(lines[0]).toMatch(/db\/host\s+config\s+prod-db/);
     expect(lines[1]).toMatch(/db\/password\s+secret\s+age-secret-value/);
+  });
+});
+
+describe("keyshelf ls --reveal (cache)", () => {
+  let root: string;
+  const envName = "cache-test";
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-cache-ls-"));
+    await writeAgeFixture(root, envName, { cacheTtl: 3600 });
+
+    execFileSync(
+      TSX,
+      [
+        CLI,
+        "set",
+        "--env",
+        envName,
+        "--provider",
+        "age",
+        "--value",
+        "cached-reveal-secret",
+        "db/password"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+  });
+
+  it("populates cache on --reveal and serves from it afterwards", async () => {
+    // first reveal populates cache
+    execFileSync(TSX, [CLI, "ls", "--env", envName, "--reveal"], {
+      cwd: root,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+
+    expect(existsSync(join(root, ".keyshelf", "cache", envName, "db_password.age"))).toBe(true);
+
+    // delete the secret source
+    await rm(join(root, ".keyshelf", "secrets"), { recursive: true, force: true });
+
+    // second reveal should still work from cache
+    const result = execFileSync(TSX, [CLI, "ls", "--env", envName, "--reveal"], {
+      cwd: root,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    const lines = result.trim().split("\n");
+    expect(lines[1]).toMatch(/db\/password\s+secret\s+cached-reveal-secret/);
   });
 });

@@ -7,8 +7,13 @@ export interface ProviderConfig {
   options: Record<string, unknown>;
 }
 
+export interface CacheConfig {
+  ttl: number;
+}
+
 export interface EnvConfig {
   defaultProvider?: ProviderConfig;
+  cache?: CacheConfig;
   overrides: Record<string, string | TaggedValue>;
 }
 
@@ -20,6 +25,7 @@ export function parseEnvironment(content: string): EnvConfig {
 
   const doc = raw as Record<string, unknown>;
   const defaultProvider = parseProviderBlock(doc["default-provider"]);
+  const cache = parseCacheBlock(doc.cache);
 
   const keysBlock = doc.keys;
   if (keysBlock != null && typeof keysBlock !== "object") {
@@ -36,7 +42,7 @@ export function parseEnvironment(content: string): EnvConfig {
     }
   }
 
-  return { defaultProvider, overrides };
+  return { defaultProvider, cache, overrides };
 }
 
 export function parseProviderBlock(raw: unknown): ProviderConfig | undefined {
@@ -54,4 +60,17 @@ export function parseProviderBlock(raw: unknown): ProviderConfig | undefined {
   }
 
   return { name, options };
+}
+
+export function parseCacheBlock(raw: unknown): CacheConfig | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+
+  const block = raw as Record<string, unknown>;
+  const ttl = block.ttl;
+
+  if (typeof ttl !== "number" || ttl <= 0) {
+    throw new Error('Cache "ttl" must be a positive number (seconds)');
+  }
+
+  return { ttl };
 }
