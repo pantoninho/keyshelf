@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { AgeProvider, generateIdentity } from "../../../src/providers/age.js";
@@ -87,5 +87,18 @@ describe("AgeProvider", () => {
     const special = 'p@$$w0rd!#%^&*()_+{}|:"<>?`~';
     await provider.set(ctx("special"), special);
     expect(await provider.resolve(ctx("special"))).toBe(special);
+  });
+
+  it("delete removes the .age file", async () => {
+    await provider.set(ctx("db/password"), "supersecret");
+    const filePath = join(secretsDir, "db_password.age");
+    await expect(readFile(filePath)).resolves.toBeDefined();
+
+    await provider.delete(ctx("db/password"));
+    await expect(readFile(filePath)).rejects.toThrow();
+  });
+
+  it("delete throws for missing secret", async () => {
+    await expect(provider.delete(ctx("missing/key"))).rejects.toThrow();
   });
 });

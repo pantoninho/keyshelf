@@ -7,7 +7,8 @@ function mockClient() {
     accessSecretVersion: vi.fn(),
     getSecret: vi.fn(),
     createSecret: vi.fn(),
-    addSecretVersion: vi.fn()
+    addSecretVersion: vi.fn(),
+    deleteSecret: vi.fn()
   };
 }
 
@@ -132,6 +133,24 @@ describe("GcpSmProvider", () => {
       client.createSecret.mockRejectedValue(permDenied);
 
       await expect(provider.set(ctx("db/password"), "val")).rejects.toThrow("PERMISSION_DENIED");
+    });
+  });
+
+  describe("delete", () => {
+    it("deletes the secret", async () => {
+      client.deleteSecret.mockResolvedValue([{}]);
+
+      await provider.delete(ctx("db/password"));
+
+      expect(client.deleteSecret).toHaveBeenCalledWith({
+        name: "projects/my-proj/secrets/keyshelf__prod__db__password"
+      });
+    });
+
+    it("propagates errors", async () => {
+      client.deleteSecret.mockRejectedValue(new Error("NOT_FOUND"));
+
+      await expect(provider.delete(ctx("db/password"))).rejects.toThrow("NOT_FOUND");
     });
   });
 });

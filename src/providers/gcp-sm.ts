@@ -84,4 +84,12 @@ export class GcpSmProvider implements Provider {
       payload: { data: Buffer.from(value, "utf-8") }
     });
   }
+
+  async delete(ctx: ProviderContext): Promise<void> {
+    const opts = this.resolveOptions(ctx);
+    const secretId = toSecretId(ctx.envName, ctx.keyPath);
+    await this.client.deleteSecret({
+      name: `projects/${opts.project}/secrets/${secretId}`
+    });
+  }
 }

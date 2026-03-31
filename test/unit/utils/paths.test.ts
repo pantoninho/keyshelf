@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { flattenKeys, setNestedValue } from "../../../src/utils/paths.js";
+import { flattenKeys, setNestedValue, deleteNestedValue } from "../../../src/utils/paths.js";
 
 describe("flattenKeys", () => {
   it("flattens nested objects to /-separated paths", () => {
@@ -98,5 +98,56 @@ describe("setNestedValue", () => {
     const obj: Record<string, unknown> = { db: "scalar" };
     setNestedValue(obj, "db/host", "localhost");
     expect(obj).toEqual({ db: { host: "localhost" } });
+  });
+});
+
+describe("deleteNestedValue", () => {
+  it("deletes a top-level key", () => {
+    const obj: Record<string, unknown> = { key: "value", other: "keep" };
+    const result = deleteNestedValue(obj, "key");
+    expect(result).toBe(true);
+    expect(obj).toEqual({ other: "keep" });
+  });
+
+  it("deletes a nested key", () => {
+    const obj: Record<string, unknown> = { db: { host: "localhost", port: 5432 } };
+    const result = deleteNestedValue(obj, "db/host");
+    expect(result).toBe(true);
+    expect(obj).toEqual({ db: { port: 5432 } });
+  });
+
+  it("cleans up empty parent objects", () => {
+    const obj: Record<string, unknown> = { db: { password: "secret" }, other: "keep" };
+    const result = deleteNestedValue(obj, "db/password");
+    expect(result).toBe(true);
+    expect(obj).toEqual({ other: "keep" });
+  });
+
+  it("cleans up deeply nested empty parents", () => {
+    const obj: Record<string, unknown> = { a: { b: { c: "deep" } } };
+    const result = deleteNestedValue(obj, "a/b/c");
+    expect(result).toBe(true);
+    expect(obj).toEqual({});
+  });
+
+  it("returns false for missing key", () => {
+    const obj: Record<string, unknown> = { db: { host: "localhost" } };
+    const result = deleteNestedValue(obj, "db/password");
+    expect(result).toBe(false);
+    expect(obj).toEqual({ db: { host: "localhost" } });
+  });
+
+  it("returns false for missing intermediate path", () => {
+    const obj: Record<string, unknown> = { other: "value" };
+    const result = deleteNestedValue(obj, "db/host");
+    expect(result).toBe(false);
+    expect(obj).toEqual({ other: "value" });
+  });
+
+  it("preserves siblings when cleaning parents", () => {
+    const obj: Record<string, unknown> = { a: { b: { c: "delete" }, d: "keep" } };
+    const result = deleteNestedValue(obj, "a/b/c");
+    expect(result).toBe(true);
+    expect(obj).toEqual({ a: { d: "keep" } });
   });
 });
