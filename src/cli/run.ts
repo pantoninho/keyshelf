@@ -3,6 +3,7 @@ import spawn from "cross-spawn";
 import { loadConfig } from "../config/loader.js";
 import { resolve, validate } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
+import { createCache } from "./cache.js";
 
 export const runCommand = new Command("run")
   .description("Resolve secrets and run a command with env vars injected")
@@ -14,12 +15,14 @@ export const runCommand = new Command("run")
     const appDir = process.cwd();
     const config = await loadConfig(appDir, opts.env, { mappingFile: opts.map });
     const registry = createDefaultRegistry();
+    const cache = createCache(config);
 
     const resolveOpts = {
       schema: config.schema,
       env: config.env,
       envName: opts.env,
-      registry
+      registry,
+      cache
     };
 
     const errors = await validate(resolveOpts);

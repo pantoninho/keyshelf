@@ -94,4 +94,26 @@ describe("parseEnvironment", () => {
     });
     expect(env.overrides).toEqual({});
   });
+
+  it("parses cache block with ttl", () => {
+    const content = "cache:\n  ttl: 3600";
+    const env = parseEnvironment(content);
+    expect(env.cache).toEqual({ ttl: 3600 });
+  });
+
+  it("returns undefined cache when no cache block", () => {
+    const content = "keys:\n  db/host: localhost";
+    const env = parseEnvironment(content);
+    expect(env.cache).toBeUndefined();
+  });
+
+  it("throws for invalid cache ttl", () => {
+    const content = "cache:\n  ttl: -1";
+    expect(() => parseEnvironment(content)).toThrow('Cache "ttl" must be a positive number');
+  });
+
+  it("throws for non-numeric cache ttl", () => {
+    const content = "cache:\n  ttl: fast";
+    expect(() => parseEnvironment(content)).toThrow('Cache "ttl" must be a positive number');
+  });
 });

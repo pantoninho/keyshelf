@@ -4,6 +4,7 @@ import { ProviderRegistry } from "../../../src/providers/registry.js";
 import type { Provider } from "../../../src/providers/types.js";
 import type { KeyDefinition } from "../../../src/config/schema.js";
 import type { EnvConfig } from "../../../src/config/environment.js";
+import type { SecretCache } from "../../../src/cache/index.js";
 
 function mockProvider(name: string, resolveValue = "provider-value"): Provider {
   return {
@@ -338,6 +339,93 @@ describe("resolve", () => {
       registry: makeRegistry(gcp)
     });
     expect(result).toEqual([{ path: "app/name", value: "from-provider" }]);
+  });
+});
+
+describe("resolve with cache", () => {
+  function mockCache(): SecretCache {
+    return {
+      get: vi.fn().mockResolvedValue(undefined),
+      set: vi.fn().mockResolvedValue(undefined)
+    } as unknown as SecretCache;
+  }
+
+  it("populates cache on provider resolve", async () => {
+    const gcp = mockProvider("gcp", "secret-val");
+    const cache = mockCache();
+    const env: EnvConfig = {
+      defaultProvider: { name: "gcp", options: { project: "p" } },
+      overrides: {}
+    };
+    await resolve({
+      envName: "test",
+      schema: [secretKey("db/password")],
+      env,
+      registry: makeRegistry(gcp),
+      cache
+    });
+    expect(cache.set).toHaveBeenCalledWith("test", "db/password", "secret-val");
+  });
+
+  it("returns cached value without calling provider", async () => {
+    const gcp = mockProvider("gcp", "fresh-val");
+    const cache = mockCache();
+    (cache.get as ReturnType<typeof vi.fn>).mockResolvedValue("cached-val");
+    const env: EnvConfig = {
+      defaultProvider: { name: "gcp", options: { project: "p" } },
+      overrides: {}
+    };
+    const result = await resolve({
+      envName: "test",
+      schema: [secretKey("db/password")],
+      env,
+      registry: makeRegistry(gcp),
+      cache
+    });
+    expect(result).toEqual([{ path: "db/password", value: "cached-val" }]);
+    expect(gcp.resolve).not.toHaveBeenCalled();
+  });
+
+  it("does not cache plaintext overrides", async () => {
+    const cache = mockCache();
+    const env: EnvConfig = { overrides: { "db/host": "localhost" } };
+    await resolve({
+      envName: "test",
+      schema: [configKey("db/host", "default")],
+      env,
+      registry: makeRegistry(),
+      cache
+    });
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
+  it("does not cache schema defaults", async () => {
+    const cache = mockCache();
+    const env: EnvConfig = { overrides: {} };
+    await resolve({
+      envName: "test",
+      schema: [configKey("db/host", "default")],
+      env,
+      registry: makeRegistry(),
+      cache
+    });
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
+  it("caches provider-tagged overrides", async () => {
+    const gcp = mockProvider("gcp", "tagged-secret");
+    const cache = mockCache();
+    const env: EnvConfig = {
+      overrides: { "db/password": { tag: "gcp", config: { name: "x" } } }
+    };
+    await resolve({
+      envName: "test",
+      schema: [secretKey("db/password")],
+      env,
+      registry: makeRegistry(gcp),
+      cache
+    });
+    expect(cache.set).toHaveBeenCalledWith("test", "db/password", "tagged-secret");
   });
 });
 

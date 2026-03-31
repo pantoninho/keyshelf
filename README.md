@@ -212,6 +212,34 @@ default-provider:
 
 Secrets are created automatically on first `keyshelf set`. Requires GCP credentials configured in the environment (e.g. `GOOGLE_APPLICATION_CREDENTIALS` or `gcloud auth`).
 
+## Cache
+
+Keyshelf can cache resolved secrets locally to avoid repeated requests to providers. Cached values are encrypted with [age](https://age-encryption.org/) using an auto-generated identity stored in `.keyshelf/cache/identity.txt`.
+
+Enable caching by adding a `cache:` block to an environment file:
+
+```yaml
+# .keyshelf/dev.yaml
+cache:
+  ttl: 3600 # seconds
+
+default-provider:
+  name: gcp
+  project: my-gcp-project
+```
+
+| Option | Description                                                                              |
+| ------ | ---------------------------------------------------------------------------------------- |
+| `ttl`  | Time-to-live in seconds. Cached values older than this are re-fetched from the provider. |
+
+Cache files are stored in `.keyshelf/cache/<env>/` as `.age` encrypted files. Only provider-resolved values are cached — plaintext overrides and schema defaults are not.
+
+The cache directory should be added to `.gitignore`:
+
+```
+.keyshelf/cache/
+```
+
 ## Schema reference
 
 ### `keyshelf.yaml`
@@ -245,6 +273,10 @@ keys:
 ### `.keyshelf/<env>.yaml`
 
 ```yaml
+# Optional: cache resolved secrets locally (encrypted with age)
+cache:
+  ttl: 3600
+
 # Default provider for all unbound secrets in this env
 default-provider:
   name: age
@@ -279,6 +311,7 @@ API_KEY=api/key
 | `.keyshelf/<env>.yaml` | Depends | Safe if it only has plaintext config. Avoid committing if it has sensitive overrides |
 | `.keyshelf/secrets/`   | No      | Contains encrypted `.age` files — add to `.gitignore`                                |
 | `keys/*.txt`           | No      | Age identity (private key) files — add to `.gitignore`                               |
+| `.keyshelf/cache/`     | No      | Encrypted cache files and identity — add to `.gitignore`                             |
 | `.env.keyshelf`        | Yes     | App-level key mappings, no secret values                                             |
 
 ## Programmatic API

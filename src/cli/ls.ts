@@ -7,6 +7,7 @@ import { isTaggedValue, type TaggedValue } from "../config/yaml-tags.js";
 import type { EnvConfig } from "../config/environment.js";
 import { resolve } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
+import { createCache } from "./cache.js";
 
 interface KeyRow {
   path: string;
@@ -98,12 +99,14 @@ async function printRevealed(appDir: string, envName: string, mapFile?: string):
 
   const config = await loadConfig(appDir, envName, { mappingFile: mapFile });
   const registry = createDefaultRegistry();
+  const cache = createCache(config);
 
   const resolved = await resolve({
     schema: config.schema,
     env: config.env,
     envName,
-    registry
+    registry,
+    cache
   });
 
   const resolvedMap = new Map(resolved.map((r) => [r.path, r.value]));

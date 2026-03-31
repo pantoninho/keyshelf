@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
-import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, writeFile, mkdir, rm, readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -324,5 +325,82 @@ describe.skipIf(!GCP_PROJECT)("keyshelf run (gcp)", { timeout: 30_000 }, () => {
       { cwd: root, encoding: "utf-8" }
     );
     expect(result.trim()).toBe("updated-secret");
+  });
+});
+
+describe("keyshelf run (cache)", () => {
+  let root: string;
+  const envName = "cache-test";
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-cache-run-"));
+    await writeAgeFixture(root, envName, { cacheTtl: 3600 });
+
+    execFileSync(
+      TSX,
+      [
+        CLI,
+        "set",
+        "--env",
+        envName,
+        "--provider",
+        "age",
+        "--value",
+        "cached-secret",
+        "db/password"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+  });
+
+  it("creates encrypted cache files on first run", () => {
+    const result = execFileSync(
+      TSX,
+      [CLI, "run", "--env", envName, "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.trim()).toBe("cached-secret");
+
+    const cacheDir = join(root, ".keyshelf", "cache");
+    expect(existsSync(join(cacheDir, "identity.txt"))).toBe(true);
+    expect(existsSync(join(cacheDir, envName, "db_password.age"))).toBe(true);
+  });
+
+  it("serves from cache after deleting the original secret file", async () => {
+    // first run to populate cache
+    execFileSync(TSX, [CLI, "run", "--env", envName, "--", "node", "-e", "console.log('warm')"], {
+      cwd: root,
+      encoding: "utf-8"
+    });
+
+    // delete the actual age secret source
+    await rm(join(root, ".keyshelf", "secrets"), { recursive: true, force: true });
+
+    // should still resolve from cache
+    const result = execFileSync(
+      TSX,
+      [CLI, "run", "--env", envName, "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.trim()).toBe("cached-secret");
+  });
+
+  it("does not create cache directory when cache is not configured", async () => {
+    const noCacheRoot = await mkdtemp(join(tmpdir(), "keyshelf-e2e-nocache-run-"));
+    await writeAgeFixture(noCacheRoot, "dev");
+
+    execFileSync(
+      TSX,
+      [CLI, "set", "--env", "dev", "--provider", "age", "--value", "val", "db/password"],
+      { cwd: noCacheRoot, encoding: "utf-8" }
+    );
+
+    execFileSync(TSX, [CLI, "run", "--env", "dev", "--", "node", "-e", "console.log('ok')"], {
+      cwd: noCacheRoot,
+      encoding: "utf-8"
+    });
+
+    const entries = await readdir(join(noCacheRoot, ".keyshelf"));
+    expect(entries).not.toContain("cache");
   });
 });

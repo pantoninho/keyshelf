@@ -7,8 +7,10 @@ export {
 export {
   parseEnvironment,
   parseProviderBlock,
+  parseCacheBlock,
   type EnvConfig,
-  type ProviderConfig
+  type ProviderConfig,
+  type CacheConfig
 } from "./config/environment.js";
 export { parseAppMapping, type AppMapping } from "./config/app-mapping.js";
 export { loadConfig, findRootDir, type LoadedConfig } from "./config/loader.js";
@@ -23,6 +25,8 @@ export { PlaintextProvider } from "./providers/plaintext.js";
 export { AgeProvider, generateIdentity, identityToRecipient } from "./providers/age.js";
 export { GcpSmProvider, type GcpSmProviderOptions } from "./providers/gcp-sm.js";
 export { createDefaultRegistry } from "./providers/setup.js";
+
+export { SecretCache, type SecretCacheOptions } from "./cache/index.js";
 
 export { flattenKeys, setNestedValue } from "./utils/paths.js";
 

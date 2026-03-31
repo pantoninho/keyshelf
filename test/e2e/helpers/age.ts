@@ -2,7 +2,11 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { generateIdentity } from "../../../src/providers/age.js";
 
-export async function writeAgeFixture(root: string, envName: string) {
+export interface AgeFixtureOptions {
+  cacheTtl?: number;
+}
+
+export async function writeAgeFixture(root: string, envName: string, options?: AgeFixtureOptions) {
   const identityFile = join(root, "key.txt");
   const secretsDir = join(root, ".keyshelf", "secrets");
 
@@ -14,19 +18,19 @@ export async function writeAgeFixture(root: string, envName: string) {
     ["keys:", "  db:", "    host: localhost", '    password: !secret ""'].join("\n")
   );
 
+  const envLines = [
+    ...(options?.cacheTtl ? ["cache:", `  ttl: ${options.cacheTtl}`] : []),
+    "default-provider:",
+    "  name: age",
+    `  identityFile: ${identityFile}`,
+    `  secretsDir: ${secretsDir}`,
+    "keys:",
+    "  db:",
+    "    host: prod-db"
+  ];
+
   await mkdir(join(root, ".keyshelf"), { recursive: true });
-  await writeFile(
-    join(root, ".keyshelf", `${envName}.yaml`),
-    [
-      "default-provider:",
-      "  name: age",
-      `  identityFile: ${identityFile}`,
-      `  secretsDir: ${secretsDir}`,
-      "keys:",
-      "  db:",
-      "    host: prod-db"
-    ].join("\n")
-  );
+  await writeFile(join(root, ".keyshelf", `${envName}.yaml`), envLines.join("\n"));
 
   await writeFile(
     join(root, ".env.keyshelf"),
