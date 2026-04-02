@@ -364,14 +364,16 @@ describe("validate", () => {
       registry: makeRegistry()
     });
     expect(errors).toHaveLength(2);
-    expect(errors[0]).toEqual({
+    expect(errors[0]).toMatchObject({
       path: "db/password",
       message: 'No value for required key "db/password"'
     });
-    expect(errors[1]).toEqual({
+    expect(errors[0].error).toBeInstanceOf(Error);
+    expect(errors[1]).toMatchObject({
       path: "api/key",
       message: 'No value for required key "api/key"'
     });
+    expect(errors[1].error).toBeInstanceOf(Error);
   });
 
   it("skips optional secrets without error", async () => {
@@ -383,5 +385,23 @@ describe("validate", () => {
       registry: makeRegistry()
     });
     expect(errors).toEqual([]);
+  });
+
+  it("preserves original error object in validation errors", async () => {
+    const originalError = new Error("something went wrong");
+    const gcp = mockProvider("gcp");
+    (gcp.resolve as ReturnType<typeof vi.fn>).mockRejectedValue(originalError);
+    const env: EnvConfig = {
+      defaultProvider: { name: "gcp", options: { project: "my-proj" } },
+      overrides: {}
+    };
+    const errors = await validate({
+      envName: "test",
+      schema: [secretKey("db/password")],
+      env,
+      registry: makeRegistry(gcp)
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0].error).toBe(originalError);
   });
 });

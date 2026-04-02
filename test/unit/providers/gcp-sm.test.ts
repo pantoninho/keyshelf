@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SecretManagerServiceClient } from "@google-cloud/secret-manager";
-import { GcpSmProvider } from "../../../src/providers/gcp-sm.js";
+import { GcpSmProvider, GcpAuthError } from "../../../src/providers/gcp-sm.js";
 
 function mockClient() {
   return {
@@ -132,6 +132,73 @@ describe("GcpSmProvider", () => {
       client.createSecret.mockRejectedValue(permDenied);
 
       await expect(provider.set(ctx("db/password"), "val")).rejects.toThrow("PERMISSION_DENIED");
+    });
+  });
+
+  describe("auth error detection", () => {
+    it("throws GcpAuthError on invalid_grant in resolve", async () => {
+      const authErr = new Error(
+        '400 undefined: Getting metadata from plugin failed with error: {"error":"invalid_grant","error_description":"reauth related error (invalid_rapt)"}'
+      );
+      client.accessSecretVersion.mockRejectedValue(authErr);
+
+      await expect(provider.resolve(ctx("db/password"))).rejects.toThrow(GcpAuthError);
+      await expect(provider.resolve(ctx("db/password"))).rejects.toThrow(
+        "gcloud auth application-default login"
+      );
+    });
+
+    it("throws GcpAuthError on UNAUTHENTICATED gRPC code in resolve", async () => {
+      const authErr = Object.assign(new Error("UNAUTHENTICATED"), { code: 16 });
+      client.accessSecretVersion.mockRejectedValue(authErr);
+
+      await expect(provider.resolve(ctx("db/password"))).rejects.toThrow(GcpAuthError);
+    });
+
+    it("throws GcpAuthError on expired token in resolve", async () => {
+      const authErr = new Error("token has been expired or revoked");
+      client.accessSecretVersion.mockRejectedValue(authErr);
+
+      await expect(provider.resolve(ctx("db/password"))).rejects.toThrow(GcpAuthError);
+    });
+
+    it("throws GcpAuthError on auth error in validate", async () => {
+      const authErr = new Error(
+        '{"error":"invalid_grant","error_description":"reauth related error (invalid_rapt)"}'
+      );
+      client.getSecret.mockRejectedValue(authErr);
+
+      await expect(provider.validate(ctx("db/password"))).rejects.toThrow(GcpAuthError);
+    });
+
+    it("throws GcpAuthError on auth error in set (createSecret)", async () => {
+      const authErr = new Error("invalid_grant");
+      client.createSecret.mockRejectedValue(authErr);
+
+      await expect(provider.set(ctx("db/password"), "val")).rejects.toThrow(GcpAuthError);
+    });
+
+    it("throws GcpAuthError on auth error in set (addSecretVersion)", async () => {
+      client.createSecret.mockResolvedValue([{}]);
+      const authErr = new Error("token has been expired or revoked");
+      client.addSecretVersion.mockRejectedValue(authErr);
+
+      await expect(provider.set(ctx("db/password"), "val")).rejects.toThrow(GcpAuthError);
+    });
+
+    it("throws GcpAuthError when default credentials not found", async () => {
+      const authErr = new Error("Could not load the default credentials");
+      client.accessSecretVersion.mockRejectedValue(authErr);
+
+      await expect(provider.resolve(ctx("db/password"))).rejects.toThrow(GcpAuthError);
+    });
+
+    it("does not throw GcpAuthError for non-auth errors", async () => {
+      const notFound = new Error("NOT_FOUND: Secret not found");
+      client.accessSecretVersion.mockRejectedValue(notFound);
+
+      await expect(provider.resolve(ctx("db/password"))).rejects.toThrow("NOT_FOUND");
+      await expect(provider.resolve(ctx("db/password"))).rejects.not.toThrow(GcpAuthError);
     });
   });
 });

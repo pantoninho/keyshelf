@@ -6,4 +6,5 @@ export interface ResolvedKey {
 export interface ValidationError {
   path: string;
   message: string;
+  error?: Error;
 }
