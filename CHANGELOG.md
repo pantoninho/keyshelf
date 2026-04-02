@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.2](https://github.com/pantoninho/keyshelf/compare/v4.0.1...v4.0.2) (2026-04-02)
+
+
+### Bug Fixes
+
+* show actionable error message for GCP authentication failures ([#50](https://github.com/pantoninho/keyshelf/issues/50)) ([90a7a4b](https://github.com/pantoninho/keyshelf/commit/90a7a4baffa8cbc9e78b95a6fc0cbf1604959669))
+
 ## [4.0.1](https://github.com/pantoninho/keyshelf/compare/v4.0.0...v4.0.1) (2026-03-26)
 
 
