@@ -5,6 +5,34 @@ export interface GcpSmProviderOptions {
   project: string;
 }
 
+export class GcpAuthError extends Error {
+  constructor(cause?: Error) {
+    super(
+      "GCP authentication failed. Run `gcloud auth application-default login` to re-authenticate."
+    );
+    this.name = "GcpAuthError";
+    this.cause = cause;
+  }
+}
+
+const AUTH_ERROR_PATTERNS = [
+  "invalid_grant",
+  "invalid_rapt",
+  "reauth related error",
+  "token has been expired or revoked",
+  "Could not load the default credentials",
+  "Could not automatically determine credentials"
+];
+
+function isAuthError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message;
+  const code = (err as { code?: number }).code;
+  // gRPC UNAUTHENTICATED = 16
+  if (code === 16) return true;
+  return AUTH_ERROR_PATTERNS.some((pattern) => msg.includes(pattern));
+}
+
 function toSecretId(envName: string, keyPath: string): string {
   return `keyshelf__${envName}__${keyPath.replace(/\//g, "__")}`;
 }
@@ -32,9 +60,15 @@ export class GcpSmProvider implements Provider {
     const opts = this.resolveOptions(ctx);
     const secretId = toSecretId(ctx.envName, ctx.keyPath);
 
-    const [version] = await this.client.accessSecretVersion({
-      name: `projects/${opts.project}/secrets/${secretId}/versions/latest`
-    });
+    let version;
+    try {
+      [version] = await this.client.accessSecretVersion({
+        name: `projects/${opts.project}/secrets/${secretId}/versions/latest`
+      });
+    } catch (err) {
+      if (isAuthError(err)) throw new GcpAuthError(err as Error);
+      throw err;
+    }
 
     const payload = version.payload?.data;
     if (!payload) {
@@ -53,7 +87,8 @@ export class GcpSmProvider implements Provider {
         name: `projects/${opts.project}/secrets/${secretId}`
       });
       return true;
-    } catch {
+    } catch (err) {
+      if (isAuthError(err)) throw new GcpAuthError(err as Error);
       return false;
     }
   }
@@ -71,6 +106,7 @@ export class GcpSmProvider implements Provider {
         secret: { replication: { automatic: {} } }
       });
     } catch (err: unknown) {
+      if (isAuthError(err)) throw new GcpAuthError(err as Error);
       const code = (err as { code?: number }).code;
       if (code !== 6) {
         // 6 = ALREADY_EXISTS
@@ -79,9 +115,14 @@ export class GcpSmProvider implements Provider {
     }
 
     // Add new version
-    await this.client.addSecretVersion({
-      parent: `${parent}/secrets/${secretId}`,
-      payload: { data: Buffer.from(value, "utf-8") }
-    });
+    try {
+      await this.client.addSecretVersion({
+        parent: `${parent}/secrets/${secretId}`,
+        payload: { data: Buffer.from(value, "utf-8") }
+      });
+    } catch (err) {
+      if (isAuthError(err)) throw new GcpAuthError(err as Error);
+      throw err;
+    }
   }
 }

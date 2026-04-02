@@ -21,7 +21,8 @@ export async function validate(options: ResolveOptions): Promise<ValidationError
     } catch (err) {
       errors.push({
         path: key.path,
-        message: err instanceof Error ? err.message : String(err)
+        message: err instanceof Error ? err.message : String(err),
+        error: err instanceof Error ? err : undefined
       });
     }
   }

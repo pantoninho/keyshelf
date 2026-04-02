@@ -3,6 +3,7 @@ import spawn from "cross-spawn";
 import { loadConfig } from "../config/loader.js";
 import { resolve, validate } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
+import { GcpAuthError } from "../providers/gcp-sm.js";
 
 export const runCommand = new Command("run")
   .description("Resolve secrets and run a command with env vars injected")
@@ -24,9 +25,22 @@ export const runCommand = new Command("run")
 
     const errors = await validate(resolveOpts);
     if (errors.length > 0) {
-      console.error("Validation errors:");
-      for (const err of errors) {
-        console.error(`  - ${err.path}: ${err.message}`);
+      const authErrors = errors.filter((e) => e.error instanceof GcpAuthError);
+      const otherErrors = errors.filter((e) => !(e.error instanceof GcpAuthError));
+
+      if (authErrors.length > 0) {
+        console.error(
+          "GCP authentication failed. Your credentials may be expired or revoked.\n" +
+            "Run the following command to re-authenticate:\n\n" +
+            "  gcloud auth application-default login\n"
+        );
+      }
+
+      if (otherErrors.length > 0) {
+        console.error("Validation errors:");
+        for (const err of otherErrors) {
+          console.error(`  - ${err.path}: ${err.message}`);
+        }
       }
       process.exit(1);
     }
