@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { AgeProvider, generateIdentity } from "../../../src/providers/age.js";
 
 describe("AgeProvider", () => {
@@ -87,5 +87,23 @@ describe("AgeProvider", () => {
     const special = 'p@$$w0rd!#%^&*()_+{}|:"<>?`~';
     await provider.set(ctx("special"), special);
     expect(await provider.resolve(ctx("special"))).toBe(special);
+  });
+
+  it("expands ~ in identityFile and secretsDir", async () => {
+    const home = homedir();
+    const relIdentity = identityFile.replace(home, "~");
+    const relSecrets = secretsDir.replace(home, "~");
+
+    // only run when tmpdir is under home (true on macOS/Linux)
+    if (!identityFile.startsWith(home)) return;
+
+    const tildeCtx = {
+      keyPath: "tilde/test",
+      envName: "test",
+      config: { identityFile: relIdentity, secretsDir: relSecrets }
+    };
+
+    await provider.set(tildeCtx, "tilde-value");
+    expect(await provider.resolve(tildeCtx)).toBe("tilde-value");
   });
 });
