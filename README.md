@@ -212,6 +212,25 @@ default-provider:
 
 Secrets are created automatically on first `keyshelf set`. Requires GCP credentials configured in the environment (e.g. `GOOGLE_APPLICATION_CREDENTIALS` or `gcloud auth`).
 
+### sops
+
+SOPS-inspired single-file encrypted secrets using [age](https://age-encryption.org/) encryption. All secrets for an environment are stored in one JSON file, with each value individually encrypted using AES-256-GCM and a shared data key that is itself encrypted with age.
+
+```yaml
+# .keyshelf/production.yaml
+default-provider:
+  name: sops
+  identityFile: ./keys/production.txt
+  secretsFile: ./.keyshelf/secrets/production.json
+```
+
+| Option         | Description                                              |
+| -------------- | -------------------------------------------------------- |
+| `identityFile` | Path to the age identity (private key) file              |
+| `secretsFile`  | Path to the JSON file where encrypted secrets are stored |
+
+The secrets file is created automatically on first `keyshelf set`. It contains all encrypted entries, the age-encrypted data key, and an HMAC for tamper detection. Unlike the `age` provider (one file per secret), `sops` keeps everything in a single file, which can be easier to manage and commit.
+
 ## Schema reference
 
 ### `keyshelf.yaml`
@@ -312,7 +331,7 @@ const resolved = await resolve({
 
 ## Editor setup
 
-YAML editors and linters may report `unknown tag !secret` (or `!age`, `!gcp`) warnings on keyshelf files. This is expected — these are custom YAML tags that keyshelf handles at parse time.
+YAML editors and linters may report `unknown tag !secret` (or `!age`, `!gcp`, `!sops`) warnings on keyshelf files. This is expected — these are custom YAML tags that keyshelf handles at parse time.
 
 ### VS Code (YAML extension by Red Hat)
 
@@ -328,7 +347,9 @@ Add to `.vscode/settings.json`:
     "!gcp",
     "!gcp mapping",
     "!aws",
-    "!aws mapping"
+    "!aws mapping",
+    "!sops",
+    "!sops mapping"
   ]
 }
 ```
@@ -354,6 +375,8 @@ rules:
     - "!gcp mapping"
     - "!aws"
     - "!aws mapping"
+    - "!sops"
+    - "!sops mapping"
 ```
 
 ## Development
