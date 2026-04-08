@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { writeAgeFixture } from "./helpers/age.js";
+import { writeSopsFixture } from "./helpers/sops.js";
 
 const CLI = join(import.meta.dirname, "..", "..", "bin", "keyshelf.ts");
 const TSX = join(import.meta.dirname, "..", "..", "node_modules", ".bin", "tsx");
@@ -143,5 +144,52 @@ describe("keyshelf ls (age)", () => {
     const lines = result.trim().split("\n");
     expect(lines[0]).toMatch(/db\/host\s+config\s+prod-db/);
     expect(lines[1]).toMatch(/db\/password\s+secret\s+age-secret-value/);
+  });
+});
+
+describe("keyshelf ls (sops)", () => {
+  let root: string;
+  const envName = "sops-test";
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-sops-ls-"));
+    await writeSopsFixture(root, envName);
+
+    execFileSync(
+      TSX,
+      [
+        CLI,
+        "set",
+        "--env",
+        envName,
+        "--provider",
+        "sops",
+        "--value",
+        "sops-secret-value",
+        "db/password"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+  });
+
+  it("shows provider source for sops secrets", () => {
+    const result = execFileSync(TSX, [CLI, "ls", "--env", envName], {
+      cwd: root,
+      encoding: "utf-8"
+    });
+    const lines = result.trim().split("\n");
+    expect(lines[0]).toMatch(/db\/host\s+config\s+override: prod-db/);
+    expect(lines[1]).toMatch(/db\/password\s+secret\s+provider: sops/);
+  });
+
+  it("--reveal resolves and shows actual values", () => {
+    const result = execFileSync(TSX, [CLI, "ls", "--env", envName, "--reveal"], {
+      cwd: root,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    const lines = result.trim().split("\n");
+    expect(lines[0]).toMatch(/db\/host\s+config\s+prod-db/);
+    expect(lines[1]).toMatch(/db\/password\s+secret\s+sops-secret-value/);
   });
 });
