@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { GCP_PROJECT, createGcpClient, writeGcpFixture, deleteSecrets } from "./helpers/gcp.js";
 import { writeAgeFixture } from "./helpers/age.js";
+import { writeSopsFixture } from "./helpers/sops.js";
 
 const CLI = join(import.meta.dirname, "..", "..", "bin", "keyshelf.ts");
 const TSX = join(import.meta.dirname, "..", "..", "node_modules", ".bin", "tsx");
@@ -244,6 +245,79 @@ describe("keyshelf run (age)", () => {
       { cwd: root, encoding: "utf-8" }
     );
     expect(result.trim()).toBe("updated-age-secret");
+  });
+});
+
+describe("keyshelf run (sops)", () => {
+  let root: string;
+  const envName = "sops-test";
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-sops-run-"));
+    await writeSopsFixture(root, envName);
+
+    execFileSync(
+      TSX,
+      [
+        CLI,
+        "set",
+        "--env",
+        envName,
+        "--provider",
+        "sops",
+        "--value",
+        "sops-secret-value",
+        "db/password"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+  });
+
+  it("resolves sops-encrypted secret and injects env vars", () => {
+    const result = execFileSync(
+      TSX,
+      [
+        CLI,
+        "run",
+        "--env",
+        envName,
+        "--",
+        "node",
+        "-e",
+        "console.log(JSON.stringify({host: process.env.DB_HOST, password: process.env.DB_PASSWORD}))"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+    const parsed = JSON.parse(result.trim());
+    expect(parsed).toEqual({
+      host: "prod-db",
+      password: "sops-secret-value"
+    });
+  });
+
+  it("picks up overwritten sops secret value", () => {
+    execFileSync(
+      TSX,
+      [
+        CLI,
+        "set",
+        "--env",
+        envName,
+        "--provider",
+        "sops",
+        "--value",
+        "updated-sops-secret",
+        "db/password"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+
+    const result = execFileSync(
+      TSX,
+      [CLI, "run", "--env", envName, "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.trim()).toBe("updated-sops-secret");
   });
 });
 

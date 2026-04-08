@@ -32,7 +32,7 @@ function createBareTagType(tagName: string): yaml.Type {
   });
 }
 
-const TAG_NAMES = ["secret", "gcp", "aws", "age"] as const;
+const TAG_NAMES = ["secret", "gcp", "aws", "age", "sops"] as const;
 
 const mappingTypes = TAG_NAMES.map((name) => createTagType(name));
 const bareTypes = TAG_NAMES.map((name) => createBareTagType(name));

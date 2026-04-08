@@ -7,6 +7,7 @@ import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { Decrypter } from "age-encryption";
 import { GCP_PROJECT, createGcpClient, writeGcpFixture, deleteSecrets } from "./helpers/gcp.js";
 import { writeAgeFixture } from "./helpers/age.js";
+import { writeSopsFixture } from "./helpers/sops.js";
 
 const CLI = join(import.meta.dirname, "..", "..", "bin", "keyshelf.ts");
 const TSX = join(import.meta.dirname, "..", "..", "node_modules", ".bin", "tsx");
@@ -83,6 +84,93 @@ describe("keyshelf set (age)", () => {
 
     const plaintext = await decryptFile(join(secretsDir, "db_password.age"));
     expect(plaintext).toBe("default-provider-value");
+  });
+
+  it("stores config keys as plaintext even when default provider is configured", async () => {
+    execFileSync(TSX, [CLI, "set", "--env", envName, "--value", "new-host", "db/host"], {
+      cwd: root,
+      encoding: "utf-8"
+    });
+
+    const content = await readFile(join(root, ".keyshelf", `${envName}.yaml`), "utf-8");
+    expect(content).toContain("new-host");
+  });
+});
+
+describe("keyshelf set (sops)", () => {
+  let root: string;
+  let secretsFile: string;
+  const envName = "sops-test";
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-sops-set-"));
+    await writeSopsFixture(root, envName);
+    secretsFile = join(root, ".keyshelf", "secrets.json");
+  });
+
+  it("creates an encrypted secret in the secrets file", async () => {
+    execFileSync(
+      TSX,
+      [
+        CLI,
+        "set",
+        "--env",
+        envName,
+        "--provider",
+        "sops",
+        "--value",
+        "sops-secret-value",
+        "db/password"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+
+    const content = JSON.parse(await readFile(secretsFile, "utf-8"));
+    expect(content.entries["db/password"]).toBeDefined();
+    expect(content.entries["db/password"].data).toBeDefined();
+    expect(content.sops.dataKey).toBeDefined();
+    expect(content.sops.mac).toBeDefined();
+  });
+
+  it("overwrites an existing sops secret", async () => {
+    execFileSync(
+      TSX,
+      [
+        CLI,
+        "set",
+        "--env",
+        envName,
+        "--provider",
+        "sops",
+        "--value",
+        "updated-sops-value",
+        "db/password"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+
+    // Verify via resolve (run command)
+    const result = execFileSync(
+      TSX,
+      [CLI, "run", "--env", envName, "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.trim()).toBe("updated-sops-value");
+  });
+
+  it("uses default provider for secret keys when --provider is omitted", async () => {
+    execFileSync(
+      TSX,
+      [CLI, "set", "--env", envName, "--value", "default-sops-value", "db/password"],
+      { cwd: root, encoding: "utf-8" }
+    );
+
+    const result = execFileSync(
+      TSX,
+      [CLI, "run", "--env", envName, "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.trim()).toBe("default-sops-value");
   });
 
   it("stores config keys as plaintext even when default provider is configured", async () => {
