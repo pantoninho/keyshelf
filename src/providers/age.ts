@@ -1,4 +1,5 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
 import type { Provider, ProviderContext } from "./types.js";
@@ -14,6 +15,13 @@ function keyPathToFileName(keyPath: string): string {
 
 function secretFilePath(secretsDir: string, keyPath: string): string {
   return join(secretsDir, `${keyPathToFileName(keyPath)}.age`);
+}
+
+function expandTilde(filePath: string): string {
+  if (filePath.startsWith("~/") || filePath === "~") {
+    return join(homedir(), filePath.slice(1));
+  }
+  return filePath;
 }
 
 async function readIdentity(identityFile: string): Promise<string> {
@@ -35,7 +43,7 @@ export class AgeProvider implements Provider {
       throw new Error(`age provider requires "secretsDir" config for "${ctx.keyPath}"`);
     }
 
-    return { identityFile, secretsDir };
+    return { identityFile: expandTilde(identityFile), secretsDir: expandTilde(secretsDir) };
   }
 
   async resolve(ctx: ProviderContext): Promise<string> {
