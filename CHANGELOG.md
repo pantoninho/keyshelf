@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.3](https://github.com/pantoninho/keyshelf/compare/v4.0.2...v4.0.3) (2026-04-08)
+
+
+### Bug Fixes
+
+* expand ~ in identityFile and secretsDir paths ([#53](https://github.com/pantoninho/keyshelf/issues/53)) ([eb80c5a](https://github.com/pantoninho/keyshelf/commit/eb80c5a301ac801adeeee629d9e26f5304101965))
+
 ## [4.0.2](https://github.com/pantoninho/keyshelf/compare/v4.0.1...v4.0.2) (2026-04-02)
 
 
