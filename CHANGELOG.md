@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.1.0](https://github.com/pantoninho/keyshelf/compare/v4.0.3...v4.1.0) (2026-04-08)
+
+
+### Features
+
+* add sops provider ([#55](https://github.com/pantoninho/keyshelf/issues/55)) ([03c9c31](https://github.com/pantoninho/keyshelf/commit/03c9c31c77a789b45aca25c79d57760d47cf1512))
+
 ## [4.0.3](https://github.com/pantoninho/keyshelf/compare/v4.0.2...v4.0.3) (2026-04-08)
 
 
