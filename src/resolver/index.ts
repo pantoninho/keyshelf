@@ -13,14 +13,18 @@ export interface ResolveOptions {
 
 export async function validate(options: ResolveOptions): Promise<ValidationError[]> {
   const { schema, env, envName, registry } = options;
-  const errors: ValidationError[] = [];
 
-  for (const key of schema) {
-    try {
-      await resolveKey(key, env, envName, registry);
-    } catch (err) {
+  const results = await Promise.allSettled(
+    schema.map((key) => resolveKey(key, env, envName, registry))
+  );
+
+  const errors: ValidationError[] = [];
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result.status === "rejected") {
+      const err = result.reason;
       errors.push({
-        path: key.path,
+        path: schema[i].path,
         message: err instanceof Error ? err.message : String(err),
         error: err instanceof Error ? err : undefined
       });
@@ -32,16 +36,15 @@ export async function validate(options: ResolveOptions): Promise<ValidationError
 
 export async function resolve(options: ResolveOptions): Promise<ResolvedKey[]> {
   const { schema, env, envName, registry } = options;
-  const results: ResolvedKey[] = [];
 
-  for (const key of schema) {
-    const value = await resolveKey(key, env, envName, registry);
-    if (value !== undefined) {
-      results.push({ path: key.path, value });
-    }
-  }
+  const entries = await Promise.all(
+    schema.map(async (key) => {
+      const value = await resolveKey(key, env, envName, registry);
+      return value !== undefined ? { path: key.path, value } : null;
+    })
+  );
 
-  return results;
+  return entries.filter((e): e is ResolvedKey => e !== null);
 }
 
 async function resolveKey(
