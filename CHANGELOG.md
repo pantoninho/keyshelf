@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.2.0](https://github.com/pantoninho/keyshelf/compare/v4.1.0...v4.2.0) (2026-04-10)
+
+
+### Features
+
+* resolve keys in parallel ([#58](https://github.com/pantoninho/keyshelf/issues/58)) ([ab825f7](https://github.com/pantoninho/keyshelf/commit/ab825f7055442f16854deb2cbae1b97002cee6b4))
+
 ## [4.1.0](https://github.com/pantoninho/keyshelf/compare/v4.0.3...v4.1.0) (2026-04-08)
 
 
