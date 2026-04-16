@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.2.1](https://github.com/pantoninho/keyshelf/compare/v4.2.0...v4.2.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* resolve provider config paths relative to project root ([#60](https://github.com/pantoninho/keyshelf/issues/60)) ([22b6892](https://github.com/pantoninho/keyshelf/commit/22b689239154fec533035412a61495334a32dae7))
+
 ## [4.2.0](https://github.com/pantoninho/keyshelf/compare/v4.1.0...v4.2.0) (2026-04-10)
 
 
