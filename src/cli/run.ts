@@ -20,6 +20,7 @@ export const runCommand = new Command("run")
       schema: config.schema,
       env: config.env,
       envName: opts.env,
+      rootDir: config.rootDir,
       registry
     };
 

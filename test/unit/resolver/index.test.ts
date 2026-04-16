@@ -40,6 +40,7 @@ describe("resolve", () => {
     };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [configKey("db/host", "localhost")],
       env,
       registry: makeRegistry()
@@ -51,6 +52,7 @@ describe("resolve", () => {
     const env: EnvConfig = { overrides: {} };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [configKey("db/host", "localhost")],
       env,
       registry: makeRegistry()
@@ -67,6 +69,7 @@ describe("resolve", () => {
     };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("db/password")],
       env,
       registry: makeRegistry(gcp)
@@ -74,6 +77,7 @@ describe("resolve", () => {
     expect(result).toEqual([{ path: "db/password", value: "gcp-secret" }]);
     expect(gcp.resolve).toHaveBeenCalledWith({
       envName: "test",
+      rootDir: "/tmp",
       keyPath: "db/password",
       config: { name: "db-pass" }
     });
@@ -89,12 +93,14 @@ describe("resolve", () => {
     };
     await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("db/password")],
       env,
       registry: makeRegistry(gcp)
     });
     expect(gcp.resolve).toHaveBeenCalledWith({
       envName: "test",
+      rootDir: "/tmp",
       keyPath: "db/password",
       config: { project: "my-proj", name: "custom" }
     });
@@ -113,12 +119,14 @@ describe("resolve", () => {
     };
     await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("db/password")],
       env,
       registry: makeRegistry(gcp)
     });
     expect(gcp.resolve).toHaveBeenCalledWith({
       envName: "test",
+      rootDir: "/tmp",
       keyPath: "db/password",
       config: { project: "override" }
     });
@@ -132,6 +140,7 @@ describe("resolve", () => {
     };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("db/password")],
       env,
       registry: makeRegistry(gcp)
@@ -139,6 +148,7 @@ describe("resolve", () => {
     expect(result).toEqual([{ path: "db/password", value: "default-secret" }]);
     expect(gcp.resolve).toHaveBeenCalledWith({
       envName: "test",
+      rootDir: "/tmp",
       keyPath: "db/password",
       config: { project: "my-proj" }
     });
@@ -149,6 +159,7 @@ describe("resolve", () => {
     await expect(
       resolve({
         envName: "test",
+        rootDir: "/tmp",
         schema: [secretKey("db/password")],
         env,
         registry: makeRegistry()
@@ -160,6 +171,7 @@ describe("resolve", () => {
     const env: EnvConfig = { overrides: {} };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("db/password", true)],
       env,
       registry: makeRegistry()
@@ -172,6 +184,7 @@ describe("resolve", () => {
     await expect(
       resolve({
         envName: "test",
+        rootDir: "/tmp",
         schema: [configKey("db/host")],
         env,
         registry: makeRegistry()
@@ -187,6 +200,7 @@ describe("resolve", () => {
     };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [
         configKey("db/host", "localhost"),
         secretKey("db/password"),
@@ -208,6 +222,7 @@ describe("resolve", () => {
     };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [configKey("db/port", "5432")],
       env,
       registry: makeRegistry()
@@ -220,6 +235,7 @@ describe("resolve", () => {
     await expect(
       resolve({
         envName: "test",
+        rootDir: "/tmp",
         schema: [
           {
             path: "key",
@@ -244,12 +260,14 @@ describe("resolve", () => {
     };
     await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("key")],
       env,
       registry: makeRegistry(aws)
     });
     expect(aws.resolve).toHaveBeenCalledWith({
       envName: "test",
+      rootDir: "/tmp",
       keyPath: "key",
       config: { region: "us-east-1" }
     });
@@ -261,6 +279,7 @@ describe("resolve", () => {
     };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("db/password", true)],
       env,
       registry: makeRegistry()
@@ -279,6 +298,7 @@ describe("resolve", () => {
     };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("pulumi/config-passphrase", true)],
       env,
       registry: makeRegistry(gcp)
@@ -298,6 +318,7 @@ describe("resolve", () => {
     await expect(
       resolve({
         envName: "test",
+        rootDir: "/tmp",
         schema: [secretKey("db/password")],
         env,
         registry: makeRegistry(gcp)
@@ -317,6 +338,7 @@ describe("resolve", () => {
     };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("db/password", true)],
       env,
       registry: makeRegistry(gcp)
@@ -333,6 +355,7 @@ describe("resolve", () => {
     };
     const result = await resolve({
       envName: "test",
+      rootDir: "/tmp",
       schema: [configKey("app/name", "default-app")],
       env,
       registry: makeRegistry(gcp)
@@ -348,6 +371,7 @@ describe("validate", () => {
     };
     const errors = await validate({
       envName: "test",
+      rootDir: "/tmp",
       schema: [configKey("db/host", "default")],
       env,
       registry: makeRegistry()
@@ -359,6 +383,7 @@ describe("validate", () => {
     const env: EnvConfig = { overrides: {} };
     const errors = await validate({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("db/password"), secretKey("api/key"), configKey("db/host", "localhost")],
       env,
       registry: makeRegistry()
@@ -380,6 +405,7 @@ describe("validate", () => {
     const env: EnvConfig = { overrides: {} };
     const errors = await validate({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("optional/key", true)],
       env,
       registry: makeRegistry()
@@ -397,6 +423,7 @@ describe("validate", () => {
     };
     const errors = await validate({
       envName: "test",
+      rootDir: "/tmp",
       schema: [secretKey("db/password")],
       env,
       registry: makeRegistry(gcp)

@@ -23,7 +23,7 @@ describe("SopsProvider", () => {
   });
 
   function ctx(keyPath: string) {
-    return { keyPath, envName: "test", config: { identityFile, secretsFile } };
+    return { keyPath, envName: "test", rootDir: tmpDir, config: { identityFile, secretsFile } };
   }
 
   it("roundtrips set + resolve", async () => {
@@ -69,6 +69,7 @@ describe("SopsProvider", () => {
     const missingCtx = {
       keyPath: "k",
       envName: "test",
+      rootDir: tmpDir,
       config: { identityFile, secretsFile: join(tmpDir, "nope.json") }
     };
     expect(await provider.validate(missingCtx)).toBe(false);
@@ -90,6 +91,7 @@ describe("SopsProvider", () => {
       provider.resolve({
         keyPath: "k",
         envName: "test",
+        rootDir: tmpDir,
         config: { secretsFile }
       })
     ).rejects.toThrow("identityFile");
@@ -100,6 +102,7 @@ describe("SopsProvider", () => {
       provider.resolve({
         keyPath: "k",
         envName: "test",
+        rootDir: tmpDir,
         config: { identityFile }
       })
     ).rejects.toThrow("secretsFile");
@@ -150,6 +153,7 @@ describe("SopsProvider", () => {
     const tildeCtx = {
       keyPath: "tilde/test",
       envName: "test",
+      rootDir: tmpDir,
       config: { identityFile: relIdentity, secretsFile: relSecrets }
     };
 

@@ -8,26 +8,38 @@ describe("PlaintextProvider", () => {
     const result = await provider.resolve({
       envName: "test",
       keyPath: "db/host",
+      rootDir: "/tmp",
       config: { value: "localhost" }
     });
     expect(result).toBe("localhost");
   });
 
   it("throws when value is not a string", async () => {
-    await expect(provider.resolve({ keyPath: "db/host", config: {} })).rejects.toThrow(
-      "Plaintext provider requires a string value"
-    );
+    await expect(
+      provider.resolve({ keyPath: "db/host", envName: "test", rootDir: "/tmp", config: {} })
+    ).rejects.toThrow("Plaintext provider requires a string value");
   });
 
   it("validates string values", async () => {
-    expect(await provider.validate({ keyPath: "k", config: { value: "v" } })).toBe(true);
+    expect(
+      await provider.validate({
+        keyPath: "k",
+        envName: "test",
+        rootDir: "/tmp",
+        config: { value: "v" }
+      })
+    ).toBe(true);
   });
 
   it("rejects non-string values", async () => {
-    expect(await provider.validate({ keyPath: "k", config: {} })).toBe(false);
+    expect(
+      await provider.validate({ keyPath: "k", envName: "test", rootDir: "/tmp", config: {} })
+    ).toBe(false);
   });
 
   it("set is a no-op", async () => {
-    await expect(provider.set({ keyPath: "k", config: {} }, "v")).resolves.toBeUndefined();
+    await expect(
+      provider.set({ keyPath: "k", envName: "test", rootDir: "/tmp", config: {} }, "v")
+    ).resolves.toBeUndefined();
   });
 });
