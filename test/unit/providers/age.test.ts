@@ -22,7 +22,7 @@ describe("AgeProvider", () => {
   });
 
   function ctx(keyPath: string) {
-    return { keyPath, envName: "test", config: { identityFile, secretsDir } };
+    return { keyPath, envName: "test", rootDir: tmpDir, config: { identityFile, secretsDir } };
   }
 
   it("roundtrips set + resolve", async () => {
@@ -63,6 +63,7 @@ describe("AgeProvider", () => {
       provider.resolve({
         keyPath: "k",
         envName: "test",
+        rootDir: tmpDir,
         config: { secretsDir }
       })
     ).rejects.toThrow("identityFile");
@@ -73,6 +74,7 @@ describe("AgeProvider", () => {
       provider.resolve({
         keyPath: "k",
         envName: "test",
+        rootDir: tmpDir,
         config: { identityFile }
       })
     ).rejects.toThrow("secretsDir");
@@ -100,6 +102,7 @@ describe("AgeProvider", () => {
     const tildeCtx = {
       keyPath: "tilde/test",
       envName: "test",
+      rootDir: tmpDir,
       config: { identityFile: relIdentity, secretsDir: relSecrets }
     };
 

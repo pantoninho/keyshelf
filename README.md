@@ -185,6 +185,8 @@ default-provider:
 | `identityFile` | Path to the age identity (private key) file       |
 | `secretsDir`   | Directory where `.age` encrypted files are stored |
 
+Relative paths are resolved from the project root (the directory containing `keyshelf.yaml`), so `./keys/production.txt` always refers to the same file regardless of where you run the command. Absolute paths and `~`-prefixed paths are used as-is.
+
 Generate a new identity:
 
 ```javascript
@@ -228,6 +230,8 @@ default-provider:
 | -------------- | -------------------------------------------------------- |
 | `identityFile` | Path to the age identity (private key) file              |
 | `secretsFile`  | Path to the JSON file where encrypted secrets are stored |
+
+Relative paths are resolved from the project root (the directory containing `keyshelf.yaml`). Absolute paths and `~`-prefixed paths are used as-is.
 
 The secrets file is created automatically on first `keyshelf set`. It contains all encrypted entries, the age-encrypted data key, and an HMAC for tamper detection. Unlike the `age` provider (one file per secret), `sops` keeps everything in a single file, which can be easier to manage and commit.
 
@@ -313,6 +317,7 @@ const errors = await validate({
   schema: config.schema,
   env: config.env,
   envName: "production",
+  rootDir: config.rootDir,
   registry
 });
 if (errors.length > 0) {
@@ -324,6 +329,7 @@ const resolved = await resolve({
   schema: config.schema,
   env: config.env,
   envName: "production",
+  rootDir: config.rootDir,
   registry
 });
 // [{ path: 'db/host', value: 'prod-db.example.com' }, ...]

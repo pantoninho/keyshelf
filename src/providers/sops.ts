@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { randomBytes, createCipheriv, createDecipheriv, createHmac } from "node:crypto";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, isAbsolute } from "node:path";
 import { Encrypter, Decrypter, identityToRecipient } from "age-encryption";
 import type { Provider, ProviderContext } from "./types.js";
 
@@ -24,11 +24,14 @@ interface SecretsFile {
   };
 }
 
-function expandTilde(filePath: string): string {
+function resolvePath(filePath: string, rootDir: string): string {
   if (filePath.startsWith("~/") || filePath === "~") {
     return join(homedir(), filePath.slice(1));
   }
-  return filePath;
+  if (isAbsolute(filePath)) {
+    return filePath;
+  }
+  return resolve(rootDir, filePath);
 }
 
 async function readIdentity(identityFile: string): Promise<string> {
@@ -118,8 +121,8 @@ export class SopsProvider implements Provider {
     }
 
     return {
-      identityFile: expandTilde(identityFile),
-      secretsFile: expandTilde(secretsFile)
+      identityFile: resolvePath(identityFile, ctx.rootDir),
+      secretsFile: resolvePath(secretsFile, ctx.rootDir)
     };
   }
 

@@ -32,7 +32,7 @@ describe("full resolution flow", () => {
     const registry = new ProviderRegistry();
     registry.register(new PlaintextProvider());
 
-    const result = await resolve({ schema, env, envName: "test", registry });
+    const result = await resolve({ schema, env, envName: "test", rootDir: tmpDir, registry });
     expect(result).toEqual([
       { path: "db/host", value: "prod-db.example.com" },
       { path: "db/port", value: "5432" }
@@ -64,12 +64,13 @@ describe("full resolution flow", () => {
       {
         keyPath: "db/password",
         envName: "test",
+        rootDir: tmpDir,
         config: { identityFile, secretsDir }
       },
       "supersecret"
     );
 
-    const result = await resolve({ schema, env, envName: "test", registry });
+    const result = await resolve({ schema, env, envName: "test", rootDir: tmpDir, registry });
     expect(result).toEqual([
       { path: "db/host", value: "prod-db" },
       { path: "db/password", value: "supersecret" }
@@ -90,7 +91,7 @@ describe("full resolution flow", () => {
     const env = parseEnvironment("");
     const registry = new ProviderRegistry();
 
-    const errors = await validate({ schema, env, envName: "test", registry });
+    const errors = await validate({ schema, env, envName: "test", rootDir: tmpDir, registry });
     expect(errors).toHaveLength(2);
     expect(errors.map((e) => e.path)).toEqual(["db/password", "api/key"]);
   });
@@ -132,6 +133,7 @@ describe("full resolution flow", () => {
         schema,
         env,
         envName: "prod",
+        rootDir: tmpDir,
         registry
       });
 
@@ -162,6 +164,7 @@ describe("full resolution flow", () => {
         schema,
         env,
         envName: "staging",
+        rootDir: tmpDir,
         registry
       });
 
@@ -195,6 +198,7 @@ describe("full resolution flow", () => {
         schema,
         env,
         envName: "dev",
+        rootDir: tmpDir,
         registry
       });
 

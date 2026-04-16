@@ -1,6 +1,7 @@
 export interface ProviderContext {
   keyPath: string;
   envName: string;
+  rootDir: string;
   config: Record<string, unknown>;
 }
 

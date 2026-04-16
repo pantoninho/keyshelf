@@ -8,14 +8,15 @@ export interface ResolveOptions {
   schema: KeyDefinition[];
   env: EnvConfig;
   envName: string;
+  rootDir: string;
   registry: ProviderRegistry;
 }
 
 export async function validate(options: ResolveOptions): Promise<ValidationError[]> {
-  const { schema, env, envName, registry } = options;
+  const { schema, env, envName, rootDir, registry } = options;
 
   const results = await Promise.allSettled(
-    schema.map((key) => resolveKey(key, env, envName, registry))
+    schema.map((key) => resolveKey(key, env, envName, rootDir, registry))
   );
 
   const errors: ValidationError[] = [];
@@ -35,11 +36,11 @@ export async function validate(options: ResolveOptions): Promise<ValidationError
 }
 
 export async function resolve(options: ResolveOptions): Promise<ResolvedKey[]> {
-  const { schema, env, envName, registry } = options;
+  const { schema, env, envName, rootDir, registry } = options;
 
   const entries = await Promise.all(
     schema.map(async (key) => {
-      const value = await resolveKey(key, env, envName, registry);
+      const value = await resolveKey(key, env, envName, rootDir, registry);
       return value !== undefined ? { path: key.path, value } : null;
     })
   );
@@ -51,6 +52,7 @@ async function resolveKey(
   key: KeyDefinition,
   env: EnvConfig,
   envName: string,
+  rootDir: string,
   registry: ProviderRegistry
 ): Promise<string | undefined> {
   const override = env.overrides[key.path];
@@ -63,7 +65,7 @@ async function resolveKey(
   // 2. Env file explicit override (provider-tagged)
   if (override !== undefined && isTaggedValue(override)) {
     try {
-      return await resolveViaProvider(key.path, override, env, envName, registry);
+      return await resolveViaProvider(key.path, override, env, envName, rootDir, registry);
     } catch (err) {
       if (key.optional) return undefined;
       throw err;
@@ -76,6 +78,7 @@ async function resolveKey(
     const ctx = {
       keyPath: key.path,
       envName,
+      rootDir,
       config: { ...env.defaultProvider.options }
     };
     try {
@@ -104,6 +107,7 @@ async function resolveViaProvider(
   tagged: TaggedValue,
   env: EnvConfig,
   envName: string,
+  rootDir: string,
   registry: ProviderRegistry
 ): Promise<string> {
   const provider = registry.get(tagged.tag);
@@ -112,6 +116,7 @@ async function resolveViaProvider(
   const ctx = {
     keyPath,
     envName,
+    rootDir,
     config: { ...baseConfig, ...tagged.config }
   };
   return provider.resolve(ctx);

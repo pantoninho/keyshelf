@@ -103,6 +103,7 @@ async function printRevealed(appDir: string, envName: string, mapFile?: string):
     schema: config.schema,
     env: config.env,
     envName,
+    rootDir: config.rootDir,
     registry
   });
 

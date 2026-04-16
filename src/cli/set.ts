@@ -71,7 +71,7 @@ export const setCommand = new Command("set")
         Object.assign(providerConfig, config.env.defaultProvider.options);
       }
 
-      await provider.set({ keyPath, envName: opts.env, config: providerConfig }, value);
+      await provider.set({ keyPath, envName: opts.env, rootDir, config: providerConfig }, value);
       console.log(`Stored "${keyPath}" via ${providerName} provider for ${opts.env}`);
       return;
     }

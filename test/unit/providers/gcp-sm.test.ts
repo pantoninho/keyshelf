@@ -21,7 +21,7 @@ describe("GcpSmProvider", () => {
   });
 
   function ctx(keyPath: string, envName = "prod") {
-    return { keyPath, envName, config: { project: "my-proj" } };
+    return { keyPath, envName, rootDir: "/tmp", config: { project: "my-proj" } };
   }
 
   describe("secret ID derivation", () => {
@@ -70,9 +70,9 @@ describe("GcpSmProvider", () => {
     });
 
     it("throws when project is missing", async () => {
-      await expect(provider.resolve({ keyPath: "k", envName: "dev", config: {} })).rejects.toThrow(
-        'gcp provider requires "project"'
-      );
+      await expect(
+        provider.resolve({ keyPath: "k", envName: "dev", rootDir: "/tmp", config: {} })
+      ).rejects.toThrow('gcp provider requires "project"');
     });
   });
 
