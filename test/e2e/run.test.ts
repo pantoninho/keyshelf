@@ -173,6 +173,41 @@ describe("keyshelf run", () => {
     );
     expect(result.trim()).toBe("dev-db");
   });
+
+  it("resolves template mappings with ${} syntax", async () => {
+    await writeFile(join(root, ".env.keyshelf"), "DB_URL=postgres://${db/host}:${db/port}/mydb\n");
+
+    const result = execFileSync(
+      TSX,
+      [CLI, "run", "--env", "dev", "--", "node", "-e", "console.log(process.env.DB_URL)"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.trim()).toBe("postgres://dev-db:5432/mydb");
+  });
+
+  it("mixes direct and template mappings", async () => {
+    await writeFile(
+      join(root, ".env.keyshelf"),
+      ["DB_HOST=db/host", "DB_URL=postgres://${db/host}:${db/port}/mydb"].join("\n")
+    );
+
+    const result = execFileSync(
+      TSX,
+      [
+        CLI,
+        "run",
+        "--env",
+        "dev",
+        "--",
+        "node",
+        "-e",
+        "console.log(JSON.stringify({host: process.env.DB_HOST, url: process.env.DB_URL}))"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+    const parsed = JSON.parse(result.trim());
+    expect(parsed).toEqual({ host: "dev-db", url: "postgres://dev-db:5432/mydb" });
+  });
 });
 
 describe("keyshelf run (age)", () => {

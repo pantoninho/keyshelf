@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import yaml from "js-yaml";
 import { findRootDir, loadConfig } from "../config/loader.js";
-import { parseAppMapping } from "../config/app-mapping.js";
+import { parseAppMapping, isTemplateMapping } from "../config/app-mapping.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { KEYSHELF_SCHEMA } from "../config/yaml-tags.js";
 import { setNestedValue } from "../utils/paths.js";
@@ -50,8 +50,12 @@ export const importCommand = new Command("import")
     }
     const appMapping = parseAppMapping(mappingContent);
 
-    // Build reverse map: ENV_VAR -> key/path
-    const reverseMap = new Map(appMapping.map((m) => [m.envVar, m.keyPath]));
+    // Build reverse map: ENV_VAR -> key/path (skip template mappings)
+    const reverseMap = new Map(
+      appMapping
+        .filter((m) => !isTemplateMapping(m))
+        .map((m) => [m.envVar, (m as { keyPath: string }).keyPath])
+    );
 
     // Parse .env file
     const envFileContent = await readFile(opts.file, "utf-8");

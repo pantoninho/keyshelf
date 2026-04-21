@@ -10,7 +10,14 @@ export {
   type EnvConfig,
   type ProviderConfig
 } from "./config/environment.js";
-export { parseAppMapping, type AppMapping } from "./config/app-mapping.js";
+export {
+  parseAppMapping,
+  isTemplateMapping,
+  resolveTemplate,
+  type AppMapping,
+  type DirectMapping,
+  type TemplateMapping
+} from "./config/app-mapping.js";
 export { loadConfig, findRootDir, type LoadedConfig } from "./config/loader.js";
 export { KEYSHELF_SCHEMA, isTaggedValue, type TaggedValue } from "./config/yaml-tags.js";
 
