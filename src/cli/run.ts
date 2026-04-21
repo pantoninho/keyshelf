@@ -4,6 +4,7 @@ import { loadConfig } from "../config/loader.js";
 import { resolve, validate } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { GcpAuthError } from "../providers/gcp-sm.js";
+import { isTemplateMapping, resolveTemplate } from "../config/app-mapping.js";
 
 export const runCommand = new Command("run")
   .description("Resolve secrets and run a command with env vars injected")
@@ -52,13 +53,23 @@ export const runCommand = new Command("run")
     const resolvedMap = new Map(resolved.map((r) => [r.path, r.value]));
 
     for (const mapping of config.appMapping) {
-      const value = resolvedMap.get(mapping.keyPath);
-      if (value !== undefined) {
+      if (isTemplateMapping(mapping)) {
+        const { value, missing } = resolveTemplate(mapping.template, resolvedMap);
+        for (const m of missing) {
+          console.error(
+            `warning: ${mapping.envVar} references "${m}" which is not defined in schema`
+          );
+        }
         envVars[mapping.envVar] = value;
       } else {
-        console.error(
-          `warning: ${mapping.envVar} maps to "${mapping.keyPath}" which is not defined in schema`
-        );
+        const value = resolvedMap.get(mapping.keyPath);
+        if (value !== undefined) {
+          envVars[mapping.envVar] = value;
+        } else {
+          console.error(
+            `warning: ${mapping.envVar} maps to "${mapping.keyPath}" which is not defined in schema`
+          );
+        }
       }
     }
 

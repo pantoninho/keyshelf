@@ -79,9 +79,14 @@ DB_PORT=db/port
 DB_PASSWORD=db/password
 API_KEY=api/key
 API_URL=api/url
+
+# Template syntax — combine multiple keys into one env var
+DB_URL=postgres://${db/host}:${db/port}/mydb
 ```
 
 Each app declares exactly which keys it consumes and what env var names to use. The `.env.keyshelf` file is required — it controls which keys are injected into your app.
+
+Values can be either a direct key path (`db/host`) or a template with `${key/path}` references that get interpolated at resolve time. Templates can mix literal text with any number of key references.
 
 ### 4. Run your app
 
@@ -292,7 +297,15 @@ DB_HOST=db/host
 DB_PORT=db/port
 DB_PASSWORD=db/password
 API_KEY=api/key
+
+# Template syntax — interpolate multiple keys into one value
+DB_URL=postgres://${db/host}:${db/port}/mydb
+CLIENT_IDS=${google/web-client-id},${google/ios-client-id}
 ```
+
+Each line is either a **direct mapping** (`ENV_VAR=key/path`) or a **template** (`ENV_VAR=...${key/path}...`). Templates replace each `${key/path}` with its resolved value, allowing you to compose connection strings, comma-separated lists, or any other derived value.
+
+> **Note:** Template mappings are skipped during `keyshelf import` because a composite value cannot be decomposed back into individual keys.
 
 ## What to commit
 
