@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.3.0](https://github.com/pantoninho/keyshelf/compare/v4.2.1...v4.3.0) (2026-04-21)
+
+
+### Features
+
+* support template syntax in app mapping files ([#62](https://github.com/pantoninho/keyshelf/issues/62)) ([f978a1f](https://github.com/pantoninho/keyshelf/commit/f978a1fe65bd9a7ed4264b49182edd661531b0bd))
+
 ## [4.2.1](https://github.com/pantoninho/keyshelf/compare/v4.2.0...v4.2.1) (2026-04-16)
 
 
