@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { describeSource } from "../../../src/cli/ls.js";
+import { describe, it, expect, vi } from "vitest";
+import { describeSource, buildJsonVars } from "../../../src/cli/ls.js";
 import type { KeyDefinition } from "../../../src/config/schema.js";
 import type { EnvConfig } from "../../../src/config/environment.js";
+import type { AppMapping } from "../../../src/config/app-mapping.js";
 
 const configKey = (path: string, defaultValue?: string): KeyDefinition => ({
   path,
@@ -75,5 +76,91 @@ describe("describeSource", () => {
       }
     };
     expect(describeSource(secretKey("db/password"), env)).toBe("provider: gcp");
+  });
+});
+
+describe("buildJsonVars", () => {
+  const schema: KeyDefinition[] = [
+    configKey("db/host", "localhost"),
+    secretKey("db/password"),
+    secretKey("auth/token", true)
+  ];
+
+  it("emits secret flag from schema for direct mappings", () => {
+    const mappings: AppMapping[] = [
+      { envVar: "DB_HOST", keyPath: "db/host" },
+      { envVar: "DB_PASSWORD", keyPath: "db/password" }
+    ];
+    const resolved = new Map([
+      ["db/host", "prod-db"],
+      ["db/password", "s3cret"]
+    ]);
+    expect(buildJsonVars(mappings, schema, resolved)).toEqual([
+      { envVar: "DB_HOST", keyPath: "db/host", value: "prod-db", secret: false },
+      { envVar: "DB_PASSWORD", keyPath: "db/password", value: "s3cret", secret: true }
+    ]);
+  });
+
+  it("omits direct mappings whose keys did not resolve", () => {
+    const mappings: AppMapping[] = [
+      { envVar: "DB_HOST", keyPath: "db/host" },
+      { envVar: "AUTH_TOKEN", keyPath: "auth/token" }
+    ];
+    const resolved = new Map([["db/host", "prod-db"]]);
+    expect(buildJsonVars(mappings, schema, resolved)).toEqual([
+      { envVar: "DB_HOST", keyPath: "db/host", value: "prod-db", secret: false }
+    ]);
+  });
+
+  it("marks template mapping secret when any referenced key is secret", () => {
+    const mappings: AppMapping[] = [
+      {
+        envVar: "DB_URL",
+        template: "${db/host}:${db/password}",
+        keyPaths: ["db/host", "db/password"]
+      }
+    ];
+    const resolved = new Map([
+      ["db/host", "prod-db"],
+      ["db/password", "s3cret"]
+    ]);
+    expect(buildJsonVars(mappings, schema, resolved)).toEqual([
+      {
+        envVar: "DB_URL",
+        keyPath: null,
+        value: "prod-db:s3cret",
+        secret: true,
+        template: true
+      }
+    ]);
+  });
+
+  it("template referencing only config keys is not marked secret", () => {
+    const mappings: AppMapping[] = [
+      { envVar: "DB_URL", template: "${db/host}", keyPaths: ["db/host"] }
+    ];
+    const resolved = new Map([["db/host", "prod-db"]]);
+    expect(buildJsonVars(mappings, schema, resolved)).toEqual([
+      {
+        envVar: "DB_URL",
+        keyPath: null,
+        value: "prod-db",
+        secret: false,
+        template: true
+      }
+    ]);
+  });
+
+  it("warns about template references not in schema but still emits", () => {
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    const mappings: AppMapping[] = [
+      { envVar: "URL", template: "${unknown/path}", keyPaths: ["unknown/path"] }
+    ];
+    const result = buildJsonVars(mappings, schema, new Map());
+    expect(result).toEqual([
+      { envVar: "URL", keyPath: null, value: "", secret: false, template: true }
+    ]);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
