@@ -1,0 +1,46 @@
+{
+  "name": "keyshelf",
+  "version": "4.3.0",
+  "description": "Config and secrets management for monorepos",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pantoninho/keyshelf",
+    "directory": "packages/keyshelf"
+  },
+  "bin": {
+    "keyshelf": "./dist/bin/keyshelf.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx bin/keyshelf.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@google-cloud/secret-manager": "^6.1.1",
+    "age-encryption": "^0.3.0",
+    "commander": "^14.0.3",
+    "cross-spawn": "^7.0.6",
+    "js-yaml": "^4.1.1"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.5.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.1"
+  }
+}

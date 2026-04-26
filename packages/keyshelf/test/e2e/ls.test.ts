@@ -5,9 +5,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { writeAgeFixture } from "./helpers/age.js";
 import { writeSopsFixture } from "./helpers/sops.js";
-
-const CLI = join(import.meta.dirname, "..", "..", "bin", "keyshelf.ts");
-const TSX = join(import.meta.dirname, "..", "..", "node_modules", ".bin", "tsx");
+import { CLI, TSX } from "./helpers/cli.js";
 
 async function createFixture() {
   const root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-ls-"));

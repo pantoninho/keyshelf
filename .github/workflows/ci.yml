@@ -24,6 +24,8 @@ jobs:
 
       - run: npm run format:check
 
+      - run: npm run typecheck
+
       - run: npm test
 
   release-please:
@@ -33,15 +35,16 @@ jobs:
       contents: write
       pull-requests: write
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
+      keyshelf_release_created: ${{ steps.release.outputs['packages/keyshelf--release_created'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          release-type: node
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
-  publish:
-    if: ${{ needs.release-please.outputs.release_created }}
+  publish-keyshelf:
+    if: ${{ needs.release-please.outputs.keyshelf_release_created == 'true' }}
     needs: [test, release-please]
     runs-on: ubuntu-latest
     permissions:
@@ -57,12 +60,14 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build
+      - run: npm run build -w keyshelf
 
       - name: Verify the integrity of provenance attestations and registry signatures
         run: npm audit signatures
+        working-directory: packages/keyshelf
 
       - name: Publish to npm
         run: npm publish --provenance --access public
+        working-directory: packages/keyshelf
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
