@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v0.2.1...keyshelf-action-v0.3.0) (2026-04-27)
+
+
+### Features
+
+* **action:** bundle keyshelf ([#74](https://github.com/pantoninho/keyshelf/issues/74)) ([c2960b7](https://github.com/pantoninho/keyshelf/commit/c2960b7b94270d9b27914e4bd7bc3bf6afc8f04a))
+
 ## [0.2.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v0.2.0...keyshelf-action-v0.2.1) (2026-04-27)
 
 
