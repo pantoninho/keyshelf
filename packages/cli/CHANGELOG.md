@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.5.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v4.4.0...keyshelf-v4.5.0) (2026-04-27)
+
+
+### Features
+
+* **action:** bundle keyshelf ([#74](https://github.com/pantoninho/keyshelf/issues/74)) ([c2960b7](https://github.com/pantoninho/keyshelf/commit/c2960b7b94270d9b27914e4bd7bc3bf6afc8f04a))
+
 ## [4.4.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v4.3.0...keyshelf-v4.4.0) (2026-04-27)
 
 
