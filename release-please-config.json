@@ -6,6 +6,9 @@
   "packages": {
     "packages/keyshelf": {
       "package-name": "keyshelf"
+    },
+    "packages/action": {
+      "package-name": "keyshelf-action"
     }
   }
 }

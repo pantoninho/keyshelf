@@ -1,3 +1,4 @@
 {
-  "packages/keyshelf": "4.3.0"
+  "packages/keyshelf": "4.3.0",
+  "packages/action": "0.1.0"
 }
