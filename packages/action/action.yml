@@ -39,12 +39,7 @@ runs:
     - name: Install action dependencies
       shell: bash
       working-directory: ${{ github.action_path }}
-      run: |
-        if node -e "require.resolve('keyshelf/bin')" 2>/dev/null; then
-          echo "keyshelf already resolvable from $(pwd); skipping install"
-        else
-          npm install --omit=dev --no-audit --no-fund --silent
-        fi
+      run: npm install --omit=dev --no-audit --no-fund --silent
 
     - name: Write identity
       if: inputs.identity != ''
