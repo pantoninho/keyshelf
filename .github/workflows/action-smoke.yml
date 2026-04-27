@@ -124,8 +124,10 @@ jobs:
           # Install keyshelf at the consumer repo root — recreates the #70 trip wire.
           npm init -y >/dev/null
           # Use the repo's own dist via tarball to avoid mixing registry versions.
+          mkdir -p /tmp/ks-tgz
           (cd ../action-source && npm ci && npm run build -w keyshelf && cd packages/cli && npm pack --pack-destination /tmp/ks-tgz)
-          npm install --omit=dev "$(ls /tmp/ks-tgz/keyshelf-*.tgz)"
+          tarball=$(ls /tmp/ks-tgz/keyshelf-*.tgz | head -n1)
+          npm install --omit=dev "$tarball"
 
           identity=$(node -e 'import("keyshelf").then(m => m.generateIdentity()).then(k => process.stdout.write(k))')
           recipient=$(node -e "import('keyshelf').then(m => m.identityToRecipient(process.argv[1])).then(r => process.stdout.write(r))" "$identity")
