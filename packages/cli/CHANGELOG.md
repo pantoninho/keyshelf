@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.4.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v4.3.0...keyshelf-v4.4.0) (2026-04-27)
+
+
+### Features
+
+* monorepo + keyshelf-action (closes [#64](https://github.com/pantoninho/keyshelf/issues/64)) ([#65](https://github.com/pantoninho/keyshelf/issues/65)) ([c49b6ae](https://github.com/pantoninho/keyshelf/commit/c49b6aea06f5a0f019d1cbfa913f8f78c22f5c39))
+
 ## [4.3.0](https://github.com/pantoninho/keyshelf/compare/v4.2.1...v4.3.0) (2026-04-21)
 
 
