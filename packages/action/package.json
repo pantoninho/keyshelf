@@ -14,15 +14,15 @@
     "node": ">=20"
   },
   "scripts": {
+    "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "keyshelf": "^4.4.0"
-  },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "keyshelf": "^4.4.0",
+    "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.1"
   }

@@ -36,11 +36,6 @@ runs:
           exit 1
         fi
 
-    - name: Install action dependencies
-      shell: bash
-      working-directory: ${{ github.action_path }}
-      run: npm install --omit=dev --no-audit --no-fund --silent
-
     - name: Write identity
       if: inputs.identity != ''
       shell: bash
@@ -48,7 +43,7 @@ runs:
       env:
         KEYSHELF_ENV: ${{ inputs.env }}
         KEYSHELF_IDENTITY: ${{ inputs.identity }}
-      run: node "${{ github.action_path }}/scripts/write-identity.mjs"
+      run: node "${{ github.action_path }}/dist/write-identity.mjs"
 
     - name: Resolve and emit env vars
       shell: bash
@@ -56,4 +51,4 @@ runs:
       env:
         KEYSHELF_ENV: ${{ inputs.env }}
         KEYSHELF_MAPS: ${{ inputs.map }}
-      run: node "${{ github.action_path }}/scripts/emit-env.mjs"
+      run: node "${{ github.action_path }}/dist/emit-env.mjs"

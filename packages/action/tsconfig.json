@@ -12,7 +12,8 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": false,
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": "6.0",
+    "types": ["node"]
   },
   "include": ["test", "scripts"]
 }
