@@ -5,7 +5,7 @@ GitHub Action that resolves [keyshelf](https://github.com/pantoninho/keyshelf)-m
 ## Usage
 
 ```yaml
-- uses: pantoninho/keyshelf/packages/action@v1
+- uses: pantoninho/keyshelf/packages/action@keyshelf-action-v0.2.0
   with:
     env: staging
     identity: ${{ secrets.KEYSHELF_STAGING_IDENTITY }}
