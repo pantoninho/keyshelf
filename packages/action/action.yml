@@ -53,7 +53,6 @@ runs:
       env:
         KEYSHELF_ENV: ${{ inputs.env }}
         KEYSHELF_IDENTITY: ${{ inputs.identity }}
-        KEYSHELF_CWD: ${{ inputs.working-directory }}
       run: node "${{ github.action_path }}/scripts/write-identity.mjs"
 
     - name: Resolve and emit env vars
@@ -62,5 +61,4 @@ runs:
       env:
         KEYSHELF_ENV: ${{ inputs.env }}
         KEYSHELF_MAPS: ${{ inputs.map }}
-        KEYSHELF_CWD: ${{ inputs.working-directory }}
       run: node "${{ github.action_path }}/scripts/emit-env.mjs"
