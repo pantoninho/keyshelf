@@ -29,6 +29,7 @@ export { ProviderRegistry } from "./providers/registry.js";
 export { PlaintextProvider } from "./providers/plaintext.js";
 export { AgeProvider, generateIdentity, identityToRecipient } from "./providers/age.js";
 export { GcpSmProvider, type GcpSmProviderOptions } from "./providers/gcp-sm.js";
+export { SopsProvider, type SopsProviderOptions } from "./providers/sops.js";
 export { createDefaultRegistry } from "./providers/setup.js";
 
 export { flattenKeys, setNestedValue } from "./utils/paths.js";

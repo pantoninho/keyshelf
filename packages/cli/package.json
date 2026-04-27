@@ -3,6 +3,7 @@
   "version": "4.4.0",
   "description": "Config and secrets management for monorepos",
   "type": "module",
+  "sideEffects": false,
   "repository": {
     "type": "git",
     "url": "https://github.com/pantoninho/keyshelf",
