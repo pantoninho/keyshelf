@@ -28,6 +28,9 @@ for (const mapFile of maps) {
     { cwd, encoding: "utf-8" }
   );
 
+  if (result.error) {
+    fail(`Failed to spawn keyshelf at ${cliBin}: ${result.error.message}`);
+  }
   if (result.status !== 0) {
     process.stderr.write(result.stderr || "");
     fail(`keyshelf ls failed for map "${mapFile}" (exit ${result.status})`);
