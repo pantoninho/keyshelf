@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "keyshelf": "*"
+    "keyshelf": "^4.4.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
