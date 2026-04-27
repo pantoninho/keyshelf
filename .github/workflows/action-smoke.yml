@@ -1,0 +1,96 @@
+name: action-smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install workspace deps
+        run: npm ci
+
+      - name: Build keyshelf
+        run: npm run build -w keyshelf
+
+      - name: Generate fixture
+        id: fixture
+        run: |
+          set -euo pipefail
+          mkdir -p fixture/.keyshelf fixture/keys
+          cd fixture
+
+          identity=$(node -e 'import("keyshelf").then(m => m.generateIdentity()).then(k => process.stdout.write(k))')
+          recipient=$(node -e "import('keyshelf').then(m => m.identityToRecipient(process.argv[1])).then(r => process.stdout.write(r))" "$identity")
+
+          cat > keyshelf.yaml <<'YAML'
+          keys:
+            db:
+              host: localhost
+              password: !secret ""
+            service:
+              name: api
+          YAML
+
+          cat > .keyshelf/test.yaml <<YAML
+          default-provider:
+            name: age
+            identityFile: ./keys/age.txt
+            secretsDir: ./.keyshelf/secrets/test
+            recipients:
+              - $recipient
+          YAML
+
+          cat > .env.keyshelf <<'YAML'
+          DB_HOST=db/host
+          DB_PASSWORD=db/password
+          DB_URL=postgres://${db/host}:${db/password}@srv/db
+          SERVICE_NAME=service/name
+          YAML
+
+          echo "$identity" > keys/age.txt
+          chmod 600 keys/age.txt
+
+          ../packages/cli/dist/bin/keyshelf.js set --env test --value 'hunter2' db/password
+
+          rm keys/age.txt
+
+          # Mask the test identity so it does not appear in logs (including the
+          # subsequent `with:` block when the action is invoked).
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::add-mask::$line"
+          done <<<"$identity"
+
+          {
+            echo "identity<<EOF_IDENT"
+            echo "$identity"
+            echo "EOF_IDENT"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: ./packages/action
+        with:
+          env: test
+          identity: ${{ steps.fixture.outputs.identity }}
+          map: .env.keyshelf
+          working-directory: fixture
+
+      - name: Verify env vars are set (and secrets are masked in logs)
+        run: |
+          set -euo pipefail
+          test "$DB_HOST" = "localhost"
+          test "$SERVICE_NAME" = "api"
+          test "${DB_PASSWORD:-}" != ""
+          test "${DB_URL:-}" != ""
+          # Don't echo the secrets — masking would replace them with *** anyway.
+          echo "DB_PASSWORD length: ${#DB_PASSWORD}"
+          echo "DB_URL length: ${#DB_URL}"

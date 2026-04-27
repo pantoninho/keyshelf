@@ -6,9 +6,7 @@ import { execFileSync } from "node:child_process";
 import { Decrypter } from "age-encryption";
 import { writeAgeFixture } from "./helpers/age.js";
 import { writeSopsFixture } from "./helpers/sops.js";
-
-const CLI = join(import.meta.dirname, "..", "..", "bin", "keyshelf.ts");
-const TSX = join(import.meta.dirname, "..", "..", "node_modules", ".bin", "tsx");
+import { CLI, TSX } from "./helpers/cli.js";
 
 describe("keyshelf import (age)", () => {
   let root: string;

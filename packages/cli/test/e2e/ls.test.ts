@@ -5,9 +5,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { writeAgeFixture } from "./helpers/age.js";
 import { writeSopsFixture } from "./helpers/sops.js";
-
-const CLI = join(import.meta.dirname, "..", "..", "bin", "keyshelf.ts");
-const TSX = join(import.meta.dirname, "..", "..", "node_modules", ".bin", "tsx");
+import { CLI, TSX } from "./helpers/cli.js";
 
 async function createFixture() {
   const root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-ls-"));
@@ -144,6 +142,63 @@ describe("keyshelf ls (age)", () => {
     const lines = result.trim().split("\n");
     expect(lines[0]).toMatch(/db\/host\s+config\s+prod-db/);
     expect(lines[1]).toMatch(/db\/password\s+secret\s+age-secret-value/);
+  });
+
+  it("--format json emits resolved mappings with secret flags", async () => {
+    await writeFile(
+      join(root, ".env.keyshelf"),
+      ["DB_HOST=db/host", "DB_PASSWORD=db/password"].join("\n")
+    );
+
+    const result = execFileSync(
+      TSX,
+      [CLI, "ls", "--env", envName, "--reveal", "--map", ".env.keyshelf", "--format", "json"],
+      { cwd: root, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+    );
+
+    const parsed = JSON.parse(result);
+    expect(parsed.env).toBe(envName);
+    expect(parsed.vars).toEqual([
+      { envVar: "DB_HOST", keyPath: "db/host", value: "prod-db", secret: false },
+      { envVar: "DB_PASSWORD", keyPath: "db/password", value: "age-secret-value", secret: true }
+    ]);
+  });
+
+  it("--format json marks template mappings secret if any referenced key is secret", async () => {
+    await writeFile(
+      join(root, ".env.keyshelf"),
+      ["DB_URL=postgres://${db/host}:${db/password}@host/db"].join("\n")
+    );
+
+    const result = execFileSync(
+      TSX,
+      [CLI, "ls", "--env", envName, "--reveal", "--map", ".env.keyshelf", "--format", "json"],
+      { cwd: root, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+    );
+
+    const parsed = JSON.parse(result);
+    expect(parsed.vars).toEqual([
+      {
+        envVar: "DB_URL",
+        keyPath: null,
+        value: "postgres://prod-db:age-secret-value@host/db",
+        secret: true,
+        template: true
+      }
+    ]);
+  });
+
+  it("--format json without --map errors", () => {
+    try {
+      execFileSync(TSX, [CLI, "ls", "--env", envName, "--reveal", "--format", "json"], {
+        cwd: root,
+        encoding: "utf-8",
+        stdio: "pipe"
+      });
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as { stderr: string }).stderr).toContain("--format json requires");
+    }
   });
 });
 

@@ -8,9 +8,7 @@ import { Decrypter } from "age-encryption";
 import { GCP_PROJECT, createGcpClient, writeGcpFixture, deleteSecrets } from "./helpers/gcp.js";
 import { writeAgeFixture } from "./helpers/age.js";
 import { writeSopsFixture } from "./helpers/sops.js";
-
-const CLI = join(import.meta.dirname, "..", "..", "bin", "keyshelf.ts");
-const TSX = join(import.meta.dirname, "..", "..", "node_modules", ".bin", "tsx");
+import { CLI, TSX } from "./helpers/cli.js";
 
 describe("keyshelf set (age)", () => {
   let root: string;

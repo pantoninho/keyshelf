@@ -1,0 +1,64 @@
+name: keyshelf
+description: Resolve keyshelf-managed config and secrets into $GITHUB_ENV with auto-masking for !secret keys
+branding:
+  icon: key
+  color: purple
+
+inputs:
+  env:
+    description: Environment name (matches .keyshelf/<env>.yaml)
+    required: true
+  map:
+    description: Path(s) to .env.keyshelf mapping file(s); newline-separated for multiple
+    required: true
+  identity:
+    description: Raw identity material (e.g. age private key). Written to the path declared in .keyshelf/<env>.yaml with mode 0600. Pass via secrets.* — never hard-code.
+    required: false
+    default: ""
+  working-directory:
+    description: Directory containing keyshelf.yaml (project root)
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ ! -f ".keyshelf/${{ inputs.env }}.yaml" ]; then
+          echo "::error::Env file .keyshelf/${{ inputs.env }}.yaml not found in $(pwd)"
+          exit 1
+        fi
+        if [ -z "${{ inputs.map }}" ]; then
+          echo "::error::'map' is required"
+          exit 1
+        fi
+
+    - name: Install action dependencies
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        if node -e "require.resolve('keyshelf/bin')" 2>/dev/null; then
+          echo "keyshelf already resolvable from $(pwd); skipping install"
+        else
+          npm install --omit=dev --no-audit --no-fund --silent
+        fi
+
+    - name: Write identity
+      if: inputs.identity != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        KEYSHELF_ENV: ${{ inputs.env }}
+        KEYSHELF_IDENTITY: ${{ inputs.identity }}
+      run: node "${{ github.action_path }}/scripts/write-identity.mjs"
+
+    - name: Resolve and emit env vars
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        KEYSHELF_ENV: ${{ inputs.env }}
+        KEYSHELF_MAPS: ${{ inputs.map }}
+      run: node "${{ github.action_path }}/scripts/emit-env.mjs"

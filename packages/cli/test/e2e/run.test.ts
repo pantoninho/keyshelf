@@ -6,9 +6,7 @@ import { execFileSync } from "node:child_process";
 import { GCP_PROJECT, createGcpClient, writeGcpFixture, deleteSecrets } from "./helpers/gcp.js";
 import { writeAgeFixture } from "./helpers/age.js";
 import { writeSopsFixture } from "./helpers/sops.js";
-
-const CLI = join(import.meta.dirname, "..", "..", "bin", "keyshelf.ts");
-const TSX = join(import.meta.dirname, "..", "..", "node_modules", ".bin", "tsx");
+import { CLI, TSX } from "./helpers/cli.js";
 
 async function createFixture() {
   const root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-"));
