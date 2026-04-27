@@ -94,3 +94,93 @@ jobs:
           # Don't echo the secrets — masking would replace them with *** anyway.
           echo "DB_PASSWORD length: ${#DB_PASSWORD}"
           echo "DB_URL length: ${#DB_URL}"
+
+  # Reproduces the consumer scenario from issues #70 and #73:
+  #   - The action source lives at a path separate from the consumer's working tree
+  #     (mirroring how GitHub places `_actions/<owner>/<repo>/<ref>/...` on the runner).
+  #   - The consumer has `keyshelf` installed at its repo root, which previously caused
+  #     the action's bootstrap to skip install (#70) and later resolved the dep via the
+  #     workspace symlink to a build-less `packages/cli` (#73).
+  # With the bundled action, no install runs in `${{ github.action_path }}`, so neither
+  # bug class can recur.
+  smoke-as-consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (acts as action source at a separate path)
+        uses: actions/checkout@v4
+        with:
+          path: action-source
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up "consumer" repo with keyshelf installed at root
+        run: |
+          set -euo pipefail
+          mkdir -p consumer/.keyshelf consumer/keys
+          cd consumer
+
+          # Install keyshelf at the consumer repo root — recreates the #70 trip wire.
+          npm init -y >/dev/null
+          # Use the repo's own dist via tarball to avoid mixing registry versions.
+          (cd ../action-source && npm ci && npm run build -w keyshelf && cd packages/cli && npm pack --pack-destination /tmp/ks-tgz)
+          npm install --omit=dev "$(ls /tmp/ks-tgz/keyshelf-*.tgz)"
+
+          identity=$(node -e 'import("keyshelf").then(m => m.generateIdentity()).then(k => process.stdout.write(k))')
+          recipient=$(node -e "import('keyshelf').then(m => m.identityToRecipient(process.argv[1])).then(r => process.stdout.write(r))" "$identity")
+
+          cat > keyshelf.yaml <<'YAML'
+          keys:
+            db:
+              host: localhost
+              password: !secret ""
+          YAML
+
+          cat > .keyshelf/test.yaml <<YAML
+          default-provider:
+            name: age
+            identityFile: ./keys/age.txt
+            secretsDir: ./.keyshelf/secrets/test
+            recipients:
+              - $recipient
+          YAML
+
+          cat > .env.keyshelf <<'YAML'
+          DB_HOST=db/host
+          DB_PASSWORD=db/password
+          YAML
+
+          echo "$identity" > keys/age.txt
+          chmod 600 keys/age.txt
+          npx --no-install keyshelf set --env test --value 'hunter2' db/password
+          rm keys/age.txt
+
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::add-mask::$line"
+          done <<<"$identity"
+
+          { echo "identity<<EOF_IDENT"; echo "$identity"; echo "EOF_IDENT"; } >> "$GITHUB_OUTPUT"
+        id: setup
+
+      - name: Invoke action from separate path against consumer working-directory
+        uses: ./action-source/packages/action
+        with:
+          env: test
+          identity: ${{ steps.setup.outputs.identity }}
+          map: .env.keyshelf
+          working-directory: consumer
+
+      - name: Verify env vars resolved through the bundled action
+        run: |
+          set -euo pipefail
+          test "$DB_HOST" = "localhost"
+          test "${DB_PASSWORD:-}" != ""
+
+      - name: Assert action did not install dependencies in its own tree
+        run: |
+          set -euo pipefail
+          if [ -d action-source/packages/action/node_modules ]; then
+            echo "::error::action-source/packages/action/node_modules exists — bundled action should never install."
+            exit 1
+          fi

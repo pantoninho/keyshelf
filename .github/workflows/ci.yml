@@ -22,6 +22,16 @@ jobs:
 
       - run: npm run build -w keyshelf
 
+      - run: npm run build -w @keyshelf/action
+
+      - name: Verify action bundle is up to date
+        run: |
+          if ! git diff --quiet -- packages/action/dist; then
+            echo "::error::packages/action/dist is stale. Run 'npm run build -w @keyshelf/action' and commit the result."
+            git --no-pager diff --stat -- packages/action/dist
+            exit 1
+          fi
+
       - run: npm run lint
 
       - run: npm run format:check
