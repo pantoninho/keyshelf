@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v0.2.0...keyshelf-action-v0.2.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* **action:** always install action deps (closes [#70](https://github.com/pantoninho/keyshelf/issues/70)) ([#71](https://github.com/pantoninho/keyshelf/issues/71)) ([83a3453](https://github.com/pantoninho/keyshelf/commit/83a345381acfc44679a52f98c686ae0266cb52b3))
+
 ## [0.2.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v0.1.0...keyshelf-action-v0.2.0) (2026-04-27)
 
 
