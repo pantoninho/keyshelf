@@ -20,6 +20,8 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run build -w keyshelf
+
       - run: npm run lint
 
       - run: npm run format:check

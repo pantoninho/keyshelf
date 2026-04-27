@@ -65,6 +65,12 @@ jobs:
 
           rm keys/age.txt
 
+          # Mask the test identity so it does not appear in logs (including the
+          # subsequent `with:` block when the action is invoked).
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::add-mask::$line"
+          done <<<"$identity"
+
           {
             echo "identity<<EOF_IDENT"
             echo "$identity"
