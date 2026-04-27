@@ -4,7 +4,7 @@
   "include-component-in-tag": true,
   "separate-pull-requests": true,
   "packages": {
-    "packages/keyshelf": {
+    "packages/cli": {
       "package-name": "keyshelf"
     },
     "packages/action": {

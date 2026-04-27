@@ -61,7 +61,7 @@ jobs:
           echo "$identity" > keys/age.txt
           chmod 600 keys/age.txt
 
-          ../packages/keyshelf/dist/bin/keyshelf.js set --env test --value 'hunter2' db/password
+          ../packages/cli/dist/bin/keyshelf.js set --env test --value 'hunter2' db/password
 
           rm keys/age.txt
 
