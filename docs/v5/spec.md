@@ -259,14 +259,17 @@ The Phase 2 validator must enforce, in addition to the type-level constraints:
    declaration is rejected if `groups` is absent).
 4. `secret({...})` must have at least one binding (`value` / `default` /
    non-empty `values`).
-5. Duplicate flattened paths are rejected (covers both string-path /
-   nested mixing and case-insensitive duplicates on case-insensitive file
-   systems — `db/Host` and `db/host` are duplicates).
-6. Path segments must match `/^[A-Za-z_][A-Za-z0-9_-]*$/`. The `/` separator
+5. Duplicate flattened paths are rejected (covers string-path / nested
+   mixing — e.g. `foo: { x: 'a' }` and `'foo/x': 'b'` declared at the same
+   level).
+6. A leaf path may not be a prefix of any other leaf path. Declaring `foo`
+   as a leaf and `'foo/x'` as another leaf in the same config is rejected:
+   any given path is either a leaf or a namespace prefix, never both.
+7. Path segments must match `/^[A-Za-z_][A-Za-z0-9_-]*$/`. The `/` separator
    is reserved.
-7. Template references in `config` bindings must resolve to declared key
+8. Template references in `config` bindings must resolve to declared key
    paths and must not form cycles.
-8. `.env.keyshelf` references must point to declared key paths
+9. `.env.keyshelf` references must point to declared key paths
    (loader-time validation against the flattened key set).
 
 ---
@@ -302,8 +305,9 @@ keys: {
 ```
 
 A path is either a leaf or a namespace, never both. Declaring `foo` as a
-scalar/factory at the same level as `foo: { ... }` is a duplicate-path
-error — there is no shape that supports both simultaneously, by design.
+leaf (scalar / factory) and `foo/x` as another leaf in the same config is
+rejected by validation rule 6 — there is no shape that supports both
+simultaneously, by design.
 
 **Why this rule.** It removes ambiguity entirely: a property's _shape_
 (literal object vs factory return) is the disambiguator, never the property's
