@@ -11,6 +11,6 @@ implementation must satisfy.
 | [02-env-and-group.config.ts](./02-env-and-group.config.ts)                 | `values` map keyed by env, `group` field, mixed config + secret |
 | [03-envless-shared-secret.config.ts](./03-envless-shared-secret.config.ts) | Envless secret in a group; envless config without a group       |
 | [04-optional-secrets.config.ts](./04-optional-secrets.config.ts)           | `optional: true` with and without a binding fallback            |
-| [05-nested-namespaces.config.ts](./05-nested-namespaces.config.ts)         | Deep nesting + string-path escape hatch                         |
+| [05-nested-namespaces.config.ts](./05-nested-namespaces.config.ts)         | Deep nesting and `'a/b/c'` flattened-path notation              |
 | [06-template-config.config.ts](./06-template-config.config.ts)             | `${path/to/key}` interpolation in config values                 |
 | [07-full.config.ts](./07-full.config.ts)                                   | Canonical example mixing every shape                            |

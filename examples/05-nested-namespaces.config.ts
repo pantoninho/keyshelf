@@ -34,10 +34,6 @@ export default defineConfig({
     "feature-flags/launch-darkly/sdk-key": secret({
       value: age({ identityFile: "./keys/dev.txt" })
     }),
-    "feature-flags": {
-      "launch-darkly": {
-        environment: config({ value: "dev" })
-      }
-    }
+    "feature-flags/launch-darkly/environment": config({ value: "dev" })
   }
 });

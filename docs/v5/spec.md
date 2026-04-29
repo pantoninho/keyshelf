@@ -69,21 +69,28 @@ on factory return values, and at runtime by the validator.
 Keys are addressed by `/`-separated paths derived from nesting:
 `db: { password: secret({...}) }` flattens to `db/password`.
 
-### String paths as escape hatch
+### String paths
 
-A property name may itself be a `/`-separated path. This is the only way to
-declare a leaf at a path that would otherwise have to be a namespace:
+A property name may itself be a `/`-separated path. This is purely a
+flatten-the-nesting convenience for short configs:
 
 ```ts
 keys: {
-  'db/password': secret({ /* ... */ }),  // path: db/password
+  'db/host': 'localhost',
+  'db/port': 5432,
+}
+// equivalent to
+keys: {
   db: {
-    host: 'localhost',                    // path: db/host
+    host: 'localhost',
+    port: 5432,
   },
 }
 ```
 
 Validation rejects any pair of declarations that flatten to the same path.
+A path is either a leaf or a namespace, never both — declaring `foo: 'bar'`
+and `foo: { x: 'y' }` at the same level is a duplicate-path error.
 
 ---
 
@@ -294,17 +301,9 @@ keys: {
 }
 ```
 
-To declare a leaf at path `foo` _and_ sub-keys under `foo/*`, use the
-string-path escape hatch for the leaf:
-
-```ts
-keys: {
-  foo: {
-    sub: 'x',                   // foo/sub
-  },
-  'foo/value': 'bar',           // foo/value (the leaf)
-}
-```
+A path is either a leaf or a namespace, never both. Declaring `foo` as a
+scalar/factory at the same level as `foo: { ... }` is a duplicate-path
+error — there is no shape that supports both simultaneously, by design.
 
 **Why this rule.** It removes ambiguity entirely: a property's _shape_
 (literal object vs factory return) is the disambiguator, never the property's
