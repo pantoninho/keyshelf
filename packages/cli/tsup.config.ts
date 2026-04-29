@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/**/*.ts", "bin/keyshelf.ts"],
+  entry: ["src/**/*.ts", "bin/*.ts"],
   format: ["esm"],
   target: "node20",
   bundle: false,
