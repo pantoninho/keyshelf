@@ -10,7 +10,8 @@
     "directory": "packages/cli"
   },
   "bin": {
-    "keyshelf": "./dist/bin/keyshelf.js"
+    "keyshelf": "./dist/bin/keyshelf.js",
+    "keyshelf-next": "./dist/bin/keyshelf-next.js"
   },
   "main": "./dist/src/index.js",
   "types": "./dist/index.d.ts",
@@ -20,6 +21,7 @@
       "import": "./dist/src/index.js"
     },
     "./bin": "./dist/bin/keyshelf.js",
+    "./bin-next": "./dist/bin/keyshelf-next.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -30,6 +32,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsx bin/keyshelf.ts",
+    "dev:next": "tsx bin/keyshelf-next.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
