@@ -137,7 +137,6 @@ export type NormalizedRecord =
       optional: boolean;
       description?: string;
       value?: ConfigBinding;
-      default?: ConfigBinding;
       values?: Record<string, ConfigBinding>;
     }
   | {
@@ -147,7 +146,6 @@ export type NormalizedRecord =
       optional: boolean;
       description?: string;
       value?: BuiltinProviderRef;
-      default?: BuiltinProviderRef;
       values?: Record<string, BuiltinProviderRef>;
     };
 

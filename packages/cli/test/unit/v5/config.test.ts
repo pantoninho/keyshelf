@@ -42,8 +42,7 @@ describe("v5 config factories and validation", () => {
         group: "app",
         optional: false,
         description: undefined,
-        value: undefined,
-        default: "localhost",
+        value: "localhost",
         values: { production: "db.example.com" }
       },
       {
@@ -53,7 +52,6 @@ describe("v5 config factories and validation", () => {
         optional: false,
         description: undefined,
         value: age({ identityFile: "./ci.txt" }),
-        default: undefined,
         values: undefined
       }
     ]);
