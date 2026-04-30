@@ -96,6 +96,12 @@ interface KeyNamespace {
 
 type KeyNode = ConfigBinding | ConfigRecord | SecretRecord | KeyNamespace;
 
+interface TemplateVisitState {
+  visiting: Set<string>;
+  visited: Set<string>;
+  stack: string[];
+}
+
 const keyNodeSchema: z.ZodType<KeyNode> = z.lazy(() =>
   z.union([
     configScalarSchema,
@@ -133,37 +139,11 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
   const groups = [...(parsed.groups ?? [])];
   checkUnique("groups", groups, errors);
 
-  const envSet = new Set(parsed.envs);
-  const groupSet = new Set(groups);
   const flattened = flattenKeyTree(parsed.keys, errors);
   const paths = new Set(flattened.map((record) => record.path));
 
   validatePathConflicts(flattened, errors);
-
-  for (const record of flattened) {
-    if (record.value !== undefined && record.default !== undefined) {
-      errors.push(`${record.path}: value and default are mutually exclusive`);
-    }
-
-    if (record.group !== undefined && !groupSet.has(record.group)) {
-      const suffix = groups.length === 0 ? " because no groups are declared" : "";
-      errors.push(`${record.path}: group "${record.group}" is not declared${suffix}`);
-    }
-
-    for (const envName of Object.keys(record.values ?? {})) {
-      if (!envSet.has(envName)) {
-        errors.push(`${record.path}: values contains undeclared env "${envName}"`);
-      }
-    }
-
-    if (record.kind === "secret") {
-      const hasValues = record.values !== undefined && Object.keys(record.values).length > 0;
-      if (record.value === undefined && record.default === undefined && !hasValues) {
-        errors.push(`${record.path}: secret requires value, default, or at least one values entry`);
-      }
-    }
-  }
-
+  validateRecords(flattened, parsed.envs, groups, errors);
   validateTemplateReferences(flattened, paths, errors);
 
   if (errors.length > 0) {
@@ -200,6 +180,62 @@ export function validateAppMappingReferences(
   }
 }
 
+function validateRecords(
+  records: NormalizedRecord[],
+  envs: readonly string[],
+  groups: readonly string[],
+  errors: string[]
+): void {
+  const envSet = new Set(envs);
+  const groupSet = new Set(groups);
+
+  for (const record of records) {
+    validateRecordValue(record, errors);
+    validateRecordGroup(record, groups, groupSet, errors);
+    validateRecordValues(record, envSet, errors);
+    validateSecretValue(record, errors);
+  }
+}
+
+function validateRecordValue(record: NormalizedRecord, errors: string[]): void {
+  if (record.value !== undefined && record.default !== undefined) {
+    errors.push(`${record.path}: value and default are mutually exclusive`);
+  }
+}
+
+function validateRecordGroup(
+  record: NormalizedRecord,
+  groups: readonly string[],
+  groupSet: Set<string>,
+  errors: string[]
+): void {
+  if (record.group === undefined || groupSet.has(record.group)) return;
+
+  const suffix = groups.length === 0 ? " because no groups are declared" : "";
+  errors.push(`${record.path}: group "${record.group}" is not declared${suffix}`);
+}
+
+function validateRecordValues(
+  record: NormalizedRecord,
+  envSet: Set<string>,
+  errors: string[]
+): void {
+  for (const envName of Object.keys(record.values ?? {})) {
+    if (!envSet.has(envName)) {
+      errors.push(`${record.path}: values contains undeclared env "${envName}"`);
+    }
+  }
+}
+
+function validateSecretValue(record: NormalizedRecord, errors: string[]): void {
+  if (record.kind !== "secret") return;
+
+  const hasValues = record.values !== undefined && Object.keys(record.values).length > 0;
+  if (record.value === undefined && record.default === undefined && !hasValues) {
+    errors.push(`${record.path}: secret requires value, default, or at least one values entry`);
+  }
+}
+
 function flattenKeyTree(
   tree: KeyTree,
   errors: string[],
@@ -209,65 +245,79 @@ function flattenKeyTree(
   const seen = new Set<string>();
 
   for (const [rawKey, value] of Object.entries(tree)) {
-    const keyParts = rawKey.split("/");
-    const fullParts = [...prefix, ...keyParts];
+    const fullParts = [...prefix, ...rawKey.split("/")];
     const path = fullParts.join("/");
 
-    if (seen.has(path)) {
-      errors.push(`${path}: duplicate flattened path`);
-      continue;
-    }
-    seen.add(path);
+    if (hasSeenPath(path, seen, errors)) continue;
 
     validatePathParts(fullParts, errors);
-
-    if (isConfigRecord(value)) {
-      records.push({
-        path,
-        kind: "config",
-        group: value.group,
-        optional: value.optional ?? false,
-        description: value.description,
-        value: value.value,
-        default: value.default,
-        values: copyDefinedRecord(value.values)
-      });
-      continue;
-    }
-
-    if (isSecretRecord(value)) {
-      records.push({
-        path,
-        kind: "secret",
-        group: value.group,
-        optional: value.optional ?? false,
-        description: value.description,
-        value: value.value,
-        default: value.default,
-        values: copyDefinedRecord(value.values)
-      });
-      continue;
-    }
-
-    if (isScalar(value)) {
-      records.push({
-        path,
-        kind: "config",
-        optional: false,
-        value
-      });
-      continue;
-    }
-
-    if (value == null || typeof value !== "object" || Array.isArray(value)) {
-      errors.push(`${path}: expected scalar, config(...), secret(...), or namespace object`);
-      continue;
-    }
-
-    records.push(...flattenKeyTree(value as KeyTree, errors, fullParts));
+    records.push(...flattenKeyNode(value, path, fullParts, errors));
   }
 
   return records;
+}
+
+function hasSeenPath(path: string, seen: Set<string>, errors: string[]): boolean {
+  if (seen.has(path)) {
+    errors.push(`${path}: duplicate flattened path`);
+    return true;
+  }
+
+  seen.add(path);
+  return false;
+}
+
+function flattenKeyNode(
+  value: KeyNode,
+  path: string,
+  fullParts: string[],
+  errors: string[]
+): NormalizedRecord[] {
+  if (isConfigRecord(value)) return [normalizeConfigRecord(path, value)];
+  if (isSecretRecord(value)) return [normalizeSecretRecord(path, value)];
+  if (isScalar(value)) return [normalizeScalarRecord(path, value)];
+
+  if (!isNamespace(value)) {
+    errors.push(`${path}: expected scalar, config(...), secret(...), or namespace object`);
+    return [];
+  }
+
+  return flattenKeyTree(value as KeyTree, errors, fullParts);
+}
+
+function normalizeConfigRecord(path: string, value: ConfigRecord): NormalizedRecord {
+  return {
+    path,
+    kind: "config",
+    group: value.group,
+    optional: value.optional ?? false,
+    description: value.description,
+    value: value.value,
+    default: value.default,
+    values: copyDefinedRecord(value.values)
+  };
+}
+
+function normalizeSecretRecord(path: string, value: SecretRecord): NormalizedRecord {
+  return {
+    path,
+    kind: "secret",
+    group: value.group,
+    optional: value.optional ?? false,
+    description: value.description,
+    value: value.value,
+    default: value.default,
+    values: copyDefinedRecord(value.values)
+  };
+}
+
+function normalizeScalarRecord(path: string, value: ConfigBinding): NormalizedRecord {
+  return {
+    path,
+    kind: "config",
+    optional: false,
+    value
+  };
 }
 
 function validatePathParts(parts: string[], errors: string[]): void {
@@ -304,55 +354,87 @@ function validateTemplateReferences(
   paths: Set<string>,
   errors: string[]
 ): void {
+  const graph = buildTemplateGraph(records, paths, errors);
+  validateTemplateGraph(graph, errors);
+}
+
+function buildTemplateGraph(
+  records: NormalizedRecord[],
+  paths: Set<string>,
+  errors: string[]
+): Map<string, string[]> {
   const graph = new Map<string, string[]>();
 
   for (const record of records) {
     if (record.kind !== "config") continue;
-
-    const references = [
-      ...extractTemplateReferences(record.value),
-      ...extractTemplateReferences(record.default),
-      ...Object.values(record.values ?? {}).flatMap((value) => extractTemplateReferences(value))
-    ];
-
-    for (const reference of references) {
-      if (!paths.has(reference)) {
-        errors.push(`${record.path}: template references unknown key "${reference}"`);
-      }
-    }
-
-    graph.set(
-      record.path,
-      references.filter((reference) => paths.has(reference))
-    );
+    graph.set(record.path, validateTemplateRecord(record, paths, errors));
   }
 
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const stack: string[] = [];
+  return graph;
+}
 
-  const visit = (path: string): void => {
-    if (visited.has(path)) return;
-    if (visiting.has(path)) {
-      const cycleStart = stack.indexOf(path);
-      const cycle = [...stack.slice(cycleStart), path].join(" -> ");
-      errors.push(`template cycle detected: ${cycle}`);
-      return;
-    }
+function validateTemplateRecord(
+  record: Extract<NormalizedRecord, { kind: "config" }>,
+  paths: Set<string>,
+  errors: string[]
+): string[] {
+  const references = getTemplateReferences(record);
 
-    visiting.add(path);
-    stack.push(path);
-    for (const dependency of graph.get(path) ?? []) {
-      visit(dependency);
+  for (const reference of references) {
+    if (!paths.has(reference)) {
+      errors.push(`${record.path}: template references unknown key "${reference}"`);
     }
-    stack.pop();
-    visiting.delete(path);
-    visited.add(path);
+  }
+
+  return references.filter((reference) => paths.has(reference));
+}
+
+function getTemplateReferences(record: Extract<NormalizedRecord, { kind: "config" }>): string[] {
+  return [
+    ...extractTemplateReferences(record.value),
+    ...extractTemplateReferences(record.default),
+    ...Object.values(record.values ?? {}).flatMap((value) => extractTemplateReferences(value))
+  ];
+}
+
+function validateTemplateGraph(graph: Map<string, string[]>, errors: string[]): void {
+  const state: TemplateVisitState = {
+    visiting: new Set<string>(),
+    visited: new Set<string>(),
+    stack: []
   };
 
   for (const path of graph.keys()) {
-    visit(path);
+    visitTemplatePath(path, graph, state, errors);
   }
+}
+
+function visitTemplatePath(
+  path: string,
+  graph: Map<string, string[]>,
+  state: TemplateVisitState,
+  errors: string[]
+): void {
+  if (state.visited.has(path)) return;
+  if (state.visiting.has(path)) {
+    reportTemplateCycle(path, state.stack, errors);
+    return;
+  }
+
+  state.visiting.add(path);
+  state.stack.push(path);
+  for (const dependency of graph.get(path) ?? []) {
+    visitTemplatePath(dependency, graph, state, errors);
+  }
+  state.stack.pop();
+  state.visiting.delete(path);
+  state.visited.add(path);
+}
+
+function reportTemplateCycle(path: string, stack: string[], errors: string[]): void {
+  const cycleStart = stack.indexOf(path);
+  const cycle = [...stack.slice(cycleStart), path].join(" -> ");
+  errors.push(`template cycle detected: ${cycle}`);
 }
 
 function extractTemplateReferences(value: unknown): string[] {
@@ -392,6 +474,10 @@ function copyDefinedRecord<T>(
 
 function isScalar(value: unknown): value is ConfigBinding {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+function isNamespace(value: unknown): value is KeyNamespace {
+  return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
 function isConfigRecord(value: unknown): value is ConfigRecord {
