@@ -190,16 +190,9 @@ function validateRecords(
   const groupSet = new Set(groups);
 
   for (const record of records) {
-    validateRecordValue(record, errors);
     validateRecordGroup(record, groups, groupSet, errors);
     validateRecordValues(record, envSet, errors);
     validateSecretValue(record, errors);
-  }
-}
-
-function validateRecordValue(record: NormalizedRecord, errors: string[]): void {
-  if (record.value !== undefined && record.default !== undefined) {
-    errors.push(`${record.path}: value and default are mutually exclusive`);
   }
 }
 
@@ -231,7 +224,7 @@ function validateSecretValue(record: NormalizedRecord, errors: string[]): void {
   if (record.kind !== "secret") return;
 
   const hasValues = record.values !== undefined && Object.keys(record.values).length > 0;
-  if (record.value === undefined && record.default === undefined && !hasValues) {
+  if (record.value === undefined && !hasValues) {
     errors.push(`${record.path}: secret requires value, default, or at least one values entry`);
   }
 }
@@ -273,8 +266,8 @@ function flattenKeyNode(
   fullParts: string[],
   errors: string[]
 ): NormalizedRecord[] {
-  if (isConfigRecord(value)) return [normalizeConfigRecord(path, value)];
-  if (isSecretRecord(value)) return [normalizeSecretRecord(path, value)];
+  if (isConfigRecord(value)) return [normalizeConfigRecord(path, value, errors)];
+  if (isSecretRecord(value)) return [normalizeSecretRecord(path, value, errors)];
 
   const scalar = configScalarSchema.safeParse(value);
   if (scalar.success) return [normalizeScalarRecord(path, scalar.data)];
@@ -282,30 +275,48 @@ function flattenKeyNode(
   return flattenKeyTree(value as KeyTree, errors, fullParts);
 }
 
-function normalizeConfigRecord(path: string, value: ConfigRecord): NormalizedRecord {
+function normalizeConfigRecord(
+  path: string,
+  input: ConfigRecord,
+  errors: string[]
+): NormalizedRecord {
   return {
     path,
     kind: "config",
-    group: value.group,
-    optional: value.optional ?? false,
-    description: value.description,
-    value: value.value,
-    default: value.default,
-    values: copyDefinedRecord(value.values)
+    group: input.group,
+    optional: input.optional ?? false,
+    description: input.description,
+    value: resolveBinding(path, input.value, input.default, errors),
+    values: copyDefinedRecord(input.values)
   };
 }
 
-function normalizeSecretRecord(path: string, value: SecretRecord): NormalizedRecord {
+function normalizeSecretRecord(
+  path: string,
+  input: SecretRecord,
+  errors: string[]
+): NormalizedRecord {
   return {
     path,
     kind: "secret",
-    group: value.group,
-    optional: value.optional ?? false,
-    description: value.description,
-    value: value.value,
-    default: value.default,
-    values: copyDefinedRecord(value.values)
+    group: input.group,
+    optional: input.optional ?? false,
+    description: input.description,
+    value: resolveBinding(path, input.value, input.default, errors),
+    values: copyDefinedRecord(input.values)
   };
+}
+
+function resolveBinding<T>(
+  path: string,
+  value: T | undefined,
+  fallback: T | undefined,
+  errors: string[]
+): T | undefined {
+  if (value !== undefined && fallback !== undefined) {
+    errors.push(`${path}: value and default are mutually exclusive`);
+  }
+  return value ?? fallback;
 }
 
 function normalizeScalarRecord(path: string, value: ConfigBinding): NormalizedRecord {
@@ -389,7 +400,6 @@ function validateTemplateRecord(
 function getTemplateReferences(record: Extract<NormalizedRecord, { kind: "config" }>): string[] {
   return [
     ...extractTemplateReferences(record.value),
-    ...extractTemplateReferences(record.default),
     ...Object.values(record.values ?? {}).flatMap((value) => extractTemplateReferences(value))
   ];
 }
