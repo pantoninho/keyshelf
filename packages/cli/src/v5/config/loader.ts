@@ -3,13 +3,33 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
-import { createJiti } from "jiti";
+import { createJiti, type Jiti } from "jiti";
 import { parseAppMapping, type AppMapping } from "../../config/app-mapping.js";
 import { normalizeConfig, validateAppMappingReferences } from "./schema.js";
 import type { KeyshelfConfig, NormalizedConfig } from "./types.js";
 
 const CONFIG_FILE = "keyshelf.config.ts";
 const APP_MAPPING_FILE = ".env.keyshelf";
+
+let cachedJiti: Jiti | undefined;
+
+function getJiti(): Jiti {
+  if (cachedJiti === undefined) {
+    // Pin `keyshelf/config` to the running CLI build. If we let jiti resolve via
+    // node_modules, a user with a different keyshelf version installed would get
+    // factories whose `__kind` literals are produced by *that* package's source.
+    // The discriminated unions in schema.ts match by string equality, so values
+    // would parse — until the schemas drift. This alias keeps factory output and
+    // validators in lockstep regardless of what's installed.
+    const configModulePath = fileURLToPath(new URL("./index.js", import.meta.url));
+    cachedJiti = createJiti(import.meta.url, {
+      alias: {
+        "keyshelf/config": configModulePath
+      }
+    });
+  }
+  return cachedJiti;
+}
 
 export interface LoadedV5Config {
   rootDir: string;
@@ -70,19 +90,7 @@ export async function loadV5Config(
 }
 
 async function importConfig(configPath: string): Promise<KeyshelfConfig> {
-  // Pin `keyshelf/config` to the running CLI build. If we let jiti resolve via
-  // node_modules, a user with a different keyshelf version installed would get
-  // factories whose `__kind` literals are produced by *that* package's source.
-  // The discriminated unions in schema.ts match by string equality, so values
-  // would parse — until the schemas drift. This alias keeps factory output and
-  // validators in lockstep regardless of what's installed.
-  const configModulePath = fileURLToPath(new URL("./index.js", import.meta.url));
-  const jiti = createJiti(import.meta.url, {
-    alias: {
-      "keyshelf/config": configModulePath
-    }
-  });
-  return await jiti.import<KeyshelfConfig>(configPath, { default: true });
+  return await getJiti().import<KeyshelfConfig>(configPath, { default: true });
 }
 
 async function loadAppMapping(mappingPath: string, required: boolean): Promise<AppMapping[]> {
