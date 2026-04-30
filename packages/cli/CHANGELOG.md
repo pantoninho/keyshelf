@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.6.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v4.5.0...keyshelf-v4.6.0) (2026-04-30)
+
+
+### Features
+
+* implement v5 phase 2 config loader ([#82](https://github.com/pantoninho/keyshelf/issues/82)) ([d96194f](https://github.com/pantoninho/keyshelf/commit/d96194f2836ca8b4072ca9150fd81b2a4bffed78))
+* **v5:** scaffold phase 1 entrypoint ([#80](https://github.com/pantoninho/keyshelf/issues/80)) ([f49969d](https://github.com/pantoninho/keyshelf/commit/f49969dbe379f5eccd6c02339918395368adfebc))
+
 ## [4.5.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v4.4.0...keyshelf-v4.5.0) (2026-04-27)
 
 
