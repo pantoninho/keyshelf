@@ -192,10 +192,38 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          envs: ["dev", "production"],
+          keys: {
+            db: {
+              host: "localhost",
+              url: config({
+                values: { production: "postgres://${db/host}/${db/typo}" }
+              })
+            }
+          }
+        })
+      )
+    ).toThrow('template references unknown key "db/typo"');
+
+    expect(() =>
+      normalizeConfig(
+        defineConfig({
           envs: ["dev"],
           keys: {
             a: config({ value: "${b}" }),
             b: config({ value: "${a}" })
+          }
+        })
+      )
+    ).toThrow("template cycle detected");
+
+    expect(() =>
+      normalizeConfig(
+        defineConfig({
+          envs: ["dev", "production"],
+          keys: {
+            a: config({ values: { production: "${b}" } }),
+            b: config({ values: { production: "${a}" } })
           }
         })
       )
