@@ -230,9 +230,22 @@ describe("v5 config factories and validation", () => {
 
     expect(() =>
       validateAppMappingReferences(
-        [{ envVar: "DB_URL", keyPaths: ["db/host", "db/password"] }],
+        [
+          {
+            envVar: "DB_URL",
+            template: "postgres://${db/host}/${db/password}",
+            keyPaths: ["db/host", "db/password"]
+          }
+        ],
         normalized.keys
       )
     ).toThrow('DB_URL: references unknown key "db/password"');
+
+    expect(() =>
+      validateAppMappingReferences(
+        [{ envVar: "DB_PASSWORD", keyPath: "db/password" }],
+        normalized.keys
+      )
+    ).toThrow('DB_PASSWORD: references unknown key "db/password"');
   });
 });

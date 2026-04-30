@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isTemplateMapping, type AppMapping } from "../../config/app-mapping.js";
 import type {
   BuiltinProviderRef,
   ConfigBinding,
@@ -160,14 +161,14 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
 }
 
 export function validateAppMappingReferences(
-  mappings: Array<{ envVar: string; keyPath?: string; keyPaths?: string[] }>,
+  mappings: AppMapping[],
   flattenedKeys: NormalizedRecord[]
 ): void {
   const paths = new Set(flattenedKeys.map((record) => record.path));
   const errors: string[] = [];
 
   for (const mapping of mappings) {
-    const references = mapping.keyPaths ?? (mapping.keyPath !== undefined ? [mapping.keyPath] : []);
+    const references = isTemplateMapping(mapping) ? mapping.keyPaths : [mapping.keyPath];
     for (const reference of references) {
       if (!paths.has(reference)) {
         errors.push(`${mapping.envVar}: references unknown key "${reference}"`);
