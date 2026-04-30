@@ -279,11 +279,6 @@ function flattenKeyNode(
   const scalar = configScalarSchema.safeParse(value);
   if (scalar.success) return [normalizeScalarRecord(path, scalar.data)];
 
-  if (!isNamespace(value)) {
-    errors.push(`${path}: expected scalar, config(...), secret(...), or namespace object`);
-    return [];
-  }
-
   return flattenKeyTree(value as KeyTree, errors, fullParts);
 }
 
@@ -474,34 +469,23 @@ function copyDefinedRecord<T>(
   return copy;
 }
 
-function isNamespace(value: unknown): value is KeyNamespace {
-  return value != null && typeof value === "object" && !Array.isArray(value);
-}
-
 function isConfigRecord(value: unknown): value is ConfigRecord {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    (value as { __kind?: unknown }).__kind === "config"
-  );
+  return getKind(value) === "config";
 }
 
 function isSecretRecord(value: unknown): value is SecretRecord {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    (value as { __kind?: unknown }).__kind === "secret"
-  );
+  return getKind(value) === "secret";
 }
 
 export function isProviderRef(value: unknown): value is BuiltinProviderRef {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    typeof (value as { __kind?: unknown }).__kind === "string" &&
-    (value as { __kind: string }).__kind.startsWith("provider:")
-  );
+  const kind = getKind(value);
+  return typeof kind === "string" && kind.startsWith("provider:");
+}
+
+function getKind(value: unknown): unknown {
+  if (value == null) return undefined;
+  if (typeof value !== "object") return undefined;
+  if (Array.isArray(value)) return undefined;
+
+  return (value as { __kind?: unknown }).__kind;
 }
