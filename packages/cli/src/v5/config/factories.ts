@@ -1,7 +1,6 @@
 import type {
   AgeProviderOptions,
   BuiltinProviderRef,
-  ConfigRecord,
   ConfigRecordInput,
   DefineConfigInput,
   GcpProviderOptions,
@@ -9,7 +8,6 @@ import type {
   KeyshelfConfig,
   KeyTree,
   ProviderRef,
-  SecretRecord,
   SecretRecordInput,
   SopsProviderOptions
 } from "./types.js";
