@@ -12,7 +12,8 @@ import type {
   SelectedV5Record,
   V5KeyResolutionStatus,
   V5Resolution,
-  V5ValidationError
+  V5TopLevelError,
+  V5ValidationResult
 } from "./types.js";
 
 const TEMPLATE_RE = /(?<!\$)\$\{([^}]+)\}/g;
@@ -31,10 +32,27 @@ export async function resolve(options: ResolveV5Options): Promise<ResolvedV5Key[
   return (await resolveWithStatus(options)).resolved;
 }
 
-export async function validate(options: ResolveV5Options): Promise<V5ValidationError[]> {
-  const resolution = await resolveWithStatus(options);
+export async function validate(options: ResolveV5Options): Promise<V5ValidationResult> {
+  const topLevelErrors: V5TopLevelError[] = [];
 
-  return resolution.statuses
+  const envError = checkValidEnv(options);
+  if (envError !== undefined) topLevelErrors.push(envError);
+
+  const groupCheck = checkGroupFilter(options.config, options.groups);
+  topLevelErrors.push(...groupCheck.errors);
+
+  if (topLevelErrors.length > 0) {
+    return { topLevelErrors, keyErrors: [] };
+  }
+
+  const selected = selectRecords(options.config, options.groups, options.filters);
+  const envRequiredError = checkEnvProvidedWhenRequired(selected, options.envName);
+  if (envRequiredError !== undefined) {
+    return { topLevelErrors: [envRequiredError], keyErrors: [] };
+  }
+
+  const resolution = await resolveWithStatus(options);
+  const keyErrors = resolution.statuses
     .filter((status): status is Extract<V5KeyResolutionStatus, { status: "error" }> => {
       return status.status === "error";
     })
@@ -43,6 +61,8 @@ export async function validate(options: ResolveV5Options): Promise<V5ValidationE
       message: status.message,
       error: status.error
     }));
+
+  return { topLevelErrors: [], keyErrors };
 }
 
 export async function resolveWithStatus(options: ResolveV5Options): Promise<V5Resolution> {
@@ -164,20 +184,34 @@ function selectRecords(
 }
 
 function normalizeGroupFilter(config: NormalizedConfig, groups: string[] | undefined): Set<string> {
+  const { errors, groupSet } = checkGroupFilter(config, groups);
+  if (errors.length > 0) throw new Error(errors[0].message);
+  return groupSet;
+}
+
+function checkGroupFilter(
+  config: NormalizedConfig,
+  groups: string[] | undefined
+): { errors: V5TopLevelError[]; groupSet: Set<string> } {
   const groupNames = [...new Set(groups ?? [])];
-  if (groupNames.length === 0) return new Set();
+  if (groupNames.length === 0) return { errors: [], groupSet: new Set() };
+
   if (config.groups.length === 0) {
-    throw new Error("--group cannot be used because this config declares no groups");
+    return {
+      errors: [{ message: "--group cannot be used because this config declares no groups" }],
+      groupSet: new Set()
+    };
   }
 
   const declaredGroups = new Set(config.groups);
+  const errors: V5TopLevelError[] = [];
   for (const group of groupNames) {
     if (!declaredGroups.has(group)) {
-      throw new Error(`Unknown group "${group}"`);
+      errors.push({ message: `Unknown group "${group}"` });
     }
   }
 
-  return new Set(groupNames);
+  return { errors, groupSet: new Set(groupNames.filter((g) => declaredGroups.has(g))) };
 }
 
 function normalizePathFilters(filters: string[] | undefined): string[] {
@@ -202,27 +236,39 @@ function matchesPathPrefix(path: string, prefix: string): boolean {
 }
 
 function assertValidEnv(options: ResolveV5Options): void {
-  if (options.envName === undefined) return;
-  if (options.config.envs.includes(options.envName)) return;
-  throw new Error(`Unknown env "${options.envName}"`);
+  const error = checkValidEnv(options);
+  if (error !== undefined) throw new Error(error.message);
+}
+
+function checkValidEnv(options: ResolveV5Options): V5TopLevelError | undefined {
+  if (options.envName === undefined) return undefined;
+  if (options.config.envs.includes(options.envName)) return undefined;
+  return { message: `Unknown env "${options.envName}"` };
 }
 
 function assertEnvProvidedWhenRequired(
   selected: SelectedV5Record[],
   envName: string | undefined
 ): void {
-  if (envName !== undefined) return;
+  const error = checkEnvProvidedWhenRequired(selected, envName);
+  if (error !== undefined) throw new Error(error.message);
+}
+
+function checkEnvProvidedWhenRequired(
+  selected: SelectedV5Record[],
+  envName: string | undefined
+): V5TopLevelError | undefined {
+  if (envName !== undefined) return undefined;
 
   const envScopedRecord = selected
     .filter((entry) => entry.selected)
     .map((entry) => entry.record)
     .find((record) => hasValuesWithoutFallback(record));
 
-  if (envScopedRecord !== undefined) {
-    throw new Error(
-      `--env is required because selected key "${envScopedRecord.path}" has env-specific values and no fallback`
-    );
-  }
+  if (envScopedRecord === undefined) return undefined;
+  return {
+    message: `--env is required because selected key "${envScopedRecord.path}" has env-specific values and no fallback`
+  };
 }
 
 function hasValuesWithoutFallback(record: NormalizedRecord): boolean {
@@ -352,10 +398,7 @@ function skippedEnvVar(
   };
 }
 
-function statusToSkipReason(
-  keyPath: string,
-  status: V5KeyResolutionStatus | undefined
-): string {
+function statusToSkipReason(keyPath: string, status: V5KeyResolutionStatus | undefined): string {
   if (status?.status === "filtered") return `referenced key '${keyPath}' is filtered out`;
   if (status?.status === "skipped") return `referenced key '${keyPath}' is unavailable`;
   if (status?.status === "error") {
