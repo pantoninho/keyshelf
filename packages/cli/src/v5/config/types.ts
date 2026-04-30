@@ -123,6 +123,9 @@ export interface KeyshelfConfig<
   envs: readonly EnvName[];
   groups?: readonly GroupName[];
   keys: KeyTree<EnvName, GroupName>;
+  // Phantom: carries the inferred union of flattened key paths for callers
+  // that index into `KeyshelfConfig<...>["__paths"]`. Never set at runtime —
+  // strict() parsing would reject it — and `defineConfig` does not assign it.
   __paths?: Path;
 }
 
@@ -134,7 +137,6 @@ export type NormalizedRecord =
       optional: boolean;
       description?: string;
       value?: ConfigBinding;
-      default?: ConfigBinding;
       values?: Record<string, ConfigBinding>;
     }
   | {
@@ -144,7 +146,6 @@ export type NormalizedRecord =
       optional: boolean;
       description?: string;
       value?: BuiltinProviderRef;
-      default?: BuiltinProviderRef;
       values?: Record<string, BuiltinProviderRef>;
     };
 
