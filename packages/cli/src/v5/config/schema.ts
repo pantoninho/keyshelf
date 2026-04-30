@@ -167,7 +167,9 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
   validateTemplateReferences(flattened, paths, errors);
 
   if (errors.length > 0) {
-    throw new Error(`Invalid keyshelf.config.ts:\n${errors.map((error) => `- ${error}`).join("\n")}`);
+    throw new Error(
+      `Invalid keyshelf.config.ts:\n${errors.map((error) => `- ${error}`).join("\n")}`
+    );
   }
 
   return {
@@ -198,7 +200,11 @@ export function validateAppMappingReferences(
   }
 }
 
-function flattenKeyTree(tree: KeyTree, errors: string[], prefix: string[] = []): NormalizedRecord[] {
+function flattenKeyTree(
+  tree: KeyTree,
+  errors: string[],
+  prefix: string[] = []
+): NormalizedRecord[] {
   const records: NormalizedRecord[] = [];
   const seen = new Set<string>();
 
@@ -315,7 +321,10 @@ function validateTemplateReferences(
       }
     }
 
-    graph.set(record.path, references.filter((reference) => paths.has(reference)));
+    graph.set(
+      record.path,
+      references.filter((reference) => paths.has(reference))
+    );
   }
 
   const visiting = new Set<string>();
@@ -367,7 +376,9 @@ function checkUnique(label: string, values: readonly string[], errors: string[])
   }
 }
 
-function copyDefinedRecord<T>(values: Partial<Record<string, T>> | undefined): Record<string, T> | undefined {
+function copyDefinedRecord<T>(
+  values: Partial<Record<string, T>> | undefined
+): Record<string, T> | undefined {
   if (values === undefined) return undefined;
 
   const copy: Record<string, T> = {};

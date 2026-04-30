@@ -43,8 +43,10 @@ export async function loadV5Config(
   appDir: string,
   options: LoadV5ConfigOptions = {}
 ): Promise<LoadedV5Config> {
-  const explicitConfigPath = options.configPath === undefined ? undefined : resolve(options.configPath);
-  const rootDir = explicitConfigPath === undefined ? findV5RootDir(appDir) : dirname(explicitConfigPath);
+  const explicitConfigPath =
+    options.configPath === undefined ? undefined : resolve(options.configPath);
+  const rootDir =
+    explicitConfigPath === undefined ? findV5RootDir(appDir) : dirname(explicitConfigPath);
   const configPath = explicitConfigPath ?? join(rootDir, CONFIG_FILE);
 
   const started = performance.now();

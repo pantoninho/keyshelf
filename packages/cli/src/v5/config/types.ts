@@ -34,15 +34,19 @@ export interface BaseRecord<GroupName extends string = string> {
   description?: string;
 }
 
-export interface ConfigRecordInput<EnvName extends string = string, GroupName extends string = string>
-  extends BaseRecord<GroupName> {
+export interface ConfigRecordInput<
+  EnvName extends string = string,
+  GroupName extends string = string
+> extends BaseRecord<GroupName> {
   value?: ConfigBinding;
   default?: ConfigBinding;
   values?: Partial<Record<EnvName, ConfigBinding>>;
 }
 
-export interface SecretRecordInput<EnvName extends string = string, GroupName extends string = string>
-  extends BaseRecord<GroupName> {
+export interface SecretRecordInput<
+  EnvName extends string = string,
+  GroupName extends string = string
+> extends BaseRecord<GroupName> {
   value?: BuiltinProviderRef;
   default?: BuiltinProviderRef;
   values?: Partial<Record<EnvName, BuiltinProviderRef>>;
