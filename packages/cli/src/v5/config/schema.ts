@@ -243,29 +243,16 @@ function flattenKeyTree(
   prefix: string[] = []
 ): NormalizedRecord[] {
   const records: NormalizedRecord[] = [];
-  const seen = new Set<string>();
 
   for (const [rawKey, value] of Object.entries(tree)) {
     const fullParts = [...prefix, ...rawKey.split("/")];
     const path = fullParts.join("/");
-
-    if (hasSeenPath(path, seen, errors)) continue;
 
     validatePathParts(fullParts, errors);
     records.push(...flattenKeyNode(value, path, fullParts, errors));
   }
 
   return records;
-}
-
-function hasSeenPath(path: string, seen: Set<string>, errors: string[]): boolean {
-  if (seen.has(path)) {
-    errors.push(`${path}: duplicate flattened path`);
-    return true;
-  }
-
-  seen.add(path);
-  return false;
 }
 
 function flattenKeyNode(

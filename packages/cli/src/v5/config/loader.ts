@@ -70,6 +70,12 @@ export async function loadV5Config(
 }
 
 async function importConfig(configPath: string): Promise<KeyshelfConfig> {
+  // Pin `keyshelf/config` to the running CLI build. If we let jiti resolve via
+  // node_modules, a user with a different keyshelf version installed would get
+  // factories whose `__kind` literals are produced by *that* package's source.
+  // The discriminated unions in schema.ts match by string equality, so values
+  // would parse — until the schemas drift. This alias keeps factory output and
+  // validators in lockstep regardless of what's installed.
   const configModulePath = fileURLToPath(new URL("./index.js", import.meta.url));
   const jiti = createJiti(import.meta.url, {
     alias: {

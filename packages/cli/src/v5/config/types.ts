@@ -123,6 +123,9 @@ export interface KeyshelfConfig<
   envs: readonly EnvName[];
   groups?: readonly GroupName[];
   keys: KeyTree<EnvName, GroupName>;
+  // Phantom: carries the inferred union of flattened key paths for callers
+  // that index into `KeyshelfConfig<...>["__paths"]`. Never set at runtime —
+  // strict() parsing would reject it — and `defineConfig` does not assign it.
   __paths?: Path;
 }
 
