@@ -14,6 +14,6 @@ export function createV5Program(): Command {
 
 function createStatusCommand(): Command {
   return new Command("status").description("Show v5 implementation status").action(() => {
-    console.log("keyshelf v5 phase 1 scaffold is installed");
+    console.log("keyshelf v5 phase 2 config loader is installed");
   });
 }
