@@ -80,19 +80,22 @@ describe("v5 resolver", () => {
       })
     );
 
-    const errors = await validate({
+    const result = await validate({
       config: normalized,
       envName: "dev",
       rootDir: "/repo",
       registry: registry()
     });
 
-    expect(errors).toMatchObject([
-      {
-        path: "required",
-        message: 'No value for required key "required"'
-      }
-    ]);
+    expect(result).toMatchObject({
+      topLevelErrors: [],
+      keyErrors: [
+        {
+          path: "required",
+          message: 'No value for required key "required"'
+        }
+      ]
+    });
 
     const resolution = await resolveWithStatus({
       config: normalized,
@@ -337,12 +340,109 @@ describe("v5 resolver", () => {
       })
     ).resolves.toEqual([]);
 
-    const errors = await validate({
+    const result = await validate({
       config: normalized,
       envName: "dev",
       rootDir: "/repo",
       registry: registry(authProvider)
     });
-    expect(errors).toMatchObject([{ path: "token", message: "auth failed" }]);
+    expect(result).toMatchObject({
+      topLevelErrors: [],
+      keyErrors: [{ path: "token", message: "auth failed" }]
+    });
+  });
+
+  it("collects unknown env, unknown groups, and missing --env as topLevelErrors", async () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        envs: ["dev", "production"],
+        groups: ["app", "ci"],
+        keys: {
+          app: config({ group: "app", value: "envless" }),
+          ci: config({ group: "ci", values: { production: "ci-prod" } })
+        }
+      })
+    );
+
+    const unknownEnv = await validate({
+      config: normalized,
+      envName: "prod",
+      rootDir: "/repo",
+      registry: registry()
+    });
+    expect(unknownEnv).toMatchObject({
+      topLevelErrors: [{ message: 'Unknown env "prod"' }],
+      keyErrors: []
+    });
+
+    const unknownGroups = await validate({
+      config: normalized,
+      groups: ["does-not-exist", "also-missing"],
+      envName: "dev",
+      rootDir: "/repo",
+      registry: registry()
+    });
+    expect(unknownGroups).toMatchObject({
+      topLevelErrors: [
+        { message: 'Unknown group "does-not-exist"' },
+        { message: 'Unknown group "also-missing"' }
+      ],
+      keyErrors: []
+    });
+
+    const groupless = normalizeConfig(defineConfig({ envs: ["dev"], keys: { app: "keyshelf" } }));
+    const groupOnGroupless = await validate({
+      config: groupless,
+      groups: ["app"],
+      envName: "dev",
+      rootDir: "/repo",
+      registry: registry()
+    });
+    expect(groupOnGroupless).toMatchObject({
+      topLevelErrors: [
+        { message: "--group cannot be used because this config declares no groups" }
+      ],
+      keyErrors: []
+    });
+
+    const envRequired = await validate({
+      config: normalized,
+      groups: ["ci"],
+      rootDir: "/repo",
+      registry: registry()
+    });
+    expect(envRequired).toMatchObject({
+      topLevelErrors: [
+        {
+          message:
+            '--env is required because selected key "ci" has env-specific values and no fallback'
+        }
+      ],
+      keyErrors: []
+    });
+  });
+
+  it("resolve still throws on top-level errors (unchanged fast-fail behavior)", async () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        envs: ["dev"],
+        groups: ["app"],
+        keys: { app: config({ group: "app", value: "k" }) }
+      })
+    );
+
+    await expect(
+      resolve({ config: normalized, envName: "prod", rootDir: "/repo", registry: registry() })
+    ).rejects.toThrow('Unknown env "prod"');
+
+    await expect(
+      resolve({
+        config: normalized,
+        groups: ["ci"],
+        envName: "dev",
+        rootDir: "/repo",
+        registry: registry()
+      })
+    ).rejects.toThrow('Unknown group "ci"');
   });
 });

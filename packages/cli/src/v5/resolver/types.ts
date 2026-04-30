@@ -12,6 +12,16 @@ export interface V5ValidationError {
   error?: Error;
 }
 
+export interface V5TopLevelError {
+  message: string;
+  error?: Error;
+}
+
+export interface V5ValidationResult {
+  topLevelErrors: V5TopLevelError[];
+  keyErrors: V5ValidationError[];
+}
+
 export type V5KeyResolutionStatus =
   | {
       path: string;
