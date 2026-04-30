@@ -12,6 +12,7 @@ import type {
 
 const PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const TEMPLATE_RE = /(?<!\$)\$\{([^}]+)\}/g;
+const CONFIG_SCALAR_TYPES = new Set(["string", "number", "boolean"]);
 
 const configScalarSchema = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -473,7 +474,7 @@ function copyDefinedRecord<T>(
 }
 
 function isScalar(value: unknown): value is ConfigBinding {
-  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+  return CONFIG_SCALAR_TYPES.has(typeof value);
 }
 
 function isNamespace(value: unknown): value is KeyNamespace {
