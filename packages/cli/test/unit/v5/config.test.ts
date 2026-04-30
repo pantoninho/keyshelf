@@ -102,6 +102,27 @@ describe("v5 config factories and validation", () => {
     ).toThrow("secret requires value, default, or at least one values entry");
   });
 
+  it("rejects empty key trees and namespaces", () => {
+    expect(() =>
+      normalizeConfig({
+        __kind: "keyshelf:config",
+        envs: ["dev"],
+        keys: {}
+      })
+    ).toThrow("keys must contain at least one entry");
+
+    expect(() =>
+      normalizeConfig(
+        defineConfig({
+          envs: ["dev"],
+          keys: {
+            db: {}
+          }
+        })
+      )
+    ).toThrow("key namespaces must not be empty");
+  });
+
   it("rejects invalid provider options", () => {
     expect(() =>
       normalizeConfig(

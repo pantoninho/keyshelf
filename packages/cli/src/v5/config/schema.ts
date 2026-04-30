@@ -103,6 +103,9 @@ const keyNodeSchema: z.ZodType<KeyNode> = z.lazy(() =>
     secretRecordSchema,
     z
       .record(z.string(), keyNodeSchema)
+      .refine((value) => Object.keys(value).length > 0, {
+        message: "key namespaces must not be empty"
+      })
       .refine((value) => !Object.hasOwn(value, "__kind"), {
         message: "factory objects with __kind must match their declared schema"
       })
@@ -114,7 +117,9 @@ const keyshelfConfigSchema = z
     __kind: z.literal("keyshelf:config"),
     envs: z.array(z.string().min(1)).nonempty(),
     groups: z.array(z.string().min(1)).optional(),
-    keys: z.record(z.string(), keyNodeSchema)
+    keys: z.record(z.string(), keyNodeSchema).refine((value) => Object.keys(value).length > 0, {
+      message: "keys must contain at least one entry"
+    })
   })
   .strict();
 
