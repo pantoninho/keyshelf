@@ -9,12 +9,12 @@ describe("createV5Program", () => {
     expect(program.commands.map((command) => command.name())).toEqual(["status"]);
   });
 
-  it("reports phase 1 status", async () => {
+  it("reports phase 2 status", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
     await createV5Program().parseAsync(["node", "keyshelf-next", "status"]);
 
-    expect(log).toHaveBeenCalledWith("keyshelf v5 phase 1 scaffold is installed");
+    expect(log).toHaveBeenCalledWith("keyshelf v5 phase 2 config loader is installed");
     log.mockRestore();
   });
 });

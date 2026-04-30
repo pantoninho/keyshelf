@@ -22,6 +22,10 @@
     },
     "./bin": "./dist/bin/keyshelf.js",
     "./bin-next": "./dist/bin/keyshelf-next.js",
+    "./config": {
+      "types": "./dist/v5/config/index.d.ts",
+      "import": "./dist/src/v5/config/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -46,7 +50,9 @@
     "age-encryption": "^0.3.0",
     "commander": "^14.0.3",
     "cross-spawn": "^7.0.6",
-    "js-yaml": "^4.1.1"
+    "jiti": "^2.6.1",
+    "js-yaml": "^4.1.1",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",
