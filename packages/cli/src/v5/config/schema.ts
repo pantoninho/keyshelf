@@ -12,7 +12,6 @@ import type {
 
 const PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const TEMPLATE_RE = /(?<!\$)\$\{([^}]+)\}/g;
-const CONFIG_SCALAR_TYPES = new Set(["string", "number", "boolean"]);
 
 const configScalarSchema = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -276,7 +275,9 @@ function flattenKeyNode(
 ): NormalizedRecord[] {
   if (isConfigRecord(value)) return [normalizeConfigRecord(path, value)];
   if (isSecretRecord(value)) return [normalizeSecretRecord(path, value)];
-  if (isScalar(value)) return [normalizeScalarRecord(path, value)];
+
+  const scalar = configScalarSchema.safeParse(value);
+  if (scalar.success) return [normalizeScalarRecord(path, scalar.data)];
 
   if (!isNamespace(value)) {
     errors.push(`${path}: expected scalar, config(...), secret(...), or namespace object`);
@@ -471,10 +472,6 @@ function copyDefinedRecord<T>(
     }
   }
   return copy;
-}
-
-function isScalar(value: unknown): value is ConfigBinding {
-  return CONFIG_SCALAR_TYPES.has(typeof value);
 }
 
 function isNamespace(value: unknown): value is KeyNamespace {
