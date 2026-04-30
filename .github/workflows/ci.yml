@@ -38,6 +38,8 @@ jobs:
 
       - run: npm run typecheck
 
+      - run: npm run typecheck:examples
+
       - run: npm test
 
   release-please:

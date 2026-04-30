@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck:examples": "npm run build -w keyshelf && tsc -p examples"
   },
   "license": "MIT",
   "engines": {
