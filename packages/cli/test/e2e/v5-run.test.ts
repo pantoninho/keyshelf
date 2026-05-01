@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, beforeAll } from "vitest";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { generateIdentity } from "../../src/providers/age.js";
 import { V5_CLI, TSX } from "./helpers/v5-cli.js";
 
@@ -152,8 +152,8 @@ describe("keyshelf-next run (groups)", () => {
     expect(secretsDir).toContain(root);
   });
 
-  it("--group app skips ci/token mapping with stderr warning", () => {
-    const result = execFileSync(
+  it("--group app skips ci/token mapping with stderr warning naming the active filter", () => {
+    const result = spawnSync(
       TSX,
       [
         V5_CLI,
@@ -167,9 +167,13 @@ describe("keyshelf-next run (groups)", () => {
         "-e",
         "console.log(JSON.stringify({h: process.env.APP_HOST ?? null, t: process.env.CI_TOKEN ?? null}))"
       ],
-      { cwd: root, encoding: "utf-8", stdio: ["inherit", "pipe", "pipe"] }
+      { cwd: root, encoding: "utf-8" }
     );
-    expect(JSON.parse(result.trim())).toEqual({ h: "localhost", t: null });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout.trim())).toEqual({ h: "localhost", t: null });
+    expect(result.stderr).toContain(
+      "keyshelf: skipping CI_TOKEN — referenced key 'ci/token' is filtered out by --group=app"
+    );
   });
 
   it("--group ci resolves the secret", () => {

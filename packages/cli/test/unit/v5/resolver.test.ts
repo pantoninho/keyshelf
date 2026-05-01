@@ -108,7 +108,7 @@ describe("v5 resolver", () => {
     });
     expect(resolution.statusByPath.get("optional")).toMatchObject({
       status: "skipped",
-      reason: "optional key 'optional' has no value"
+      cause: { type: "optional-no-value" }
     });
   });
 
@@ -263,7 +263,11 @@ describe("v5 resolver", () => {
     });
     expect(appOnly.statusByPath.get("db/url")).toMatchObject({
       status: "skipped",
-      reason: "referenced key 'db/password' is filtered out"
+      cause: {
+        type: "template-ref-unavailable",
+        reference: "db/password",
+        referenceCause: { type: "group-filter", activeGroups: ["app"] }
+      }
     });
   });
 
@@ -315,19 +319,19 @@ describe("v5 resolver", () => {
         envVar: "TOKEN",
         status: "skipped",
         keyPath: "ci/token",
-        reason: "referenced key 'ci/token' is filtered out"
+        cause: { type: "group-filter", activeGroups: ["app"] }
       },
       {
         envVar: "COMBINED",
         status: "skipped",
         keyPath: "ci/token",
-        reason: "referenced key 'ci/token' is filtered out"
+        cause: { type: "group-filter", activeGroups: ["app"] }
       },
       {
         envVar: "OPTIONAL",
         status: "skipped",
         keyPath: "app/optional",
-        reason: "referenced key 'app/optional' is unavailable"
+        cause: { type: "optional-no-value" }
       }
     ]);
   });

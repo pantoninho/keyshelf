@@ -12,9 +12,12 @@ import type {
   SelectedV5Record,
   V5KeyResolutionStatus,
   V5Resolution,
+  V5SkipCause,
   V5TopLevelError,
   V5ValidationResult
 } from "./types.js";
+
+export { formatSkipCause } from "./format.js";
 
 const TEMPLATE_RE = /(?<!\$)\$\{([^}]+)\}/g;
 const ESCAPED_TEMPLATE_RE = /\$\$\{/g;
@@ -79,11 +82,11 @@ export async function resolveWithStatus(options: ResolveV5Options): Promise<V5Re
   const resolving = new Set<string>();
 
   for (const entry of selected) {
-    if (!entry.selected) {
+    if (!entry.selected && entry.cause !== undefined) {
       statusByPath.set(entry.record.path, {
         path: entry.record.path,
         status: "filtered",
-        reason: entry.reason ?? "filtered out"
+        cause: entry.cause
       });
     }
   }
@@ -94,11 +97,7 @@ export async function resolveWithStatus(options: ResolveV5Options): Promise<V5Re
 
     const record = selectedByPath.get(path);
     if (record === undefined) {
-      return {
-        path,
-        status: "filtered",
-        reason: `referenced key '${path}' is filtered out`
-      };
+      return toErrorStatus(path, new Error(`unknown key reference "${path}"`));
     }
 
     if (resolving.has(path)) {
@@ -170,15 +169,24 @@ function selectRecords(
   filters: string[] | undefined
 ): SelectedV5Record[] {
   const groupSet = normalizeGroupFilter(config, groups);
+  const activeGroups = [...groupSet];
   const pathPrefixes = normalizePathFilters(filters);
 
   return config.keys.map((record) => {
-    const groupReason = getGroupFilterReason(record, groupSet);
-    if (groupReason !== undefined) return { record, selected: false, reason: groupReason };
-
-    const filterReason = getPathFilterReason(record, pathPrefixes);
-    if (filterReason !== undefined) return { record, selected: false, reason: filterReason };
-
+    if (isExcludedByGroup(record, groupSet)) {
+      return {
+        record,
+        selected: false,
+        cause: { type: "group-filter", activeGroups }
+      };
+    }
+    if (isExcludedByPath(record, pathPrefixes)) {
+      return {
+        record,
+        selected: false,
+        cause: { type: "path-filter", activePrefixes: pathPrefixes }
+      };
+    }
     return { record, selected: true };
   });
 }
@@ -218,17 +226,15 @@ function normalizePathFilters(filters: string[] | undefined): string[] {
   return [...new Set(filters ?? [])].filter((filter) => filter.length > 0);
 }
 
-function getGroupFilterReason(record: NormalizedRecord, groupSet: Set<string>): string | undefined {
-  if (groupSet.size === 0) return undefined;
-  if (record.group === undefined) return undefined;
-  if (groupSet.has(record.group)) return undefined;
-  return `referenced key '${record.path}' is filtered out`;
+function isExcludedByGroup(record: NormalizedRecord, groupSet: Set<string>): boolean {
+  if (groupSet.size === 0) return false;
+  if (record.group === undefined) return false;
+  return !groupSet.has(record.group);
 }
 
-function getPathFilterReason(record: NormalizedRecord, prefixes: string[]): string | undefined {
-  if (prefixes.length === 0) return undefined;
-  if (prefixes.some((prefix) => matchesPathPrefix(record.path, prefix))) return undefined;
-  return `referenced key '${record.path}' is filtered out`;
+function isExcludedByPath(record: NormalizedRecord, prefixes: string[]): boolean {
+  if (prefixes.length === 0) return false;
+  return !prefixes.some((prefix) => matchesPathPrefix(record.path, prefix));
 }
 
 function matchesPathPrefix(path: string, prefix: string): boolean {
@@ -286,7 +292,7 @@ async function resolveSelectedRecord(
       return {
         path: record.path,
         status: "skipped",
-        reason: `optional key '${record.path}' has no value`
+        cause: { type: "optional-no-value" }
       };
     }
     return toErrorStatus(record.path, new Error(`No value for required key "${record.path}"`));
@@ -299,11 +305,22 @@ async function resolveSelectedRecord(
         : await resolveConfigBinding(record.path, binding as ConfigBinding, resolveRecord);
     return { path: record.path, status: "resolved", value };
   } catch (err) {
+    if (err instanceof FilteredTemplateReferenceError) {
+      return {
+        path: record.path,
+        status: "skipped",
+        cause: {
+          type: "template-ref-unavailable",
+          reference: err.reference,
+          referenceCause: err.referenceCause
+        }
+      };
+    }
     if (record.optional && isNotFoundError(err)) {
       return {
         path: record.path,
         status: "skipped",
-        reason: `optional key '${record.path}' was not found`
+        cause: { type: "optional-not-found" }
       };
     }
     return toErrorStatus(record.path, err);
@@ -364,7 +381,7 @@ async function interpolateConfigTemplate(
     }
 
     if (status.status === "filtered" || status.status === "skipped") {
-      throw new FilteredTemplateReferenceError(path, reference, status.reason);
+      throw new FilteredTemplateReferenceError(path, reference, status.cause);
     }
 
     throw new Error(`referenced key "${reference}" could not be resolved: ${status.message}`);
@@ -394,39 +411,28 @@ function skippedEnvVar(
     envVar,
     status: "skipped",
     keyPath,
-    reason: statusToSkipReason(keyPath, status),
+    cause: statusToSkipCause(status),
     mapping
   };
 }
 
-function statusToSkipReason(keyPath: string, status: V5KeyResolutionStatus | undefined): string {
-  if (status?.status === "filtered") return `referenced key '${keyPath}' is filtered out`;
-  if (status?.status === "skipped") return `referenced key '${keyPath}' is unavailable`;
-  if (status?.status === "error") {
-    return `referenced key '${keyPath}' could not be resolved: ${status.message}`;
-  }
-  return `referenced key '${keyPath}' is unavailable`;
+function statusToSkipCause(status: V5KeyResolutionStatus | undefined): V5SkipCause {
+  if (status?.status === "filtered" || status?.status === "skipped") return status.cause;
+  // Defensive fallback — shouldn't be reached with a validated config.
+  return { type: "optional-no-value" };
 }
 
 class FilteredTemplateReferenceError extends Error {
   constructor(
     readonly keyPath: string,
     readonly reference: string,
-    readonly reason: string
+    readonly referenceCause: V5SkipCause
   ) {
-    super(`referenced key "${reference}" is unavailable for "${keyPath}": ${reason}`);
+    super(`referenced key "${reference}" is unavailable for "${keyPath}"`);
   }
 }
 
 function toErrorStatus(path: string, err: unknown): V5KeyResolutionStatus {
-  if (err instanceof FilteredTemplateReferenceError) {
-    return {
-      path,
-      status: "skipped",
-      reason: err.reason
-    };
-  }
-
   return {
     path,
     status: "error",
