@@ -249,3 +249,47 @@ describe.skipIf(!GCP_PROJECT)("keyshelf set (gcp)", { timeout: 30_000 }, () => {
     expect(version.payload?.data?.toString()).toBe("updated-value");
   });
 });
+
+describe.skipIf(!GCP_PROJECT)("keyshelf set (gcp, with name)", { timeout: 30_000 }, () => {
+  let root: string;
+  let client: SecretManagerServiceClient;
+  const envName = `test${Date.now()}n`;
+  const projectName = `proj${Date.now()}`;
+  const createdSecrets: string[] = [];
+
+  beforeAll(async () => {
+    client = createGcpClient();
+    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-gcp-set-name-"));
+    await writeGcpFixture(root, envName, GCP_PROJECT!, { name: projectName });
+  });
+
+  afterAll(async () => {
+    await deleteSecrets(client, createdSecrets);
+  });
+
+  it("namespaces the secret id with the keyshelf name", async () => {
+    execFileSync(
+      TSX,
+      [
+        CLI,
+        "set",
+        "--env",
+        envName,
+        "--provider",
+        "gcp",
+        "--value",
+        "namespaced-value",
+        "db/password"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+
+    const secretName = `projects/${GCP_PROJECT}/secrets/keyshelf__${projectName}__${envName}__db__password`;
+    createdSecrets.push(secretName);
+
+    const [version] = await client.accessSecretVersion({
+      name: `${secretName}/versions/latest`
+    });
+    expect(version.payload?.data?.toString()).toBe("namespaced-value");
+  });
+});

@@ -11,6 +11,7 @@ const APP_MAPPING_FILE = ".env.keyshelf";
 
 export interface LoadedConfig {
   rootDir: string;
+  name?: string;
   schema: KeyDefinition[];
   env: EnvConfig;
   appMapping: AppMapping[];
@@ -95,5 +96,5 @@ export async function loadConfig(
     };
   }
 
-  return { rootDir, schema, env, appMapping };
+  return { rootDir, name: parsed.config.name, schema, env, appMapping };
 }

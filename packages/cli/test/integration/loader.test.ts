@@ -70,6 +70,23 @@ describe("loadConfig", () => {
       { envVar: "DB_PORT", keyPath: "db/port" },
       { envVar: "DB_PASSWORD", keyPath: "db/password" }
     ]);
+    expect(config.name).toBeUndefined();
+  });
+
+  it("exposes top-level name from keyshelf.yaml", async () => {
+    await writeFile(
+      join(root, "keyshelf.yaml"),
+      [
+        "name: my-project",
+        "keys:",
+        "  db:",
+        "    host: localhost",
+        "    port: 5432",
+        '    password: !secret ""'
+      ].join("\n")
+    );
+    const config = await loadConfig(appDir, "production");
+    expect(config.name).toBe("my-project");
   });
 
   it("throws for missing environment file", async () => {

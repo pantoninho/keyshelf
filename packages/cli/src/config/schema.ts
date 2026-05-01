@@ -11,6 +11,7 @@ export interface KeyDefinition {
 }
 
 export interface SchemaConfig {
+  name?: string;
   provider?: ProviderConfig;
 }
 
@@ -32,6 +33,20 @@ export function parseSchema(content: string): ParsedSchema {
   }
 
   const provider = parseProviderBlock(doc["default-provider"]);
+
+  let name: string | undefined;
+  if ("name" in doc && doc.name !== undefined) {
+    if (typeof doc.name !== "string" || doc.name === "") {
+      throw new Error('keyshelf.yaml "name" must be a non-empty string');
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(doc.name)) {
+      throw new Error(
+        'keyshelf.yaml "name" must contain only letters, digits, hyphens, and underscores'
+      );
+    }
+    name = doc.name;
+  }
+
   const flat = flattenKeys(doc.keys as Record<string, unknown>);
   const definitions: KeyDefinition[] = [];
 
@@ -57,5 +72,5 @@ export function parseSchema(content: string): ParsedSchema {
     }
   }
 
-  return { keys: definitions, config: { provider } };
+  return { keys: definitions, config: { name, provider } };
 }

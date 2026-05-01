@@ -154,6 +154,39 @@ describe("resolve", () => {
     });
   });
 
+  it("passes keyshelfName to provider context (default provider)", async () => {
+    const gcp = mockProvider("gcp", "secret");
+    const env: EnvConfig = {
+      defaultProvider: { name: "gcp", options: { project: "my-proj" } },
+      overrides: {}
+    };
+    await resolve({
+      envName: "test",
+      rootDir: "/tmp",
+      schema: [secretKey("db/password")],
+      env,
+      registry: makeRegistry(gcp),
+      keyshelfName: "myapp"
+    });
+    expect(gcp.resolve).toHaveBeenCalledWith(expect.objectContaining({ keyshelfName: "myapp" }));
+  });
+
+  it("passes keyshelfName to provider context (tagged override)", async () => {
+    const gcp = mockProvider("gcp", "secret");
+    const env: EnvConfig = {
+      overrides: { "db/password": { tag: "gcp", config: { name: "db-pass" } } }
+    };
+    await resolve({
+      envName: "test",
+      rootDir: "/tmp",
+      schema: [secretKey("db/password")],
+      env,
+      registry: makeRegistry(gcp),
+      keyshelfName: "myapp"
+    });
+    expect(gcp.resolve).toHaveBeenCalledWith(expect.objectContaining({ keyshelfName: "myapp" }));
+  });
+
   it("throws for required secret with no provider and no override", async () => {
     const env: EnvConfig = { overrides: {} };
     await expect(
