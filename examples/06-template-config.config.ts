@@ -1,6 +1,7 @@
 import { defineConfig, config, secret, age } from "keyshelf/config";
 
 export default defineConfig({
+  name: "example-06-template-config",
   envs: ["dev", "production"],
 
   keys: {
@@ -14,7 +15,7 @@ export default defineConfig({
       port: 5432,
       user: "app",
       password: secret({
-        value: age({ identityFile: "./keys/dev.txt" })
+        value: age({ identityFile: "./keys/dev.txt", secretsDir: "./secrets" })
       }),
 
       url: config({

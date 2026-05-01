@@ -12,12 +12,13 @@ async function createFixture() {
       'import { age, config, defineConfig, secret } from "keyshelf/config";',
       "",
       "export default defineConfig({",
+      '  name: "test",',
       '  envs: ["dev", "production"],',
       '  groups: ["app", "ci"],',
       "  keys: {",
       '    log: { level: "info" },',
       '    "db/host": config({ group: "app", default: "localhost", values: { production: "prod-db" } }),',
-      '    "github/token": secret({ group: "ci", value: age({ identityFile: "./ci.txt" }) })',
+      '    "github/token": secret({ group: "ci", value: age({ identityFile: "./ci.txt", secretsDir: "./secrets" }) })',
       "  }",
       "});"
     ].join("\n")

@@ -8,19 +8,17 @@ export interface ProviderRef<Name extends string = string, Options = unknown> {
 }
 
 export interface AgeProviderOptions {
-  identityFile?: string;
-  recipient?: string;
+  identityFile: string;
+  secretsDir: string;
 }
 
 export interface GcpProviderOptions {
   project: string;
-  secret?: string;
-  version?: string;
 }
 
 export interface SopsProviderOptions {
-  file: string;
-  path?: string;
+  identityFile: string;
+  secretsFile: string;
 }
 
 export type BuiltinProviderRef =
@@ -83,6 +81,7 @@ export interface DefineConfigInput<
     GroupNames[number]
   >
 > {
+  name: string;
   envs: EnvNames;
   groups?: GroupNames;
   keys: Keys;
@@ -120,6 +119,7 @@ export interface KeyshelfConfig<
   Path extends string = string
 > {
   __kind: "keyshelf:config";
+  name: string;
   envs: readonly EnvName[];
   groups?: readonly GroupName[];
   keys: KeyTree<EnvName, GroupName>;
@@ -150,6 +150,7 @@ export type NormalizedRecord =
     };
 
 export interface NormalizedConfig {
+  name: string;
   envs: string[];
   groups: string[];
   keys: NormalizedRecord[];

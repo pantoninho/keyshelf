@@ -1,6 +1,7 @@
 import { defineConfig, config, secret, age, gcp, sops } from "keyshelf/config";
 
 export default defineConfig({
+  name: "example-07-full",
   envs: ["dev", "staging", "production"],
   groups: ["app", "ci", "ops"],
 
@@ -27,9 +28,9 @@ export default defineConfig({
       user: config({ group: "app", value: "app" }),
       password: secret({
         group: "app",
-        default: age({ identityFile: "./keys/dev.txt" }),
+        default: age({ identityFile: "./keys/dev.txt", secretsDir: "./secrets" }),
         values: {
-          staging: sops({ file: "./secrets/staging.yaml", path: "db.password" }),
+          staging: sops({ identityFile: "./keys/sops.txt", secretsFile: "./secrets/staging.json" }),
           production: gcp({ project: "myproj" })
         }
       }),
@@ -53,7 +54,7 @@ export default defineConfig({
       token: secret({
         group: "ci",
         description: "Shared CI token, not env-scoped",
-        value: age({ identityFile: "./keys/ci.txt" })
+        value: age({ identityFile: "./keys/ci.txt", secretsDir: "./secrets" })
       })
     },
 
@@ -65,7 +66,7 @@ export default defineConfig({
         }),
         token: secret({
           group: "ops",
-          value: gcp({ project: "myproj", secret: "grafana-api-token" })
+          value: gcp({ project: "myproj" })
         })
       }
     }

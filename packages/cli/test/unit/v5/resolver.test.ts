@@ -33,6 +33,7 @@ describe("v5 resolver", () => {
     const provider = mockProvider("age", "secret-dev");
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev", "production"],
         keys: {
           host: config({
@@ -41,8 +42,8 @@ describe("v5 resolver", () => {
           }),
           port: 5432,
           token: secret({
-            values: { dev: age({ identityFile: "./dev.txt" }) },
-            default: age({ identityFile: "./shared.txt" })
+            values: { dev: age({ identityFile: "./dev.txt", secretsDir: "./secrets" }) },
+            default: age({ identityFile: "./shared.txt", secretsDir: "./secrets" })
           })
         }
       })
@@ -65,13 +66,15 @@ describe("v5 resolver", () => {
       keyPath: "token",
       envName: "dev",
       rootDir: "/repo",
-      config: { identityFile: "./dev.txt" }
+      config: { identityFile: "./dev.txt", secretsDir: "./secrets" },
+      keyshelfName: "test"
     });
   });
 
   it("reports required missing keys and skips optional keys with no active binding", async () => {
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev", "production"],
         keys: {
           required: config({ values: { production: "prod" } }),
@@ -112,6 +115,7 @@ describe("v5 resolver", () => {
   it("requires env only when a selected key has env-specific values without a fallback", async () => {
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev", "production"],
         groups: ["app", "ci"],
         keys: {
@@ -143,6 +147,7 @@ describe("v5 resolver", () => {
   it("filters by group and path prefix while keeping groupless records shared", async () => {
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev"],
         groups: ["app", "ci"],
         keys: {
@@ -152,7 +157,10 @@ describe("v5 resolver", () => {
             url: config({ group: "app", value: "https://example.test" })
           },
           ci: {
-            token: secret({ group: "ci", value: age({ identityFile: "./ci.txt" }) })
+            token: secret({
+              group: "ci",
+              value: age({ identityFile: "./ci.txt", secretsDir: "./secrets" })
+            })
           }
         }
       })
@@ -176,12 +184,14 @@ describe("v5 resolver", () => {
   it("rejects unknown envs, unknown groups, and group filters on groupless configs", async () => {
     const groupless = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev"],
         keys: { app: "keyshelf" }
       })
     );
     const grouped = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev"],
         groups: ["app"],
         keys: { app: config({ group: "app", value: "keyshelf" }) }
@@ -217,12 +227,16 @@ describe("v5 resolver", () => {
     const provider = mockProvider("age", "s3cr3t");
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev"],
         groups: ["app", "ci"],
         keys: {
           db: {
             host: config({ group: "app", value: "localhost" }),
-            password: secret({ group: "ci", value: age({ identityFile: "./ci.txt" }) }),
+            password: secret({
+              group: "ci",
+              value: age({ identityFile: "./ci.txt", secretsDir: "./secrets" })
+            }),
             url: config({
               group: "app",
               value: "postgres://${db/password}@${db/host}/app"
@@ -256,6 +270,7 @@ describe("v5 resolver", () => {
   it("renders app mappings with per-env-var skip statuses", async () => {
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev"],
         groups: ["app", "ci"],
         keys: {
@@ -264,7 +279,10 @@ describe("v5 resolver", () => {
             optional: config({ group: "app", optional: true })
           },
           ci: {
-            token: secret({ group: "ci", value: age({ identityFile: "./ci.txt" }) })
+            token: secret({
+              group: "ci",
+              value: age({ identityFile: "./ci.txt", secretsDir: "./secrets" })
+            })
           }
         }
       })
@@ -324,9 +342,13 @@ describe("v5 resolver", () => {
 
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev"],
         keys: {
-          token: secret({ optional: true, value: age({ identityFile: "./ci.txt" }) })
+          token: secret({
+            optional: true,
+            value: age({ identityFile: "./ci.txt", secretsDir: "./secrets" })
+          })
         }
       })
     );
@@ -355,6 +377,7 @@ describe("v5 resolver", () => {
   it("collects unknown env, unknown groups, and missing --env as topLevelErrors", async () => {
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev", "production"],
         groups: ["app", "ci"],
         keys: {
@@ -390,7 +413,9 @@ describe("v5 resolver", () => {
       keyErrors: []
     });
 
-    const groupless = normalizeConfig(defineConfig({ envs: ["dev"], keys: { app: "keyshelf" } }));
+    const groupless = normalizeConfig(
+      defineConfig({ name: "test", envs: ["dev"], keys: { app: "keyshelf" } })
+    );
     const groupOnGroupless = await validate({
       config: groupless,
       groups: ["app"],
@@ -425,6 +450,7 @@ describe("v5 resolver", () => {
   it("resolve still throws on top-level errors (unchanged fast-fail behavior)", async () => {
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev"],
         groups: ["app"],
         keys: { app: config({ group: "app", value: "k" }) }

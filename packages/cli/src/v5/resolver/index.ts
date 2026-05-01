@@ -330,9 +330,10 @@ async function resolveProvider(
   const provider = options.registry.get(providerRef.name);
   return provider.resolve({
     keyPath,
-    envName: options.envName ?? "",
+    envName: options.envName,
     rootDir: options.rootDir,
-    config: { ...(providerRef.options as Record<string, unknown>) }
+    config: { ...(providerRef.options as unknown as Record<string, unknown>) },
+    keyshelfName: options.config.name
   });
 }
 

@@ -1,6 +1,7 @@
 import { defineConfig, config, secret, age, gcp } from "keyshelf/config";
 
 export default defineConfig({
+  name: "example-02-env-and-group",
   envs: ["dev", "staging", "production"],
   groups: ["app"],
 
@@ -25,7 +26,7 @@ export default defineConfig({
       }),
       password: secret({
         group: "app",
-        default: age({ identityFile: "./keys/dev.txt" }),
+        default: age({ identityFile: "./keys/dev.txt", secretsDir: "./secrets" }),
         values: {
           production: gcp({ project: "myproj" })
         }
