@@ -21,7 +21,15 @@ function getJiti(): Jiti {
     // The discriminated unions in schema.ts match by string equality, so values
     // would parse — until the schemas drift. This alias keeps factory output and
     // validators in lockstep regardless of what's installed.
-    const configModulePath = fileURLToPath(new URL("./index.js", import.meta.url));
+    // Bundlers (e.g. tsup with noExternal) collapse the v5 config module
+    // into the same file as the loader, so the sibling `./index.js` doesn't
+    // exist at runtime. KEYSHELF_CONFIG_MODULE_PATH lets the bundled host
+    // (e.g. the GitHub Action) point the alias at a sidecar copy.
+    const override = process.env.KEYSHELF_CONFIG_MODULE_PATH;
+    const configModulePath =
+      override !== undefined
+        ? resolve(override)
+        : fileURLToPath(new URL("./index.js", import.meta.url));
     cachedJiti = createJiti(import.meta.url, {
       alias: {
         "keyshelf/config": configModulePath
