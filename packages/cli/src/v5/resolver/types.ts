@@ -22,6 +22,13 @@ export interface V5ValidationResult {
   keyErrors: V5ValidationError[];
 }
 
+export type V5SkipCause =
+  | { type: "group-filter"; activeGroups: readonly string[] }
+  | { type: "path-filter"; activePrefixes: readonly string[] }
+  | { type: "optional-no-value" }
+  | { type: "optional-not-found" }
+  | { type: "template-ref-unavailable"; reference: string; referenceCause: V5SkipCause };
+
 export type V5KeyResolutionStatus =
   | {
       path: string;
@@ -31,12 +38,12 @@ export type V5KeyResolutionStatus =
   | {
       path: string;
       status: "filtered";
-      reason: string;
+      cause: V5SkipCause;
     }
   | {
       path: string;
       status: "skipped";
-      reason: string;
+      cause: V5SkipCause;
     }
   | {
       path: string;
@@ -61,13 +68,13 @@ export type RenderedV5EnvVar =
   | {
       envVar: string;
       status: "skipped";
-      reason: string;
       keyPath: string;
+      cause: V5SkipCause;
       mapping: AppMapping;
     };
 
 export interface SelectedV5Record {
   record: NormalizedRecord;
   selected: boolean;
-  reason?: string;
+  cause?: V5SkipCause;
 }

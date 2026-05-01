@@ -1,6 +1,11 @@
 import { Command } from "commander";
 import { loadV5Config } from "../config/index.js";
-import { renderAppMapping, resolveWithStatus, validate } from "../resolver/index.js";
+import {
+  formatSkipCause,
+  renderAppMapping,
+  resolveWithStatus,
+  validate
+} from "../resolver/index.js";
 import { createDefaultRegistry } from "../../providers/setup.js";
 import { splitList } from "./options.js";
 import type { BuiltinProviderRef, ConfigBinding, NormalizedRecord } from "../config/types.js";
@@ -142,7 +147,8 @@ function describeStatus(
   if (status?.status === "resolved") return status.value;
   if (status?.status === "filtered") return "(filtered)";
   if (status?.status === "skipped") {
-    return record.optional ? "(optional, no value)" : status.reason;
+    if (record.optional) return "(optional, no value)";
+    return `key '${record.path}' ${formatSkipCause(status.cause)}`;
   }
   if (status?.status === "error") return `error: ${status.message}`;
   return "(missing)";

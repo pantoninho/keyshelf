@@ -1,7 +1,12 @@
 import { Command } from "commander";
 import spawn from "cross-spawn";
 import { loadV5Config } from "../config/index.js";
-import { renderAppMapping, resolveWithStatus, validate } from "../resolver/index.js";
+import {
+  formatSkipCause,
+  renderAppMapping,
+  resolveWithStatus,
+  validate
+} from "../resolver/index.js";
 import { createDefaultRegistry } from "../../providers/setup.js";
 import { splitList } from "./options.js";
 
@@ -53,7 +58,9 @@ export const runCommand = new Command("run")
       if (result.status === "rendered") {
         envVars[result.envVar] = result.value;
       } else {
-        console.error(`keyshelf: skipping ${result.envVar} — ${result.reason}`);
+        console.error(
+          `keyshelf: skipping ${result.envVar} — referenced key '${result.keyPath}' ${formatSkipCause(result.cause)}`
+        );
       }
     }
 
