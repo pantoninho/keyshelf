@@ -1,4 +1,8 @@
 import { Command } from "commander";
+import { runCommand } from "./run.js";
+import { lsCommand } from "./ls.js";
+import { setCommand } from "./set.js";
+import { importCommand } from "./import.js";
 
 const V5_VERSION = "5.0.0-alpha.0";
 
@@ -7,13 +11,10 @@ export function createV5Program(): Command {
     .description("Keyshelf v5 development CLI")
     .version(V5_VERSION);
 
-  program.addCommand(createStatusCommand());
+  program.addCommand(runCommand);
+  program.addCommand(lsCommand);
+  program.addCommand(setCommand);
+  program.addCommand(importCommand);
 
   return program;
-}
-
-function createStatusCommand(): Command {
-  return new Command("status").description("Show v5 implementation status").action(() => {
-    console.log("keyshelf v5 phase 2 config loader is installed");
-  });
 }
