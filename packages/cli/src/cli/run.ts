@@ -22,7 +22,8 @@ export const runCommand = new Command("run")
       env: config.env,
       envName: opts.env,
       rootDir: config.rootDir,
-      registry
+      registry,
+      keyshelfName: config.name
     };
 
     const errors = await validate(resolveOpts);

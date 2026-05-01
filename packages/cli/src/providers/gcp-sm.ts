@@ -33,7 +33,7 @@ function isAuthError(err: unknown): boolean {
   return AUTH_ERROR_PATTERNS.some((pattern) => msg.includes(pattern));
 }
 
-function toSecretId(
+export function toSecretId(
   keyshelfName: string | undefined,
   envName: string | undefined,
   keyPath: string

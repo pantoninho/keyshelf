@@ -144,7 +144,8 @@ async function printRevealed(
     env: config.env,
     envName,
     rootDir: config.rootDir,
-    registry
+    registry,
+    keyshelfName: config.name
   });
 
   const resolvedMap = new Map(resolved.map((r) => [r.path, r.value]));

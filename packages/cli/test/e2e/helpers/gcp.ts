@@ -8,11 +8,16 @@ export function createGcpClient() {
   return new SecretManagerServiceClient();
 }
 
-export async function writeGcpFixture(root: string, envName: string, project: string) {
-  await writeFile(
-    join(root, "keyshelf.yaml"),
-    ["keys:", "  db:", "    host: localhost", '    password: !secret ""'].join("\n")
-  );
+export async function writeGcpFixture(
+  root: string,
+  envName: string,
+  project: string,
+  options: { name?: string } = {}
+) {
+  const schemaLines: string[] = [];
+  if (options.name !== undefined) schemaLines.push(`name: ${options.name}`);
+  schemaLines.push("keys:", "  db:", "    host: localhost", '    password: !secret ""');
+  await writeFile(join(root, "keyshelf.yaml"), schemaLines.join("\n"));
 
   await mkdir(join(root, ".keyshelf"), { recursive: true });
   await writeFile(

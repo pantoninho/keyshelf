@@ -95,7 +95,16 @@ export const importCommand = new Command("import")
         if (config?.env.defaultProvider && config.env.defaultProvider.name === providerName) {
           Object.assign(providerConfig, config.env.defaultProvider.options);
         }
-        await provider.set({ keyPath, envName: opts.env, rootDir, config: providerConfig }, value);
+        await provider.set(
+          {
+            keyPath,
+            envName: opts.env,
+            rootDir,
+            keyshelfName: config?.name,
+            config: providerConfig
+          },
+          value
+        );
         console.log(`  secret: ${envVar} -> ${keyPath} (via ${providerName})`);
       } else {
         setNestedValue(envDoc, keyPath, value);

@@ -136,4 +136,31 @@ describe("parseSchema", () => {
     const { config } = parseSchema(content);
     expect(config.provider).toBeUndefined();
   });
+
+  it("parses top-level name", () => {
+    const content = "name: my-project\nkeys:\n  db/host: localhost";
+    const { config } = parseSchema(content);
+    expect(config.name).toBe("my-project");
+  });
+
+  it("returns undefined name when not specified", () => {
+    const content = "keys:\n  db/host: localhost";
+    const { config } = parseSchema(content);
+    expect(config.name).toBeUndefined();
+  });
+
+  it("rejects empty name", () => {
+    const content = 'name: ""\nkeys:\n  db/host: localhost';
+    expect(() => parseSchema(content)).toThrow('"name" must be a non-empty string');
+  });
+
+  it("rejects name with invalid characters", () => {
+    const content = "name: my project\nkeys:\n  db/host: localhost";
+    expect(() => parseSchema(content)).toThrow("letters, digits, hyphens, and underscores");
+  });
+
+  it("rejects non-string name", () => {
+    const content = "name: 123\nkeys:\n  db/host: localhost";
+    expect(() => parseSchema(content)).toThrow('"name" must be a non-empty string');
+  });
 });
