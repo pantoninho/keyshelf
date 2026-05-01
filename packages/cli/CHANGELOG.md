@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.6.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v4.5.0...keyshelf-v4.6.0) (2026-05-01)
+
+
+### Features
+
+* implement v5 phase 2 config loader ([#82](https://github.com/pantoninho/keyshelf/issues/82)) ([d96194f](https://github.com/pantoninho/keyshelf/commit/d96194f2836ca8b4072ca9150fd81b2a4bffed78))
+* **v4:** add `name` to keyshelf.yaml and namespace gcp secret ids ([#92](https://github.com/pantoninho/keyshelf/issues/92)) ([8ded4f3](https://github.com/pantoninho/keyshelf/commit/8ded4f39ea3e360a754dbd6c40c868cf1f69ae80))
+* **v5:** Implement v5 phase 3 resolver ([#87](https://github.com/pantoninho/keyshelf/issues/87)) ([989c7c6](https://github.com/pantoninho/keyshelf/commit/989c7c6bb0c6acfa7d441546b91fcd2d370b90c6))
+* **v5:** phase 5 — wire run/ls/set/import to v5 loader and resolver ([#91](https://github.com/pantoninho/keyshelf/issues/91)) ([835677a](https://github.com/pantoninho/keyshelf/commit/835677a63b13317d03cd8bb3fa2280f12deeb9b4))
+* **v5:** port providers to per-key context with name-namespaced gcp ids ([#90](https://github.com/pantoninho/keyshelf/issues/90)) ([addc5ca](https://github.com/pantoninho/keyshelf/commit/addc5ca07442d4e97d1c0eba22ce314cfe247d25))
+* **v5:** scaffold phase 1 entrypoint ([#80](https://github.com/pantoninho/keyshelf/issues/80)) ([f49969d](https://github.com/pantoninho/keyshelf/commit/f49969dbe379f5eccd6c02339918395368adfebc))
+
 ## [4.5.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v4.4.0...keyshelf-v4.5.0) (2026-04-27)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v0.3.0...keyshelf-action-v0.4.0) (2026-05-01)
+
+
+### Features
+
+* **v4:** add `name` to keyshelf.yaml and namespace gcp secret ids ([#92](https://github.com/pantoninho/keyshelf/issues/92)) ([8ded4f3](https://github.com/pantoninho/keyshelf/commit/8ded4f39ea3e360a754dbd6c40c868cf1f69ae80))
+
 ## [0.3.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v0.2.1...keyshelf-action-v0.3.0) (2026-04-27)
 
 
