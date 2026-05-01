@@ -1,8 +1,9 @@
 export interface ProviderContext {
   keyPath: string;
-  envName: string;
+  envName: string | undefined;
   rootDir: string;
   config: Record<string, unknown>;
+  keyshelfName?: string;
 }
 
 export interface Provider {

@@ -14,6 +14,7 @@ must default-export the result of `defineConfig({ ... })`.
 import { defineConfig } from "keyshelf/config";
 
 export default defineConfig({
+  name: "myapp",
   envs: ["dev", "staging", "production"],
   groups: ["app", "ci"],
   keys: {
@@ -30,12 +31,18 @@ The `.env.keyshelf` file (app-name → key-path mapping) is unchanged from v4.
 
 ```ts
 defineConfig({
+  name:   string;            // required; lower-kebab-case identity for this config
   envs:   string[];          // required, non-empty, unique
   groups?: string[];          // optional, unique; if omitted, no group filtering
   keys:   KeyTree;           // required, non-empty
 })
 ```
 
+- `name` is the keyshelf project's stable identity. Providers that share a
+  backend with other keyshelf configs (e.g. multiple apps using one GCP
+  project) use `name` to namespace their secrets so they don't collide. Must
+  match `/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/` — lowercase letters, digits, and
+  internal dashes only. Required; there is no fallback.
 - `envs` enumerates every environment name the config recognises. Any
   `values` map elsewhere in the config may only use names from this list. There
   is no implicit / dynamic env support in v5.
@@ -175,32 +182,38 @@ Provider factories are imported from `keyshelf/config` and return a
 
 ```ts
 age({
-  identityFile?: string;   // path, used for decryption
-  recipient?: string;      // age public key, used for `keyshelf set` encryption
+  identityFile: string;   // path to the age identity (private key) — used to
+                          // decrypt and to derive the recipient on `set`
+  secretsDir: string;     // directory holding the .age ciphertext files
 })
 ```
 
-At least one of `identityFile` or `recipient` is required (validator). The
-encrypted payload itself is stored alongside the config in the provider's
-own conventions, not inline.
+Both fields are required. Ciphertext is stored as
+`<secretsDir>/<keyPath-with-/-as-_>.age`.
 
 ### `gcp(options)`
 
 ```ts
 gcp({
-  project: string;
-  secret?: string;         // explicit Secret Manager name; defaults to a
-                           // path-derived convention
-  version?: string;        // defaults to 'latest'
+  project: string;        // GCP project hosting the Secret Manager secrets
 })
 ```
+
+The Secret Manager secret id is derived from the keyshelf config `name`,
+the active `envName`, and the key path:
+
+- env-scoped: `keyshelf__<name>__<env>__<keyPath-with-/-as-__>`
+- envless: `keyshelf__<name>__<keyPath-with-/-as-__>`
+
+`/` is not a valid character in GCP secret ids, so path separators are
+mangled to `__`.
 
 ### `sops(options)`
 
 ```ts
 sops({
-  file: string;            // path, relative to repo root
-  path?: string;           // dot/jsonpath into the decrypted document
+  identityFile: string;   // path to the age identity used to unlock the data key
+  secretsFile: string;    // path to the encrypted JSON document
 })
 ```
 

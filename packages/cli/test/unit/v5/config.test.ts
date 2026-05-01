@@ -13,6 +13,7 @@ describe("v5 config factories and validation", () => {
   it("normalizes nested namespaces, string paths, bare scalars, config, and secrets", () => {
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev", "production"],
         groups: ["app", "ci"],
         keys: {
@@ -27,7 +28,7 @@ describe("v5 config factories and validation", () => {
           github: {
             token: secret({
               group: "ci",
-              value: age({ identityFile: "./ci.txt" })
+              value: age({ identityFile: "./ci.txt", secretsDir: "./secrets" })
             })
           }
         }
@@ -51,7 +52,7 @@ describe("v5 config factories and validation", () => {
         group: "ci",
         optional: false,
         description: undefined,
-        value: age({ identityFile: "./ci.txt" }),
+        value: age({ identityFile: "./ci.txt", secretsDir: "./secrets" }),
         values: undefined
       }
     ]);
@@ -61,6 +62,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           keys: {
             host: config({ value: "localhost", default: "127.0.0.1" })
@@ -74,6 +76,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           groups: ["app"],
           keys: {
@@ -91,6 +94,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           keys: {
             token: secret({})
@@ -112,6 +116,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           keys: {
             db: {}
@@ -125,19 +130,22 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           keys: {
-            token: secret({ value: age({}) })
+            // @ts-expect-error secretsDir is required
+            token: secret({ value: age({ identityFile: "./ci.txt" }) })
           }
         })
       )
-    ).toThrow("age provider requires identityFile or recipient");
+    ).toThrow(/factory objects with __kind must match their declared schema/);
   });
 
   it("rejects duplicate flattened paths", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           keys: {
             db: { host: "localhost" },
@@ -152,6 +160,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           keys: {
             db: "localhost",
@@ -166,6 +175,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           keys: {
             "db.host": "localhost"
@@ -179,6 +189,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           keys: {
             db: {
@@ -192,6 +203,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev", "production"],
           keys: {
             db: {
@@ -208,6 +220,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev"],
           keys: {
             a: config({ value: "${b}" }),
@@ -220,6 +233,7 @@ describe("v5 config factories and validation", () => {
     expect(() =>
       normalizeConfig(
         defineConfig({
+          name: "test",
           envs: ["dev", "production"],
           keys: {
             a: config({ values: { production: "${b}" } }),
@@ -233,6 +247,7 @@ describe("v5 config factories and validation", () => {
   it("allows templates to reference secrets and ignores escaped template markers", () => {
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev"],
         keys: {
           token: secret({ value: gcp({ project: "my-project" }) }),
@@ -247,6 +262,7 @@ describe("v5 config factories and validation", () => {
   it("validates app mapping references against flattened keys", () => {
     const normalized = normalizeConfig(
       defineConfig({
+        name: "test",
         envs: ["dev"],
         keys: {
           db: { host: "localhost" }

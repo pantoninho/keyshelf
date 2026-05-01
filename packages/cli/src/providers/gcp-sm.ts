@@ -33,8 +33,17 @@ function isAuthError(err: unknown): boolean {
   return AUTH_ERROR_PATTERNS.some((pattern) => msg.includes(pattern));
 }
 
-function toSecretId(envName: string, keyPath: string): string {
-  return `keyshelf__${envName}__${keyPath.replace(/\//g, "__")}`;
+function toSecretId(
+  keyshelfName: string | undefined,
+  envName: string | undefined,
+  keyPath: string
+): string {
+  const path = keyPath.replace(/\//g, "__");
+  const segments = ["keyshelf"];
+  if (keyshelfName !== undefined) segments.push(keyshelfName);
+  if (envName !== undefined && envName !== "") segments.push(envName);
+  segments.push(path);
+  return segments.join("__");
 }
 
 export class GcpSmProvider implements Provider {
@@ -58,7 +67,7 @@ export class GcpSmProvider implements Provider {
 
   async resolve(ctx: ProviderContext): Promise<string> {
     const opts = this.resolveOptions(ctx);
-    const secretId = toSecretId(ctx.envName, ctx.keyPath);
+    const secretId = toSecretId(ctx.keyshelfName, ctx.envName, ctx.keyPath);
 
     let version;
     try {
@@ -81,7 +90,7 @@ export class GcpSmProvider implements Provider {
   async validate(ctx: ProviderContext): Promise<boolean> {
     try {
       const opts = this.resolveOptions(ctx);
-      const secretId = toSecretId(ctx.envName, ctx.keyPath);
+      const secretId = toSecretId(ctx.keyshelfName, ctx.envName, ctx.keyPath);
 
       await this.client.getSecret({
         name: `projects/${opts.project}/secrets/${secretId}`
@@ -95,7 +104,7 @@ export class GcpSmProvider implements Provider {
 
   async set(ctx: ProviderContext, value: string): Promise<void> {
     const opts = this.resolveOptions(ctx);
-    const secretId = toSecretId(ctx.envName, ctx.keyPath);
+    const secretId = toSecretId(ctx.keyshelfName, ctx.envName, ctx.keyPath);
     const parent = `projects/${opts.project}`;
 
     // Create secret if it doesn't exist

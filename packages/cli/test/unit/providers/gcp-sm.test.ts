@@ -25,7 +25,7 @@ describe("GcpSmProvider", () => {
   }
 
   describe("secret ID derivation", () => {
-    it("generates keyshelf__{env}__{path} format", async () => {
+    it("generates keyshelf__{env}__{path} when keyshelfName is absent (v4 callers)", async () => {
       client.accessSecretVersion.mockResolvedValue([{ payload: { data: Buffer.from("val") } }]);
 
       await provider.resolve(ctx("db/password", "staging"));
@@ -42,6 +42,54 @@ describe("GcpSmProvider", () => {
 
       expect(client.accessSecretVersion).toHaveBeenCalledWith({
         name: "projects/my-proj/secrets/keyshelf__dev__services__api__db__password/versions/latest"
+      });
+    });
+
+    it("includes keyshelfName segment when provided", async () => {
+      client.accessSecretVersion.mockResolvedValue([{ payload: { data: Buffer.from("val") } }]);
+
+      await provider.resolve({
+        keyPath: "db/password",
+        envName: "staging",
+        rootDir: "/tmp",
+        config: { project: "my-proj" },
+        keyshelfName: "myapp"
+      });
+
+      expect(client.accessSecretVersion).toHaveBeenCalledWith({
+        name: "projects/my-proj/secrets/keyshelf__myapp__staging__db__password/versions/latest"
+      });
+    });
+
+    it("omits env segment when envName is undefined (envless secret)", async () => {
+      client.accessSecretVersion.mockResolvedValue([{ payload: { data: Buffer.from("val") } }]);
+
+      await provider.resolve({
+        keyPath: "github/token",
+        envName: undefined,
+        rootDir: "/tmp",
+        config: { project: "my-proj" },
+        keyshelfName: "myapp"
+      });
+
+      expect(client.accessSecretVersion).toHaveBeenCalledWith({
+        name: "projects/my-proj/secrets/keyshelf__myapp__github__token/versions/latest"
+      });
+    });
+
+    it("omits env segment when envName is empty string (legacy callers)", async () => {
+      client.accessSecretVersion.mockResolvedValue([{ payload: { data: Buffer.from("val") } }]);
+
+      await provider.resolve({
+        keyPath: "github/token",
+        envName: "",
+        rootDir: "/tmp",
+        config: { project: "my-proj" },
+        keyshelfName: "myapp"
+      });
+
+      expect(client.accessSecretVersion).toHaveBeenCalledWith({
+        name: "projects/my-proj/secrets/keyshelf__myapp__github__token/versions/latest"
       });
     });
   });

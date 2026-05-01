@@ -1,6 +1,7 @@
 import { defineConfig } from "keyshelf/config";
 
 export default defineConfig({
+  name: "example-01-basic",
   envs: ["dev"],
 
   keys: {

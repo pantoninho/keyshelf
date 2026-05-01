@@ -1,6 +1,7 @@
 import { defineConfig, config, secret, age } from "keyshelf/config";
 
 export default defineConfig({
+  name: "example-05-nested-namespaces",
   envs: ["dev", "production"],
 
   keys: {
@@ -9,7 +10,7 @@ export default defineConfig({
         api: {
           url: "http://localhost:4000",
           key: secret({
-            value: age({ identityFile: "./keys/dev.txt" })
+            value: age({ identityFile: "./keys/dev.txt", secretsDir: "./secrets" })
           })
         }
       },
@@ -32,7 +33,7 @@ export default defineConfig({
     },
 
     "feature-flags/launch-darkly/sdk-key": secret({
-      value: age({ identityFile: "./keys/dev.txt" })
+      value: age({ identityFile: "./keys/dev.txt", secretsDir: "./secrets" })
     }),
     "feature-flags/launch-darkly/environment": config({ value: "dev" })
   }

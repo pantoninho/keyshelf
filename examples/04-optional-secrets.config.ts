@@ -1,6 +1,7 @@
 import { defineConfig, secret, age, gcp } from "keyshelf/config";
 
 export default defineConfig({
+  name: "example-04-optional-secrets",
   envs: ["dev", "production"],
   groups: ["app"],
 
@@ -19,9 +20,9 @@ export default defineConfig({
       "config-passphrase": secret({
         group: "app",
         optional: true,
-        default: age({ identityFile: "./keys/dev.txt" }),
+        default: age({ identityFile: "./keys/dev.txt", secretsDir: "./secrets" }),
         values: {
-          production: gcp({ project: "myproj", secret: "pulumi-passphrase" })
+          production: gcp({ project: "myproj" })
         }
       })
     }

@@ -13,6 +13,7 @@ import type {
 
 const PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const TEMPLATE_RE = /(?<!\$)\$\{([^}]+)\}/g;
+const CONFIG_NAME_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 const configScalarSchema = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -22,13 +23,10 @@ const ageProviderSchema = z
     name: z.literal("age"),
     options: z
       .object({
-        identityFile: z.string().optional(),
-        recipient: z.string().optional()
+        identityFile: z.string().min(1),
+        secretsDir: z.string().min(1)
       })
       .strict()
-      .refine((options) => options.identityFile !== undefined || options.recipient !== undefined, {
-        message: "age provider requires identityFile or recipient"
-      })
   })
   .strict();
 
@@ -38,9 +36,7 @@ const gcpProviderSchema = z
     name: z.literal("gcp"),
     options: z
       .object({
-        project: z.string().min(1),
-        secret: z.string().optional(),
-        version: z.string().optional()
+        project: z.string().min(1)
       })
       .strict()
   })
@@ -52,8 +48,8 @@ const sopsProviderSchema = z
     name: z.literal("sops"),
     options: z
       .object({
-        file: z.string().min(1),
-        path: z.string().optional()
+        identityFile: z.string().min(1),
+        secretsFile: z.string().min(1)
       })
       .strict()
   })
@@ -122,6 +118,13 @@ const keyNodeSchema: z.ZodType<KeyNode> = z.lazy(() =>
 const keyshelfConfigSchema = z
   .object({
     __kind: z.literal("keyshelf:config"),
+    name: z
+      .string()
+      .min(1)
+      .refine((value) => CONFIG_NAME_RE.test(value), {
+        message:
+          "name must match /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/ (lowercase, digits, dashes; no leading or trailing dash)"
+      }),
     envs: z.array(z.string().min(1)).nonempty(),
     groups: z.array(z.string().min(1)).optional(),
     keys: z.record(z.string(), keyNodeSchema).refine((value) => Object.keys(value).length > 0, {
@@ -154,6 +157,7 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
   }
 
   return {
+    name: parsed.name,
     envs: [...parsed.envs],
     groups,
     keys: flattened
