@@ -1,0 +1,194 @@
+import { describe, it, expect, beforeEach, beforeAll } from "vitest";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { generateIdentity } from "../../src/providers/age.js";
+import { V5_CLI, TSX } from "./helpers/v5-cli.js";
+
+async function writeBaseFixture(root: string) {
+  await writeFile(
+    join(root, "keyshelf.config.ts"),
+    [
+      `import { defineConfig, config } from "keyshelf/config";`,
+      ``,
+      `export default defineConfig({`,
+      `  name: "demo",`,
+      `  envs: ["dev", "production"],`,
+      `  keys: {`,
+      `    db: {`,
+      `      host: config({ default: "localhost", values: { production: "prod-db" } }),`,
+      `      port: 5432,`,
+      `    },`,
+      `  },`,
+      `});`,
+      ``
+    ].join("\n")
+  );
+  await writeFile(join(root, ".env.keyshelf"), ["DB_HOST=db/host", "DB_PORT=db/port"].join("\n"));
+}
+
+async function writeGroupFixture(root: string) {
+  const identityFile = join(root, "key.txt");
+  const secretsDir = join(root, ".keyshelf", "secrets");
+  await writeFile(identityFile, await generateIdentity());
+  await mkdir(secretsDir, { recursive: true });
+
+  await writeFile(
+    join(root, "keyshelf.config.ts"),
+    [
+      `import { defineConfig, config, secret, age } from "keyshelf/config";`,
+      ``,
+      `export default defineConfig({`,
+      `  name: "demo",`,
+      `  envs: ["dev"],`,
+      `  groups: ["app", "ci"],`,
+      `  keys: {`,
+      `    app: {`,
+      `      host: config({ group: "app", value: "localhost" }),`,
+      `    },`,
+      `    ci: {`,
+      `      token: secret({ group: "ci", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+      `    },`,
+      `  },`,
+      `});`,
+      ``
+    ].join("\n")
+  );
+
+  await writeFile(
+    join(root, ".env.keyshelf"),
+    ["APP_HOST=app/host", "CI_TOKEN=ci/token"].join("\n")
+  );
+
+  return { identityFile, secretsDir };
+}
+
+describe("keyshelf-next run", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-v5-run-"));
+    await writeBaseFixture(root);
+  });
+
+  it("injects env vars from config defaults when no --env is given", () => {
+    const result = execFileSync(
+      TSX,
+      [
+        V5_CLI,
+        "run",
+        "--",
+        "node",
+        "-e",
+        "console.log(JSON.stringify({h: process.env.DB_HOST, p: process.env.DB_PORT}))"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(JSON.parse(result.trim())).toEqual({ h: "localhost", p: "5432" });
+  });
+
+  it("uses values[env] override when --env is provided", () => {
+    const result = execFileSync(
+      TSX,
+      [
+        V5_CLI,
+        "run",
+        "--env",
+        "production",
+        "--",
+        "node",
+        "-e",
+        "console.log(process.env.DB_HOST)"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.trim()).toBe("prod-db");
+  });
+
+  it("forwards child exit code", () => {
+    try {
+      execFileSync(TSX, [V5_CLI, "run", "--", "node", "-e", "process.exit(42)"], {
+        cwd: root,
+        encoding: "utf-8",
+        stdio: "pipe"
+      });
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as { status: number }).status).toBe(42);
+    }
+  });
+
+  it("rejects unknown --env with a top-level error", () => {
+    try {
+      execFileSync(TSX, [V5_CLI, "run", "--env", "staging", "--", "echo", "hi"], {
+        cwd: root,
+        encoding: "utf-8",
+        stdio: "pipe"
+      });
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as { stderr: string }).stderr).toContain('Unknown env "staging"');
+    }
+  });
+});
+
+describe("keyshelf-next run (groups)", () => {
+  let root: string;
+  let identityFile: string;
+  let secretsDir: string;
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-v5-run-groups-"));
+    const fixture = await writeGroupFixture(root);
+    identityFile = fixture.identityFile;
+    secretsDir = fixture.secretsDir;
+
+    execFileSync(TSX, [V5_CLI, "set", "--env", "dev", "--value", "ci-secret-value", "ci/token"], {
+      cwd: root,
+      encoding: "utf-8"
+    });
+    expect(identityFile).toContain(root);
+    expect(secretsDir).toContain(root);
+  });
+
+  it("--group app skips ci/token mapping with stderr warning", () => {
+    const result = execFileSync(
+      TSX,
+      [
+        V5_CLI,
+        "run",
+        "--env",
+        "dev",
+        "--group",
+        "app",
+        "--",
+        "node",
+        "-e",
+        "console.log(JSON.stringify({h: process.env.APP_HOST ?? null, t: process.env.CI_TOKEN ?? null}))"
+      ],
+      { cwd: root, encoding: "utf-8", stdio: ["inherit", "pipe", "pipe"] }
+    );
+    expect(JSON.parse(result.trim())).toEqual({ h: "localhost", t: null });
+  });
+
+  it("--group ci resolves the secret", () => {
+    const result = execFileSync(
+      TSX,
+      [
+        V5_CLI,
+        "run",
+        "--env",
+        "dev",
+        "--group",
+        "ci",
+        "--",
+        "node",
+        "-e",
+        "console.log(process.env.CI_TOKEN)"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.trim()).toBe("ci-secret-value");
+  });
+});
