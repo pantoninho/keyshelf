@@ -1,0 +1,9 @@
+default-provider:
+  name: age
+  secretsDir: ./.keyshelf/secrets/dev
+keys:
+  api:
+    url: https://dev.api.example.com
+  worker:
+    token: !age
+      secretsDir: ./.keyshelf/secrets/worker-dev

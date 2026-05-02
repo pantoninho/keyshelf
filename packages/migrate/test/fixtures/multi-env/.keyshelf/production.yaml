@@ -1,0 +1,6 @@
+default-provider:
+  name: gcp
+  project: prod-project
+keys:
+  api:
+    url: https://api.example.com

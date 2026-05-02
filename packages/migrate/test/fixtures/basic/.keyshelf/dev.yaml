@@ -1,0 +1,7 @@
+default-provider:
+  name: age
+  identityFile: ./keys/dev.txt
+  secretsDir: ./.keyshelf/secrets/dev
+keys:
+  db:
+    host: dev-db.local

@@ -9,6 +9,9 @@
     },
     "packages/action": {
       "package-name": "keyshelf-action"
+    },
+    "packages/migrate": {
+      "package-name": "@keyshelf/migrate"
     }
   }
 }

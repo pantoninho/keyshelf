@@ -1,0 +1,10 @@
+default-provider:
+  name: age
+  identityFile: ./keys/dev.txt
+  secretsDir: ./.keyshelf/secrets/dev
+keys:
+  services:
+    api:
+      host: dev-api.local
+    web:
+      public-url: https://dev.example.com

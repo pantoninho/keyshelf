@@ -1,4 +1,5 @@
 {
   "packages/cli": "4.6.0",
-  "packages/action": "0.4.0"
+  "packages/action": "0.4.0",
+  "packages/migrate": "0.1.0"
 }
