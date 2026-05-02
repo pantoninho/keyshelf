@@ -39,12 +39,20 @@ interface JsonVar {
 }
 
 export const lsCommand = new Command("ls")
-  .description("List keys defined in the config")
-  .option("--env <env>", "Environment name")
-  .option("--group <names>", "Comma-separated group filter")
-  .option("--filter <prefixes>", "Comma-separated key-path prefix filter")
-  .option("--reveal", "Resolve and show actual values (requires --env)")
-  .option("--map <file>", "Path to app mapping file")
+  .description(
+    "List records declared in keyshelf.config.ts with their kind, group, and active binding"
+  )
+  .option("--env <env>", "Environment name; selects which per-env binding the detail column shows")
+  .option(
+    "--group <names>",
+    "Comma-separated group filter; keys outside the set are marked filtered"
+  )
+  .option(
+    "--filter <prefixes>",
+    "Comma-separated key-path prefix filter (e.g. db,log); non-matching keys are marked filtered"
+  )
+  .option("--reveal", "Resolve through bound providers and show resolved values (requires --env)")
+  .option("--map <file>", "Path to app mapping file (default: .env.keyshelf)")
   .option("--format <format>", "Output format: table (default) or json", "table")
   .action(async (opts: LsOptions) => {
     const format = parseFormat(opts.format);
