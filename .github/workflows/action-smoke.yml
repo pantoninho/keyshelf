@@ -95,6 +95,125 @@ jobs:
           echo "DB_PASSWORD length: ${#DB_PASSWORD}"
           echo "DB_URL length: ${#DB_URL}"
 
+  v5-ts-config-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install workspace deps
+        run: npm ci
+
+      - name: Build keyshelf and action
+        run: |
+          npm run build -w keyshelf
+          npm run build -w @keyshelf/action
+
+      - name: Generate v5 TS fixture
+        id: fixture
+        run: |
+          set -euo pipefail
+          mkdir -p fixture-v5/keys
+          cd fixture-v5
+
+          identity=$(node -e 'import("keyshelf").then(m => m.generateIdentity()).then(k => process.stdout.write(k))')
+
+          cat > keyshelf.config.ts <<'TS'
+          import { age, config, defineConfig, secret } from "keyshelf/config";
+
+          export default defineConfig({
+            name: "action-v5-smoke",
+            envs: ["test"],
+            groups: ["app", "ci"],
+            keys: {
+              app: {
+                host: config({ group: "app", value: "localhost" }),
+                name: config({ group: "app", value: "api" }),
+              },
+              db: {
+                password: secret({
+                  group: "app",
+                  value: age({
+                    identityFile: "./keys/age.txt",
+                    secretsDir: "./.keyshelf/secrets",
+                  }),
+                }),
+              },
+              ci: {
+                token: secret({
+                  group: "ci",
+                  value: age({
+                    identityFile: "./keys/age.txt",
+                    secretsDir: "./.keyshelf/secrets",
+                  }),
+                }),
+              },
+            },
+          });
+          TS
+
+          cat > .env.keyshelf <<'ENV'
+          APP_HOST=app/host
+          APP_NAME=app/name
+          DB_PASSWORD=db/password
+          DB_URL=postgres://${app/host}:${db/password}@srv/db
+          FILTERED_CI_TOKEN=ci/token
+          ENV
+
+          echo "$identity" > keys/age.txt
+          chmod 600 keys/age.txt
+
+          ../packages/cli/dist/bin/keyshelf-next.js set --env test --value 'hunter2' db/password
+          ../packages/cli/dist/bin/keyshelf-next.js set --env test --value 'ci-secret' ci/token
+
+          rm keys/age.txt
+
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::add-mask::$line"
+          done <<<"$identity"
+
+          {
+            echo "identity<<EOF_IDENT"
+            echo "$identity"
+            echo "EOF_IDENT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Invoke action against v5 TS config
+        uses: ./packages/action
+        with:
+          env: test
+          groups: app
+          identity: ${{ steps.fixture.outputs.identity }}
+          map: .env.keyshelf
+          working-directory: fixture-v5
+
+      - name: Verify v5 env vars and group filtering
+        run: |
+          set -euo pipefail
+          test "$APP_HOST" = "localhost"
+          test "$APP_NAME" = "api"
+          test "${DB_PASSWORD:-}" != ""
+          test "${DB_URL:-}" != ""
+          test "${FILTERED_CI_TOKEN:-}" = ""
+          echo "DB_PASSWORD length: ${#DB_PASSWORD}"
+          echo "DB_URL length: ${#DB_URL}"
+
+  v5-runtime-deps-benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Benchmark v5 runtime dependency install
+        run: node packages/action/scripts/benchmark-v5-runtime-deps.mjs
+
   # Reproduces the consumer scenario from issues #70 and #73:
   #   - The action source lives at a path separate from the consumer's working tree
   #     (mirroring how GitHub places `_actions/<owner>/<repo>/<ref>/...` on the runner).
