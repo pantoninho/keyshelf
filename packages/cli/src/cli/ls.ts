@@ -176,31 +176,27 @@ function describeStatus(record: NormalizedRecord, status: KeyResolutionStatus | 
 }
 
 function describeSource(record: NormalizedRecord, envName: string | undefined): string {
-  const binding = getActiveBinding(record, envName);
-
-  if (record.kind === "secret") {
-    if (binding !== undefined) {
-      return `provider: ${(binding as BuiltinProviderRef).name}`;
-    }
-    if (record.optional) return "(optional, no provider)";
-    return "(no provider bound)";
-  }
-
-  if (binding !== undefined) {
-    return `value: ${formatScalar(binding as ConfigBinding)}`;
-  }
-  if (record.optional) return "(optional, no value)";
-  return "(missing)";
+  const binding = activeBindingOf(record, envName);
+  if (record.kind === "secret") return describeSecretBinding(record, binding);
+  return describeConfigBinding(record, binding);
 }
 
-function getActiveBinding(record: NormalizedRecord, envName: string | undefined): unknown {
-  const envBinding = pickEnvBinding(record, envName);
-  return envBinding ?? record.value;
+function describeSecretBinding(record: NormalizedRecord, binding: unknown): string {
+  if (binding !== undefined) return `provider: ${(binding as BuiltinProviderRef).name}`;
+  return record.optional ? "(optional, no provider)" : "(no provider bound)";
 }
 
-function pickEnvBinding(record: NormalizedRecord, envName: string | undefined): unknown {
-  if (envName === undefined || record.values === undefined) return undefined;
-  return Object.hasOwn(record.values, envName) ? record.values[envName] : undefined;
+function describeConfigBinding(record: NormalizedRecord, binding: unknown): string {
+  if (binding !== undefined) return `value: ${formatScalar(binding as ConfigBinding)}`;
+  return record.optional ? "(optional, no value)" : "(missing)";
+}
+
+function activeBindingOf(record: NormalizedRecord, envName: string | undefined): unknown {
+  const values = record.values;
+  if (envName !== undefined && values !== undefined && Object.hasOwn(values, envName)) {
+    return values[envName];
+  }
+  return record.value;
 }
 
 function formatScalar(value: ConfigBinding): string {
