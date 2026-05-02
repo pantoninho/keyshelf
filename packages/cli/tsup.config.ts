@@ -8,6 +8,6 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   dts: {
-    entry: ["src/index.ts", "src/v5/config/index.ts", "src/v5/runtime.ts"]
+    entry: ["src/index.ts", "src/config/index.ts"]
   }
 });

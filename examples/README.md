@@ -1,9 +1,7 @@
-# Keyshelf v5 examples
+# Keyshelf examples
 
-These are reference configurations for Phase 0 spec lock. Each file exercises a
-specific shape from `docs/v5/spec.md`. They will compile once the Phase 2
-loader/types land; until then, treat them as the type-shape contract the
-implementation must satisfy.
+Reference configurations covering the supported `keyshelf.config.ts` shapes.
+Each file exercises a specific shape from [`docs/spec.md`](../docs/spec.md).
 
 | File                                                                       | Shapes covered                                                  |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------- |

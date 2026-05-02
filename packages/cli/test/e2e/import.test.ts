@@ -1,116 +1,171 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { describe, it, expect, beforeEach } from "vitest";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { writeFileSync as fsWriteFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { Decrypter } from "age-encryption";
-import { writeAgeFixture } from "./helpers/age.js";
-import { writeSopsFixture } from "./helpers/sops.js";
+import { generateIdentity } from "../../src/providers/age.js";
 import { CLI, TSX } from "./helpers/cli.js";
 
-describe("keyshelf import (age)", () => {
-  let root: string;
-  let identityFile: string;
-  let secretsDir: string;
-  const envName = "age-test";
+function writeFileSync(path: string, lines: string[]): void {
+  fsWriteFileSync(path, lines.join("\n") + "\n");
+}
 
-  beforeAll(async () => {
-    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-age-import-"));
-    await writeAgeFixture(root, envName);
-    identityFile = join(root, "key.txt");
-    secretsDir = join(root, ".keyshelf", "secrets");
+async function writeFixture(root: string) {
+  const identityFile = join(root, "key.txt");
+  const secretsDir = join(root, ".keyshelf", "secrets");
+  await writeFile(identityFile, await generateIdentity());
+  await mkdir(secretsDir, { recursive: true });
+
+  await writeFile(
+    join(root, "keyshelf.config.ts"),
+    [
+      `import { defineConfig, config, secret, age } from "keyshelf/config";`,
+      ``,
+      `export default defineConfig({`,
+      `  name: "demo",`,
+      `  envs: ["dev"],`,
+      `  keys: {`,
+      `    db: {`,
+      `      host: config({ default: "localhost" }),`,
+      `      password: secret({ value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+      `      apiKey: secret({ value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+      `    },`,
+      `  },`,
+      `});`,
+      ``
+    ].join("\n")
+  );
+  await writeFile(
+    join(root, ".env.keyshelf"),
+    ["DB_HOST=db/host", "DB_PASSWORD=db/password", "DB_API_KEY=db/apiKey"].join("\n")
+  );
+}
+
+describe("keyshelf-next import", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-import-"));
+    await writeFixture(root);
   });
 
-  async function decryptFile(filePath: string): Promise<string> {
-    const identity = await readFile(identityFile, "utf-8");
-    const ciphertext = await readFile(filePath);
-    const decrypter = new Decrypter();
-    decrypter.addIdentity(identity.trim());
-    return await decrypter.decrypt(ciphertext, "text");
-  }
+  it("imports secrets via their bound providers and warns about config keys", () => {
+    const envFile = join(root, ".env.values");
+    writeFileSync(envFile, ["DB_HOST=imported-host", "DB_PASSWORD=imported-pw", "DB_API_KEY=k1"]);
 
-  it("uses default provider for secret keys when --provider is omitted", async () => {
-    const dotenvPath = join(root, ".env");
-    await writeFile(dotenvPath, "DB_HOST=imported-host\nDB_PASSWORD=imported-secret\n");
+    const out = execFileSync(TSX, [CLI, "import", "--env", "dev", "--file", envFile], {
+      cwd: root,
+      encoding: "utf-8",
+      stdio: ["inherit", "pipe", "pipe"]
+    });
 
-    execFileSync(TSX, [CLI, "import", "--env", envName, "--file", dotenvPath], {
+    expect(out).toContain("Imported 2 values");
+
+    const result = execFileSync(
+      TSX,
+      [
+        CLI,
+        "run",
+        "--env",
+        "dev",
+        "--",
+        "node",
+        "-e",
+        "console.log(JSON.stringify({h: process.env.DB_HOST, p: process.env.DB_PASSWORD, k: process.env.DB_API_KEY}))"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+    // DB_HOST stays at the config default (config keys are not written by import).
+    expect(JSON.parse(result.trim())).toEqual({
+      h: "localhost",
+      p: "imported-pw",
+      k: "k1"
+    });
+  });
+
+  it("skips unmapped env vars", () => {
+    const envFile = join(root, ".env.values");
+    writeFileSync(envFile, ["UNMAPPED=foo", "DB_PASSWORD=imported-pw"]);
+
+    const out = execFileSync(TSX, [CLI, "import", "--env", "dev", "--file", envFile], {
       cwd: root,
       encoding: "utf-8"
     });
-
-    // Secret should be encrypted via age (default provider)
-    const plaintext = await decryptFile(join(secretsDir, "db_password.age"));
-    expect(plaintext).toBe("imported-secret");
-
-    // Config should be stored as plaintext in env yaml
-    const envContent = await readFile(join(root, ".keyshelf", `${envName}.yaml`), "utf-8");
-    expect(envContent).toContain("imported-host");
+    expect(out).toContain("Imported 1 values, skipped 1");
   });
 
-  it("stores secrets via explicit --provider", async () => {
-    const dotenvPath = join(root, ".env");
-    await writeFile(dotenvPath, "DB_PASSWORD=explicit-provider-secret\n");
+  it("skips keys outside the --group filter", async () => {
+    const groupedRoot = await mkdtemp(join(tmpdir(), "keyshelf-import-group-"));
+    const identityFile = join(groupedRoot, "key.txt");
+    const secretsDir = join(groupedRoot, ".keyshelf", "secrets");
+    await writeFile(identityFile, await generateIdentity());
+    await mkdir(secretsDir, { recursive: true });
 
-    execFileSync(
+    await writeFile(
+      join(groupedRoot, "keyshelf.config.ts"),
+      [
+        `import { defineConfig, secret, age } from "keyshelf/config";`,
+        ``,
+        `export default defineConfig({`,
+        `  name: "demo",`,
+        `  envs: ["dev"],`,
+        `  groups: ["app", "ci"],`,
+        `  keys: {`,
+        `    db: {`,
+        `      password: secret({ group: "app", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+        `    },`,
+        `    github: {`,
+        `      token: secret({ group: "ci", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+        `    },`,
+        `  },`,
+        `});`,
+        ``
+      ].join("\n")
+    );
+    await writeFile(
+      join(groupedRoot, ".env.keyshelf"),
+      ["DB_PASSWORD=db/password", "GITHUB_TOKEN=github/token"].join("\n")
+    );
+
+    const envFile = join(groupedRoot, ".env.values");
+    writeFileSync(envFile, ["DB_PASSWORD=imported-pw", "GITHUB_TOKEN=imported-tok"]);
+
+    const result = execFileSync(
       TSX,
-      [CLI, "import", "--env", envName, "--file", dotenvPath, "--provider", "age"],
+      [CLI, "import", "--env", "dev", "--group", "app", "--file", envFile],
       {
-        cwd: root,
-        encoding: "utf-8"
+        cwd: groupedRoot,
+        encoding: "utf-8",
+        stdio: ["inherit", "pipe", "pipe"]
       }
     );
 
-    const plaintext = await decryptFile(join(secretsDir, "db_password.age"));
-    expect(plaintext).toBe("explicit-provider-secret");
-  });
-});
+    expect(result).toContain("Imported 1 values, skipped 1");
+    expect(result).toContain("DB_PASSWORD -> db/password");
+    expect(result).not.toContain("GITHUB_TOKEN -> github/token");
 
-describe("keyshelf import (sops)", () => {
-  let root: string;
-  const envName = "sops-test";
-
-  beforeAll(async () => {
-    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-sops-import-"));
-    await writeSopsFixture(root, envName);
-  });
-
-  it("uses default provider for secret keys when --provider is omitted", async () => {
-    const dotenvPath = join(root, ".env");
-    await writeFile(dotenvPath, "DB_HOST=imported-host\nDB_PASSWORD=imported-secret\n");
-
-    execFileSync(TSX, [CLI, "import", "--env", envName, "--file", dotenvPath], {
-      cwd: root,
-      encoding: "utf-8"
-    });
-
-    // Secret should be encrypted via sops (default provider) — verify via run
-    const result = execFileSync(
+    const revealed = execFileSync(
       TSX,
-      [CLI, "run", "--env", envName, "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
-      { cwd: root, encoding: "utf-8" }
+      [
+        CLI,
+        "ls",
+        "--env",
+        "dev",
+        "--group",
+        "app",
+        "--reveal",
+        "--map",
+        ".env.keyshelf",
+        "--format",
+        "json"
+      ],
+      { cwd: groupedRoot, encoding: "utf-8", stdio: ["inherit", "pipe", "pipe"] }
     );
-    expect(result.trim()).toBe("imported-secret");
-
-    // Config should be stored as plaintext in env yaml
-    const envContent = await readFile(join(root, ".keyshelf", `${envName}.yaml`), "utf-8");
-    expect(envContent).toContain("imported-host");
-  });
-
-  it("stores secrets via explicit --provider", async () => {
-    const dotenvPath = join(root, ".env");
-    await writeFile(dotenvPath, "DB_PASSWORD=explicit-sops-secret\n");
-
-    execFileSync(
-      TSX,
-      [CLI, "import", "--env", envName, "--file", dotenvPath, "--provider", "sops"],
-      { cwd: root, encoding: "utf-8" }
-    );
-
-    const result = execFileSync(
-      TSX,
-      [CLI, "run", "--env", envName, "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
-      { cwd: root, encoding: "utf-8" }
-    );
-    expect(result.trim()).toBe("explicit-sops-secret");
+    const parsed = JSON.parse(revealed) as {
+      vars: { envVar: string; value: string }[];
+    };
+    const dbVar = parsed.vars.find((v) => v.envVar === "DB_PASSWORD");
+    expect(dbVar?.value).toBe("imported-pw");
   });
 });

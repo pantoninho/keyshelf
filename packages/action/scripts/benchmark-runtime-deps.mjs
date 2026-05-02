@@ -29,7 +29,7 @@ try {
     await writeFile(
       summary,
       [
-        "## keyshelf action v5 runtime dependency benchmark",
+        "## keyshelf action runtime dependency benchmark",
         "",
         "| run | duration |",
         "| --- | ---: |",

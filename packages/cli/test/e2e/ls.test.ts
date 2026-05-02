@@ -1,77 +1,81 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { writeAgeFixture } from "./helpers/age.js";
-import { writeSopsFixture } from "./helpers/sops.js";
+import { generateIdentity } from "../../src/providers/age.js";
 import { CLI, TSX } from "./helpers/cli.js";
 
-async function createFixture() {
-  const root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-ls-"));
+async function writeAgeFixture(root: string) {
+  const identityFile = join(root, "key.txt");
+  const secretsDir = join(root, ".keyshelf", "secrets");
+  await writeFile(identityFile, await generateIdentity());
+  await mkdir(secretsDir, { recursive: true });
 
   await writeFile(
-    join(root, "keyshelf.yaml"),
+    join(root, "keyshelf.config.ts"),
     [
-      "keys:",
-      "  db:",
-      "    host: localhost",
-      "    port: 5432",
-      '    password: !secret ""',
-      "  auth:",
-      "    token: !secret",
-      "      optional: true"
+      `import { defineConfig, config, secret, age } from "keyshelf/config";`,
+      ``,
+      `export default defineConfig({`,
+      `  name: "demo",`,
+      `  envs: ["dev", "production"],`,
+      `  groups: ["app", "ci"],`,
+      `  keys: {`,
+      `    db: {`,
+      `      host: config({ group: "app", default: "localhost", values: { production: "prod-db" } }),`,
+      `      password: secret({ group: "app", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+      `    },`,
+      `    ci: {`,
+      `      token: secret({ group: "ci", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+      `    },`,
+      `  },`,
+      `});`,
+      ``
     ].join("\n")
   );
-
-  await mkdir(join(root, ".keyshelf"));
-  await writeFile(
-    join(root, ".keyshelf", "dev.yaml"),
-    ["keys:", "  db:", "    host: dev-db"].join("\n")
-  );
-
   await writeFile(
     join(root, ".env.keyshelf"),
-    ["DB_HOST=db/host", "DB_PORT=db/port", "DB_PASSWORD=db/password"].join("\n")
+    ["DB_HOST=db/host", "DB_PASSWORD=db/password", "CI_TOKEN=ci/token"].join("\n")
   );
-
-  return root;
 }
 
-describe("keyshelf ls", () => {
+describe("keyshelf-next ls", () => {
   let root: string;
 
-  beforeAll(async () => {
-    root = await createFixture();
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-ls-"));
+    await writeAgeFixture(root);
   });
 
-  it("lists keys from schema only", () => {
-    const result = execFileSync(TSX, [CLI, "ls"], {
+  it("lists schema with kind, group, and source columns", () => {
+    const result = execFileSync(TSX, [CLI, "ls"], { cwd: root, encoding: "utf-8" });
+    const lines = result.trim().split("\n");
+    expect(lines).toEqual([
+      expect.stringMatching(/^db\/host\s+config\s+app\s+value: localhost$/),
+      expect.stringMatching(/^db\/password\s+secret\s+app\s+provider: age$/),
+      expect.stringMatching(/^ci\/token\s+secret\s+ci\s+provider: age$/)
+    ]);
+  });
+
+  it("uses values[env] override in source description", () => {
+    const result = execFileSync(TSX, [CLI, "ls", "--env", "production"], {
       cwd: root,
       encoding: "utf-8"
     });
-    const lines = result.trim().split("\n");
-    expect(lines).toHaveLength(4);
-    expect(lines[0]).toMatch(/db\/host\s+config\s+default: localhost/);
-    expect(lines[1]).toMatch(/db\/port\s+config\s+default: 5432/);
-    expect(lines[2]).toMatch(/db\/password\s+secret/);
-    expect(lines[3]).toMatch(/auth\/token\s+secret\s+\(optional\)/);
+    expect(result).toMatch(/db\/host\s+config\s+app\s+value: prod-db/);
   });
 
-  it("lists keys with env source info", () => {
-    const result = execFileSync(TSX, [CLI, "ls", "--env", "dev"], {
+  it("--group ci marks app keys as filtered", () => {
+    const result = execFileSync(TSX, [CLI, "ls", "--group", "ci"], {
       cwd: root,
       encoding: "utf-8"
     });
-    const lines = result.trim().split("\n");
-    expect(lines).toHaveLength(4);
-    expect(lines[0]).toMatch(/db\/host\s+config\s+override: dev-db/);
-    expect(lines[1]).toMatch(/db\/port\s+config\s+default: 5432/);
-    expect(lines[2]).toMatch(/db\/password\s+secret\s+\(missing\)/);
-    expect(lines[3]).toMatch(/auth\/token\s+secret\s+\(optional, no value\)/);
+    expect(result).toMatch(/db\/host\s+\S+\s+app\s+\(filtered\)/);
+    expect(result).toMatch(/ci\/token\s+secret\s+ci\s+provider: age/);
   });
 
-  it("--reveal without --env fails", () => {
+  it("--reveal without --env errors", () => {
     try {
       execFileSync(TSX, [CLI, "ls", "--reveal"], {
         cwd: root,
@@ -83,168 +87,49 @@ describe("keyshelf ls", () => {
       expect((err as { stderr: string }).stderr).toContain("--reveal requires --env");
     }
   });
-
-  it("fails for missing environment", () => {
-    try {
-      execFileSync(TSX, [CLI, "ls", "--env", "staging"], {
-        cwd: root,
-        encoding: "utf-8",
-        stdio: "pipe"
-      });
-      expect.unreachable("should have thrown");
-    } catch (err) {
-      expect((err as { stderr: string }).stderr).toContain("Environment file not found");
-    }
-  });
 });
 
-describe("keyshelf ls (age)", () => {
+describe("keyshelf-next ls (reveal)", () => {
   let root: string;
-  const envName = "age-test";
 
   beforeAll(async () => {
-    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-age-ls-"));
-    await writeAgeFixture(root, envName);
-
-    execFileSync(
-      TSX,
-      [
-        CLI,
-        "set",
-        "--env",
-        envName,
-        "--provider",
-        "age",
-        "--value",
-        "age-secret-value",
-        "db/password"
-      ],
-      { cwd: root, encoding: "utf-8" }
-    );
-  });
-
-  it("shows provider source for age secrets", () => {
-    const result = execFileSync(TSX, [CLI, "ls", "--env", envName], {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-ls-reveal-"));
+    await writeAgeFixture(root);
+    execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "host-pw", "db/password"], {
       cwd: root,
       encoding: "utf-8"
     });
-    const lines = result.trim().split("\n");
-    expect(lines[0]).toMatch(/db\/host\s+config\s+override: prod-db/);
-    expect(lines[1]).toMatch(/db\/password\s+secret\s+provider: age/);
-  });
-
-  it("--reveal resolves and shows actual values", () => {
-    const result = execFileSync(TSX, [CLI, "ls", "--env", envName, "--reveal"], {
-      cwd: root,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"]
-    });
-    const lines = result.trim().split("\n");
-    expect(lines[0]).toMatch(/db\/host\s+config\s+prod-db/);
-    expect(lines[1]).toMatch(/db\/password\s+secret\s+age-secret-value/);
-  });
-
-  it("--format json emits resolved mappings with secret flags", async () => {
-    await writeFile(
-      join(root, ".env.keyshelf"),
-      ["DB_HOST=db/host", "DB_PASSWORD=db/password"].join("\n")
-    );
-
-    const result = execFileSync(
-      TSX,
-      [CLI, "ls", "--env", envName, "--reveal", "--map", ".env.keyshelf", "--format", "json"],
-      { cwd: root, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    );
-
-    const parsed = JSON.parse(result);
-    expect(parsed.env).toBe(envName);
-    expect(parsed.vars).toEqual([
-      { envVar: "DB_HOST", keyPath: "db/host", value: "prod-db", secret: false },
-      { envVar: "DB_PASSWORD", keyPath: "db/password", value: "age-secret-value", secret: true }
-    ]);
-  });
-
-  it("--format json marks template mappings secret if any referenced key is secret", async () => {
-    await writeFile(
-      join(root, ".env.keyshelf"),
-      ["DB_URL=postgres://${db/host}:${db/password}@host/db"].join("\n")
-    );
-
-    const result = execFileSync(
-      TSX,
-      [CLI, "ls", "--env", envName, "--reveal", "--map", ".env.keyshelf", "--format", "json"],
-      { cwd: root, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    );
-
-    const parsed = JSON.parse(result);
-    expect(parsed.vars).toEqual([
-      {
-        envVar: "DB_URL",
-        keyPath: null,
-        value: "postgres://prod-db:age-secret-value@host/db",
-        secret: true,
-        template: true
-      }
-    ]);
-  });
-
-  it("--format json without --map errors", () => {
-    try {
-      execFileSync(TSX, [CLI, "ls", "--env", envName, "--reveal", "--format", "json"], {
-        cwd: root,
-        encoding: "utf-8",
-        stdio: "pipe"
-      });
-      expect.unreachable("should have thrown");
-    } catch (err) {
-      expect((err as { stderr: string }).stderr).toContain("--format json requires");
-    }
-  });
-});
-
-describe("keyshelf ls (sops)", () => {
-  let root: string;
-  const envName = "sops-test";
-
-  beforeAll(async () => {
-    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-sops-ls-"));
-    await writeSopsFixture(root, envName);
-
-    execFileSync(
-      TSX,
-      [
-        CLI,
-        "set",
-        "--env",
-        envName,
-        "--provider",
-        "sops",
-        "--value",
-        "sops-secret-value",
-        "db/password"
-      ],
-      { cwd: root, encoding: "utf-8" }
-    );
-  });
-
-  it("shows provider source for sops secrets", () => {
-    const result = execFileSync(TSX, [CLI, "ls", "--env", envName], {
+    execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "ci-pw", "ci/token"], {
       cwd: root,
       encoding: "utf-8"
     });
-    const lines = result.trim().split("\n");
-    expect(lines[0]).toMatch(/db\/host\s+config\s+override: prod-db/);
-    expect(lines[1]).toMatch(/db\/password\s+secret\s+provider: sops/);
   });
 
-  it("--reveal resolves and shows actual values", () => {
-    const result = execFileSync(TSX, [CLI, "ls", "--env", envName, "--reveal"], {
+  it("--reveal --env shows resolved values", () => {
+    const result = execFileSync(TSX, [CLI, "ls", "--reveal", "--env", "dev"], {
       cwd: root,
       encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"]
+      stdio: ["inherit", "pipe", "pipe"]
     });
-    const lines = result.trim().split("\n");
-    expect(lines[0]).toMatch(/db\/host\s+config\s+prod-db/);
-    expect(lines[1]).toMatch(/db\/password\s+secret\s+sops-secret-value/);
+    expect(result).toMatch(/db\/host\s+\S+\s+app\s+localhost/);
+    expect(result).toMatch(/db\/password\s+secret\s+app\s+host-pw/);
+    expect(result).toMatch(/ci\/token\s+secret\s+ci\s+ci-pw/);
+  });
+
+  it("--format json --reveal --env --map emits structured vars", () => {
+    const result = execFileSync(
+      TSX,
+      [CLI, "ls", "--reveal", "--env", "dev", "--map", ".env.keyshelf", "--format", "json"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed).toMatchObject({
+      env: "dev",
+      vars: [
+        { envVar: "DB_HOST", keyPath: "db/host", value: "localhost", secret: false },
+        { envVar: "DB_PASSWORD", keyPath: "db/password", value: "host-pw", secret: true },
+        { envVar: "CI_TOKEN", keyPath: "ci/token", value: "ci-pw", secret: true }
+      ]
+    });
   });
 });

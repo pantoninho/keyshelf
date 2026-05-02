@@ -1,17 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Provider } from "../../../src/providers/types.js";
-import { ProviderRegistry } from "../../../src/providers/registry.js";
+import type { Provider } from "../../src/providers/types.js";
+import { ProviderRegistry } from "../../src/providers/registry.js";
+import { age, config, defineConfig, normalizeConfig, secret } from "../../src/config/index.js";
 import {
-  age,
-  config,
-  defineConfig,
-  normalizeConfig,
   renderAppMapping,
   resolve,
   resolveWithStatus,
-  secret,
   validate
-} from "../../../src/v5/index.js";
+} from "../../src/resolver/index.js";
 
 function mockProvider(name: string, resolveValue = "provider-value"): Provider {
   return {
@@ -28,7 +24,7 @@ function registry(...providers: Provider[]): ProviderRegistry {
   return value;
 }
 
-describe("v5 resolver", () => {
+describe("resolver", () => {
   it("resolves values by env before falling back to value/default", async () => {
     const provider = mockProvider("age", "secret-dev");
     const normalized = normalizeConfig(

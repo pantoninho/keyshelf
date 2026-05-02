@@ -1,295 +1,101 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtemp, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { describe, it, expect, beforeEach } from "vitest";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
-import { Decrypter } from "age-encryption";
-import { GCP_PROJECT, createGcpClient, writeGcpFixture, deleteSecrets } from "./helpers/gcp.js";
-import { writeAgeFixture } from "./helpers/age.js";
-import { writeSopsFixture } from "./helpers/sops.js";
+import { generateIdentity } from "../../src/providers/age.js";
 import { CLI, TSX } from "./helpers/cli.js";
 
-describe("keyshelf set (age)", () => {
+async function writeFixture(root: string) {
+  const identityFile = join(root, "key.txt");
+  const secretsDir = join(root, ".keyshelf", "secrets");
+  await writeFile(identityFile, await generateIdentity());
+  await mkdir(secretsDir, { recursive: true });
+
+  await writeFile(
+    join(root, "keyshelf.config.ts"),
+    [
+      `import { defineConfig, config, secret, age } from "keyshelf/config";`,
+      ``,
+      `export default defineConfig({`,
+      `  name: "demo",`,
+      `  envs: ["dev"],`,
+      `  keys: {`,
+      `    db: {`,
+      `      host: config({ default: "localhost" }),`,
+      `      password: secret({ value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+      `    },`,
+      `  },`,
+      `});`,
+      ``
+    ].join("\n")
+  );
+  await writeFile(
+    join(root, ".env.keyshelf"),
+    ["DB_HOST=db/host", "DB_PASSWORD=db/password"].join("\n")
+  );
+}
+
+describe("keyshelf-next set", () => {
   let root: string;
-  let identityFile: string;
-  let secretsDir: string;
-  const envName = "age-test";
 
-  beforeAll(async () => {
-    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-age-set-"));
-    await writeAgeFixture(root, envName);
-    identityFile = join(root, "key.txt");
-    secretsDir = join(root, ".keyshelf", "secrets");
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-set-"));
+    await writeFixture(root);
   });
 
-  async function decryptFile(filePath: string): Promise<string> {
-    const identity = await readFile(identityFile, "utf-8");
-    const ciphertext = await readFile(filePath);
-    const decrypter = new Decrypter();
-    decrypter.addIdentity(identity.trim());
-    return await decrypter.decrypt(ciphertext, "text");
-  }
-
-  it("creates an encrypted secret file", async () => {
-    execFileSync(
-      TSX,
-      [
-        CLI,
-        "set",
-        "--env",
-        envName,
-        "--provider",
-        "age",
-        "--value",
-        "age-secret-value",
-        "db/password"
-      ],
-      { cwd: root, encoding: "utf-8" }
-    );
-
-    const plaintext = await decryptFile(join(secretsDir, "db_password.age"));
-    expect(plaintext).toBe("age-secret-value");
-  });
-
-  it("overwrites an existing age secret", async () => {
-    execFileSync(
-      TSX,
-      [
-        CLI,
-        "set",
-        "--env",
-        envName,
-        "--provider",
-        "age",
-        "--value",
-        "updated-age-value",
-        "db/password"
-      ],
-      { cwd: root, encoding: "utf-8" }
-    );
-
-    const plaintext = await decryptFile(join(secretsDir, "db_password.age"));
-    expect(plaintext).toBe("updated-age-value");
-  });
-
-  it("uses default provider for secret keys when --provider is omitted", async () => {
-    execFileSync(
-      TSX,
-      [CLI, "set", "--env", envName, "--value", "default-provider-value", "db/password"],
-      { cwd: root, encoding: "utf-8" }
-    );
-
-    const plaintext = await decryptFile(join(secretsDir, "db_password.age"));
-    expect(plaintext).toBe("default-provider-value");
-  });
-
-  it("stores config keys as plaintext even when default provider is configured", async () => {
-    execFileSync(TSX, [CLI, "set", "--env", envName, "--value", "new-host", "db/host"], {
+  it("stores secret via the bound provider and run reads it back", () => {
+    execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "stored-pw", "db/password"], {
       cwd: root,
       encoding: "utf-8"
     });
 
-    const content = await readFile(join(root, ".keyshelf", `${envName}.yaml`), "utf-8");
-    expect(content).toContain("new-host");
-  });
-});
-
-describe("keyshelf set (sops)", () => {
-  let root: string;
-  let secretsFile: string;
-  const envName = "sops-test";
-
-  beforeAll(async () => {
-    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-sops-set-"));
-    await writeSopsFixture(root, envName);
-    secretsFile = join(root, ".keyshelf", "secrets.json");
-  });
-
-  it("creates an encrypted secret in the secrets file", async () => {
-    execFileSync(
-      TSX,
-      [
-        CLI,
-        "set",
-        "--env",
-        envName,
-        "--provider",
-        "sops",
-        "--value",
-        "sops-secret-value",
-        "db/password"
-      ],
-      { cwd: root, encoding: "utf-8" }
-    );
-
-    const content = JSON.parse(await readFile(secretsFile, "utf-8"));
-    expect(content.entries["db/password"]).toBeDefined();
-    expect(content.entries["db/password"].data).toBeDefined();
-    expect(content.sops.dataKey).toBeDefined();
-    expect(content.sops.mac).toBeDefined();
-  });
-
-  it("overwrites an existing sops secret", async () => {
-    execFileSync(
-      TSX,
-      [
-        CLI,
-        "set",
-        "--env",
-        envName,
-        "--provider",
-        "sops",
-        "--value",
-        "updated-sops-value",
-        "db/password"
-      ],
-      { cwd: root, encoding: "utf-8" }
-    );
-
-    // Verify via resolve (run command)
     const result = execFileSync(
       TSX,
-      [CLI, "run", "--env", envName, "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
+      [CLI, "run", "--env", "dev", "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
       { cwd: root, encoding: "utf-8" }
     );
-    expect(result.trim()).toBe("updated-sops-value");
+    expect(result.trim()).toBe("stored-pw");
   });
 
-  it("uses default provider for secret keys when --provider is omitted", async () => {
-    execFileSync(
-      TSX,
-      [CLI, "set", "--env", envName, "--value", "default-sops-value", "db/password"],
-      { cwd: root, encoding: "utf-8" }
-    );
-
-    const result = execFileSync(
-      TSX,
-      [CLI, "run", "--env", envName, "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
-      { cwd: root, encoding: "utf-8" }
-    );
-    expect(result.trim()).toBe("default-sops-value");
+  it("rejects setting a config key", () => {
+    try {
+      execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "x", "db/host"], {
+        cwd: root,
+        encoding: "utf-8",
+        stdio: "pipe"
+      });
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as { stderr: string }).stderr).toContain("keyshelf does not write config values");
+    }
   });
 
-  it("stores config keys as plaintext even when default provider is configured", async () => {
-    execFileSync(TSX, [CLI, "set", "--env", envName, "--value", "new-host", "db/host"], {
+  it("rejects unknown key", () => {
+    try {
+      execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "x", "does/not/exist"], {
+        cwd: root,
+        encoding: "utf-8",
+        stdio: "pipe"
+      });
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as { stderr: string }).stderr).toContain('"does/not/exist" is not defined');
+    }
+  });
+
+  it("reads value from stdin pipe when --value is omitted", () => {
+    execFileSync(TSX, [CLI, "set", "--env", "dev", "db/password"], {
       cwd: root,
-      encoding: "utf-8"
+      encoding: "utf-8",
+      input: "piped-pw\n"
     });
 
-    const content = await readFile(join(root, ".keyshelf", `${envName}.yaml`), "utf-8");
-    expect(content).toContain("new-host");
-  });
-});
-
-describe.skipIf(!GCP_PROJECT)("keyshelf set (gcp)", { timeout: 30_000 }, () => {
-  let root: string;
-  let client: SecretManagerServiceClient;
-  const envName = `test${Date.now()}`;
-  const createdSecrets: string[] = [];
-
-  beforeAll(async () => {
-    client = createGcpClient();
-    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-gcp-set-"));
-    await writeGcpFixture(root, envName, GCP_PROJECT!);
-  });
-
-  afterAll(async () => {
-    await deleteSecrets(client, createdSecrets);
-  });
-
-  it("creates a secret in GCP", async () => {
-    execFileSync(
+    const result = execFileSync(
       TSX,
-      [
-        CLI,
-        "set",
-        "--env",
-        envName,
-        "--provider",
-        "gcp",
-        "--value",
-        "e2e-secret-value",
-        "db/password"
-      ],
+      [CLI, "run", "--env", "dev", "--", "node", "-e", "console.log(process.env.DB_PASSWORD)"],
       { cwd: root, encoding: "utf-8" }
     );
-
-    const secretName = `projects/${GCP_PROJECT}/secrets/keyshelf__${envName}__db__password`;
-    createdSecrets.push(secretName);
-
-    const [version] = await client.accessSecretVersion({
-      name: `${secretName}/versions/latest`
-    });
-    expect(version.payload?.data?.toString()).toBe("e2e-secret-value");
-  });
-
-  it("overwrites an existing secret", async () => {
-    execFileSync(
-      TSX,
-      [
-        CLI,
-        "set",
-        "--env",
-        envName,
-        "--provider",
-        "gcp",
-        "--value",
-        "updated-value",
-        "db/password"
-      ],
-      { cwd: root, encoding: "utf-8" }
-    );
-
-    const secretName = `projects/${GCP_PROJECT}/secrets/keyshelf__${envName}__db__password`;
-
-    const [version] = await client.accessSecretVersion({
-      name: `${secretName}/versions/latest`
-    });
-    expect(version.payload?.data?.toString()).toBe("updated-value");
-  });
-});
-
-describe.skipIf(!GCP_PROJECT)("keyshelf set (gcp, with name)", { timeout: 30_000 }, () => {
-  let root: string;
-  let client: SecretManagerServiceClient;
-  const envName = `test${Date.now()}n`;
-  const projectName = `proj${Date.now()}`;
-  const createdSecrets: string[] = [];
-
-  beforeAll(async () => {
-    client = createGcpClient();
-    root = await mkdtemp(join(tmpdir(), "keyshelf-e2e-gcp-set-name-"));
-    await writeGcpFixture(root, envName, GCP_PROJECT!, { name: projectName });
-  });
-
-  afterAll(async () => {
-    await deleteSecrets(client, createdSecrets);
-  });
-
-  it("namespaces the secret id with the keyshelf name", async () => {
-    execFileSync(
-      TSX,
-      [
-        CLI,
-        "set",
-        "--env",
-        envName,
-        "--provider",
-        "gcp",
-        "--value",
-        "namespaced-value",
-        "db/password"
-      ],
-      { cwd: root, encoding: "utf-8" }
-    );
-
-    const secretName = `projects/${GCP_PROJECT}/secrets/keyshelf__${projectName}__${envName}__db__password`;
-    createdSecrets.push(secretName);
-
-    const [version] = await client.accessSecretVersion({
-      name: `${secretName}/versions/latest`
-    });
-    expect(version.payload?.data?.toString()).toBe("namespaced-value");
+    expect(result.trim()).toBe("piped-pw");
   });
 });

@@ -3,22 +3,22 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SecretManagerServiceClient } from "@google-cloud/secret-manager";
-import { age, config, defineConfig, secret, gcp } from "../../src/v5/config/index.js";
-import { normalizeConfig } from "../../src/v5/config/index.js";
-import { resolve as v5resolve } from "../../src/v5/resolver/index.js";
+import { age, config, defineConfig, secret, gcp } from "../../src/config/index.js";
+import { normalizeConfig } from "../../src/config/index.js";
+import { resolve as resolveResult } from "../../src/resolver/index.js";
 import { ProviderRegistry } from "../../src/providers/registry.js";
 import { AgeProvider, generateIdentity } from "../../src/providers/age.js";
 import { GcpSmProvider } from "../../src/providers/gcp-sm.js";
 
 async function ageFixture() {
-  const dir = await mkdtemp(join(tmpdir(), "keyshelf-v5-age-"));
+  const dir = await mkdtemp(join(tmpdir(), "keyshelf-age-"));
   const identityFile = join(dir, "id.txt");
   const secretsDir = join(dir, "secrets");
   await writeFile(identityFile, await generateIdentity());
   return { dir, identityFile, secretsDir };
 }
 
-describe("v5 resolver → providers", () => {
+describe("resolver → providers", () => {
   it("resolves an age secret end-to-end through the resolver", async () => {
     const { dir, identityFile, secretsDir } = await ageFixture();
 
@@ -50,7 +50,7 @@ describe("v5 resolver → providers", () => {
       })
     );
 
-    const resolved = await v5resolve({
+    const resolved = await resolveResult({
       config: normalized,
       rootDir: dir,
       registry
@@ -87,7 +87,7 @@ describe("v5 resolver → providers", () => {
       })
     );
 
-    const resolved = await v5resolve({
+    const resolved = await resolveResult({
       config: normalized,
       rootDir: "/repo",
       envName: "staging",
@@ -130,7 +130,7 @@ describe("v5 resolver → providers", () => {
       })
     );
 
-    const resolved = await v5resolve({
+    const resolved = await resolveResult({
       config: normalized,
       rootDir: "/repo",
       registry

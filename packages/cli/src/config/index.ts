@@ -1,10 +1,5 @@
 export { defineConfig, config, secret, age, gcp, sops } from "./factories.js";
-export {
-  findV5RootDir,
-  loadV5Config,
-  type LoadedV5Config,
-  type LoadV5ConfigOptions
-} from "./loader.js";
+export { findRootDir, loadConfig, type LoadedConfig, type LoadConfigOptions } from "./loader.js";
 export {
   isProviderRef,
   keyshelfConfigSchema,
