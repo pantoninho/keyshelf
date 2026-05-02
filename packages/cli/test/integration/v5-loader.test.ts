@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { findV5RootDir, loadV5Config } from "../../src/v5/config/index.js";
 
@@ -70,6 +70,43 @@ describe("v5 config loader", () => {
     await expect(loadV5Config(appDir)).rejects.toThrow(
       'DB_PASSWORD: references unknown key "db/password"'
     );
+  });
+
+  describe("KEYSHELF_CONFIG_MODULE_PATH override", () => {
+    afterEach(() => {
+      delete process.env.KEYSHELF_CONFIG_MODULE_PATH;
+      vi.resetModules();
+    });
+
+    it("routes the keyshelf/config alias to the path in the env var", async () => {
+      const { appDir } = await createFixture();
+
+      // Sentinel module that re-exports the real factories: if the alias
+      // routes through this file, the loader still resolves; if the env var
+      // is ignored we have no easy way to detect it, so prove routing by
+      // pointing at a missing path and asserting the failure message names
+      // it. That confirms the alias is honoring the env var.
+      process.env.KEYSHELF_CONFIG_MODULE_PATH = "/does/not/exist/keyshelf-config.mjs";
+      vi.resetModules();
+      const mod = await import("../../src/v5/config/loader.js");
+
+      await expect(mod.loadV5Config(appDir)).rejects.toThrow(
+        /does[\\/]not[\\/]exist[\\/]keyshelf-config\.mjs|Cannot find module/
+      );
+    });
+
+    it("resolves a relative override path against process.cwd()", async () => {
+      const { appDir } = await createFixture();
+
+      process.env.KEYSHELF_CONFIG_MODULE_PATH = "relative/missing/keyshelf-config.mjs";
+      vi.resetModules();
+      const mod = await import("../../src/v5/config/loader.js");
+
+      const expectedAbs = resolve("relative/missing/keyshelf-config.mjs");
+      await expect(mod.loadV5Config(appDir)).rejects.toThrow(
+        new RegExp(expectedAbs.replace(/[\\/]/g, "[\\\\/]"))
+      );
+    });
   });
 
   it("loads an explicit mapping file and rejects a missing explicit mapping file", async () => {
