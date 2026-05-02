@@ -18,10 +18,18 @@ interface RunOptions {
 }
 
 export const runCommand = new Command("run")
-  .description("Resolve keys and run a command with env vars injected")
-  .option("--env <env>", "Environment name")
-  .option("--group <names>", "Comma-separated group filter")
-  .option("--filter <prefixes>", "Comma-separated key-path prefix filter")
+  .description(
+    "Resolve keys through their bound providers and run a command with the mapped env vars injected"
+  )
+  .option(
+    "--env <env>",
+    "Environment name (only required when a selected key has values without a fallback)"
+  )
+  .option("--group <names>", "Comma-separated group filter; keys outside the set are skipped")
+  .option(
+    "--filter <prefixes>",
+    "Comma-separated key-path prefix filter (e.g. db,log); non-matching keys are skipped"
+  )
   .option("--map <file>", "Path to app mapping file (default: .env.keyshelf)")
   .argument("<command...>", "Command to run")
   .allowExcessArguments(true)

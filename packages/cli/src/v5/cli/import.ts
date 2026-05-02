@@ -3,12 +3,14 @@ import { readFile } from "node:fs/promises";
 import { loadV5Config } from "../config/index.js";
 import { isTemplateMapping } from "../../config/app-mapping.js";
 import { createDefaultRegistry } from "../../providers/setup.js";
+import { splitList } from "./options.js";
 import type { BuiltinProviderRef, NormalizedRecord } from "../config/types.js";
 
 interface ImportOptions {
   env?: string;
   file: string;
   map?: string;
+  group?: string;
 }
 
 function parseDotEnv(content: string): Record<string, string> {
@@ -26,9 +28,12 @@ function parseDotEnv(content: string): Record<string, string> {
 }
 
 export const importCommand = new Command("import")
-  .description("Bulk import secret values from a .env file via their bound providers")
+  .description(
+    "Bulk-write secret values to their bound providers from a .env file (does not edit keyshelf.config.ts)"
+  )
   .requiredOption("--file <file>", "Path to .env file to import")
-  .option("--env <env>", "Environment name")
+  .option("--env <env>", "Environment to import into (selects per-env provider binding)")
+  .option("--group <names>", "Comma-separated group filter; keys outside the set are skipped")
   .option("--map <map>", "Path to app mapping file (default: .env.keyshelf)")
   .action(async (opts: ImportOptions) => {
     const appDir = process.cwd();
@@ -40,6 +45,9 @@ export const importCommand = new Command("import")
         .filter((mapping) => !isTemplateMapping(mapping))
         .map((mapping) => [mapping.envVar, (mapping as { keyPath: string }).keyPath])
     );
+
+    const groupList = splitList(opts.group);
+    const groupSet = groupList ? new Set(groupList) : undefined;
 
     const dotEnvContent = await readFile(opts.file, "utf-8");
     const dotEnvVars = parseDotEnv(dotEnvContent);
@@ -64,8 +72,14 @@ export const importCommand = new Command("import")
 
       if (record.kind === "config") {
         console.error(
-          `warning: ${envVar} -> ${keyPath} is a config key. v5 does not write config via import — edit keyshelf.config.ts directly.`
+          `warning: ${envVar} -> ${keyPath} is a config key; v5 does not write config via import (edit keyshelf.config.ts directly)`
         );
+        skipped++;
+        continue;
+      }
+
+      if (groupSet !== undefined && (record.group === undefined || !groupSet.has(record.group))) {
+        console.error(`warning: ${envVar} -> ${keyPath} filtered out by --group; skipping`);
         skipped++;
         continue;
       }

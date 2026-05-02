@@ -10,9 +10,14 @@ interface SetOptions {
 }
 
 export const setCommand = new Command("set")
-  .description("Store a secret value via its bound provider")
-  .option("--env <env>", "Environment name")
-  .option("--value <value>", "Value to set (non-interactive)")
+  .description(
+    "Write a secret value to its bound provider (does not edit keyshelf.config.ts; config keys are hand-edited)"
+  )
+  .option("--env <env>", "Environment to write into (selects per-env provider binding)")
+  .option(
+    "--value <value>",
+    "Value to set (non-interactive); otherwise prompts on TTY or reads stdin"
+  )
   .argument("<key>", "Key path (e.g. db/password)")
   .action(async (keyPath: string, opts: SetOptions) => {
     const appDir = process.cwd();
