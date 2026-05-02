@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "benchmark:v5-runtime-deps": "node scripts/benchmark-v5-runtime-deps.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
