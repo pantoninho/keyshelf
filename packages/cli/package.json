@@ -26,6 +26,10 @@
       "types": "./dist/v5/config/index.d.ts",
       "import": "./dist/src/v5/config/index.js"
     },
+    "./v5": {
+      "types": "./dist/v5/runtime.d.ts",
+      "import": "./dist/src/v5/runtime.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

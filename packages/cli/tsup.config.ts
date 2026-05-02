@@ -7,5 +7,7 @@ export default defineConfig({
   bundle: false,
   clean: true,
   sourcemap: true,
-  dts: { entry: ["src/index.ts", "src/v5/config/index.ts"] }
+  dts: {
+    entry: ["src/index.ts", "src/v5/config/index.ts", "src/v5/runtime.ts"]
+  }
 });
