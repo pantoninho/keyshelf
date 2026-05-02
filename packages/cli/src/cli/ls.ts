@@ -176,7 +176,7 @@ function describeStatus(record: NormalizedRecord, status: KeyResolutionStatus | 
 }
 
 function describeSource(record: NormalizedRecord, envName: string | undefined): string {
-  const binding = activeBindingOf(record, envName);
+  const binding = envName ? (record.values?.[envName] ?? record.value) : record.value;
   if (record.kind === "secret") return describeSecretBinding(record, binding);
   return describeConfigBinding(record, binding);
 }
@@ -189,14 +189,6 @@ function describeSecretBinding(record: NormalizedRecord, binding: unknown): stri
 function describeConfigBinding(record: NormalizedRecord, binding: unknown): string {
   if (binding !== undefined) return `value: ${formatScalar(binding as ConfigBinding)}`;
   return record.optional ? "(optional, no value)" : "(missing)";
-}
-
-function activeBindingOf(record: NormalizedRecord, envName: string | undefined): unknown {
-  const values = record.values;
-  if (envName !== undefined && values !== undefined && Object.hasOwn(values, envName)) {
-    return values[envName];
-  }
-  return record.value;
 }
 
 function formatScalar(value: ConfigBinding): string {
