@@ -2,37 +2,44 @@
 import { appendFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import {
-  loadConfig,
-  resolve,
-  isTemplateMapping,
-  resolveTemplate,
-  ProviderRegistry,
-  PlaintextProvider,
   AgeProvider,
-  SopsProvider
+  PlaintextProvider,
+  ProviderRegistry,
+  SopsProvider,
+  formatSkipCause,
+  loadConfig,
+  renderAppMapping,
+  resolveWithStatus,
+  validate
 } from "keyshelf";
 
-const env = process.env.KEYSHELF_ENV;
+const envName = process.env.KEYSHELF_ENV || undefined;
 const mapsRaw = process.env.KEYSHELF_MAPS || "";
+const groupsRaw = process.env.KEYSHELF_GROUPS || "";
+const filtersRaw = process.env.KEYSHELF_FILTERS || "";
 const cwd = process.env.KEYSHELF_CWD || process.cwd();
 const githubEnv = process.env.GITHUB_ENV;
 
-const BUNDLED_PROVIDERS = new Set(["plaintext", "age", "sops"]);
-
-if (!env) fail("KEYSHELF_ENV is required");
 if (!githubEnv) fail("GITHUB_ENV is not set; this script must run inside GitHub Actions");
 
 const maps = mapsRaw
   .split("\n")
   .map((s) => s.trim())
   .filter(Boolean);
-
 if (maps.length === 0) fail("'map' input is empty");
+
+const groups = splitList(groupsRaw);
+const filters = splitList(filtersRaw);
+
+const registry = new ProviderRegistry();
+registry.register(new PlaintextProvider());
+registry.register(new AgeProvider());
+registry.register(new SopsProvider());
 
 for (const mapFile of maps) {
   let vars;
   try {
-    vars = await resolveMap(cwd, env, mapFile);
+    vars = await resolveMap(cwd, envName, mapFile);
   } catch (err) {
     fail(`Failed to resolve map "${mapFile}": ${err.message}`);
   }
@@ -40,58 +47,58 @@ for (const mapFile of maps) {
   for (const v of vars) {
     if (v.secret) process.stdout.write(`::add-mask::${v.value}\n`);
   }
-
   for (const v of vars) {
     appendEnv(v.envVar, v.value);
   }
 }
 
 async function resolveMap(appDir, envName, mapFile) {
-  const config = await loadConfig(appDir, envName, { mappingFile: mapFile });
+  const loaded = await loadConfig(appDir, { mappingFile: mapFile });
+  const resolveOpts = {
+    config: loaded.config,
+    envName,
+    rootDir: loaded.rootDir,
+    registry,
+    groups,
+    filters
+  };
 
-  const providerName = config.env.defaultProvider?.name;
-  if (providerName && !BUNDLED_PROVIDERS.has(providerName)) {
-    fail(
-      `Provider "${providerName}" is not bundled into the keyshelf action. ` +
-        `Bundled providers: ${[...BUNDLED_PROVIDERS].join(", ")}. ` +
-        `See https://github.com/pantoninho/keyshelf/issues/73 for status.`
-    );
+  const validation = await validate(resolveOpts);
+  if (validation.topLevelErrors.length > 0) {
+    fail(validation.topLevelErrors.map((e) => e.message).join("; "));
+  }
+  if (validation.keyErrors.length > 0) {
+    const lines = validation.keyErrors.map((e) => `  - ${e.path}: ${e.message}`).join("\n");
+    fail(`Validation errors:\n${lines}`);
   }
 
-  const registry = new ProviderRegistry();
-  registry.register(new PlaintextProvider());
-  registry.register(new AgeProvider());
-  registry.register(new SopsProvider());
-
-  const resolved = await resolve({
-    schema: config.schema,
-    env: config.env,
-    envName,
-    rootDir: config.rootDir,
-    registry
-  });
-  const resolvedMap = new Map(resolved.map((r) => [r.path, r.value]));
-  const schemaByPath = new Map(config.schema.map((k) => [k.path, k]));
+  const resolution = await resolveWithStatus(resolveOpts);
+  const rendered = renderAppMapping(loaded.appMapping, resolution);
+  const recordByPath = new Map(loaded.config.keys.map((k) => [k.path, k]));
 
   const vars = [];
-  for (const mapping of config.appMapping) {
-    if (isTemplateMapping(mapping)) {
-      const { value, missing } = resolveTemplate(mapping.template, resolvedMap);
-      for (const m of missing) {
-        process.stderr.write(
-          `warning: ${mapping.envVar} references "${m}" which is not defined in schema\n`
-        );
-      }
-      const secret = mapping.keyPaths.some((p) => schemaByPath.get(p)?.isSecret === true);
-      vars.push({ envVar: mapping.envVar, value, secret });
-    } else {
-      const value = resolvedMap.get(mapping.keyPath);
-      if (value === undefined) continue;
-      const secret = schemaByPath.get(mapping.keyPath)?.isSecret === true;
-      vars.push({ envVar: mapping.envVar, value, secret });
+  for (const result of rendered) {
+    if (result.status === "skipped") {
+      process.stderr.write(
+        `keyshelf: skipping ${result.envVar} — referenced key '${result.keyPath}' ${formatSkipCause(result.cause)}\n`
+      );
+      continue;
     }
+
+    const secret =
+      "template" in result.mapping
+        ? result.mapping.keyPaths.some((p) => recordByPath.get(p)?.kind === "secret")
+        : recordByPath.get(result.mapping.keyPath)?.kind === "secret";
+    vars.push({ envVar: result.envVar, value: result.value, secret });
   }
   return vars;
+}
+
+function splitList(raw) {
+  return raw
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function appendEnv(name, value) {

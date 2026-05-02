@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatSkipCause } from "../../../src/v5/index.js";
+import { formatSkipCause } from "../../src/index.js";
 
 describe("formatSkipCause", () => {
   it("formats group-filter with active group list", () => {

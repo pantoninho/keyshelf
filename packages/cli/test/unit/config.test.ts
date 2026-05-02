@@ -7,9 +7,9 @@ import {
   normalizeConfig,
   secret,
   validateAppMappingReferences
-} from "../../../src/v5/config/index.js";
+} from "../../src/config/index.js";
 
-describe("v5 config factories and validation", () => {
+describe("config factories and validation", () => {
   it("normalizes nested namespaces, string paths, bare scalars, config, and secrets", () => {
     const normalized = normalizeConfig(
       defineConfig({

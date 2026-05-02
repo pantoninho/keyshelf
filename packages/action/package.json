@@ -15,14 +15,14 @@
   },
   "scripts": {
     "build": "tsup",
-    "benchmark:v5-runtime-deps": "node scripts/benchmark-v5-runtime-deps.mjs",
+    "benchmark:runtime-deps": "node scripts/benchmark-runtime-deps.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
-    "keyshelf": "^4.4.0",
+    "keyshelf": "file:../cli",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.1"

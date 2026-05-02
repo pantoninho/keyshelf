@@ -1,12 +1,12 @@
 name: keyshelf
-description: Resolve keyshelf-managed config and secrets into $GITHUB_ENV with auto-masking for !secret keys
+description: Resolve keyshelf-managed config and secrets into $GITHUB_ENV with auto-masking for secret keys
 branding:
   icon: key
   color: purple
 
 inputs:
   env:
-    description: Environment name. Required for v4 configs; for v5 configs only required when at least one selected key has env-specific values without a fallback.
+    description: Environment name. Required only when at least one selected key has env-specific values without a fallback.
     required: false
     default: ""
   map:
@@ -17,32 +17,27 @@ inputs:
     required: false
     default: ""
   working-directory:
-    description: Directory containing keyshelf.config.ts (v5) or keyshelf.yaml (v4)
+    description: Directory containing keyshelf.config.ts
     required: false
     default: "."
   groups:
-    description: (v5 only) Comma- or newline-separated list of groups to include
+    description: Comma- or newline-separated list of groups to include
     required: false
     default: ""
   filters:
-    description: (v5 only) Comma- or newline-separated list of key-path prefixes to include
+    description: Comma- or newline-separated list of key-path prefixes to include
     required: false
     default: ""
 
 runs:
   using: composite
   steps:
-    - name: Detect config mode
-      id: mode
+    - name: Validate inputs
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
-        if [ -f "keyshelf.config.ts" ]; then
-          echo "mode=v5" >> "$GITHUB_OUTPUT"
-        elif [ -f "keyshelf.yaml" ]; then
-          echo "mode=v4" >> "$GITHUB_OUTPUT"
-        else
-          echo "::error::Neither keyshelf.config.ts (v5) nor keyshelf.yaml (v4) found in $(pwd)"
+        if [ ! -f "keyshelf.config.ts" ]; then
+          echo "::error::keyshelf.config.ts not found in $(pwd)"
           exit 1
         fi
         if [ -z "${{ inputs.map }}" ]; then
@@ -50,22 +45,7 @@ runs:
           exit 1
         fi
 
-    - name: Validate v4 inputs
-      if: steps.mode.outputs.mode == 'v4'
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        if [ -z "${{ inputs.env }}" ]; then
-          echo "::error::'env' is required for v4 configs"
-          exit 1
-        fi
-        if [ ! -f ".keyshelf/${{ inputs.env }}.yaml" ]; then
-          echo "::error::Env file .keyshelf/${{ inputs.env }}.yaml not found in $(pwd)"
-          exit 1
-        fi
-
-    - name: Install v5 runtime deps
-      if: steps.mode.outputs.mode == 'v5'
+    - name: Install runtime deps
       shell: bash
       working-directory: ${{ github.action_path }}
       run: |
@@ -75,35 +55,16 @@ runs:
           npm install --no-save --no-audit --no-fund --no-package-lock jiti@^2.6.1 zod@^4.4.1
         fi
 
-    - name: Write identity (v4)
-      if: steps.mode.outputs.mode == 'v4' && inputs.identity != ''
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      env:
-        KEYSHELF_ENV: ${{ inputs.env }}
-        KEYSHELF_IDENTITY: ${{ inputs.identity }}
-      run: node "${{ github.action_path }}/dist/write-identity.mjs"
-
-    - name: Write identity (v5)
-      if: steps.mode.outputs.mode == 'v5' && inputs.identity != ''
+    - name: Write identity
+      if: inputs.identity != ''
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
         KEYSHELF_IDENTITY: ${{ inputs.identity }}
         KEYSHELF_CONFIG_MODULE_PATH: ${{ github.action_path }}/dist/keyshelf-config.mjs
-      run: node "${{ github.action_path }}/dist/write-identity-v5.mjs"
+      run: node "${{ github.action_path }}/dist/write-identity.mjs"
 
-    - name: Resolve and emit env vars (v4)
-      if: steps.mode.outputs.mode == 'v4'
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      env:
-        KEYSHELF_ENV: ${{ inputs.env }}
-        KEYSHELF_MAPS: ${{ inputs.map }}
-      run: node "${{ github.action_path }}/dist/emit-env.mjs"
-
-    - name: Resolve and emit env vars (v5)
-      if: steps.mode.outputs.mode == 'v5'
+    - name: Resolve and emit env vars
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
@@ -112,4 +73,4 @@ runs:
         KEYSHELF_GROUPS: ${{ inputs.groups }}
         KEYSHELF_FILTERS: ${{ inputs.filters }}
         KEYSHELF_CONFIG_MODULE_PATH: ${{ github.action_path }}/dist/keyshelf-config.mjs
-      run: node "${{ github.action_path }}/dist/emit-env-v5.mjs"
+      run: node "${{ github.action_path }}/dist/emit-env.mjs"

@@ -1,32 +1,67 @@
-import { readFile } from "node:fs/promises";
-import { resolve, dirname, join } from "node:path";
 import { existsSync } from "node:fs";
-import { parseSchema, type KeyDefinition } from "./schema.js";
-import { parseEnvironment, type EnvConfig } from "./environment.js";
+import { readFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { performance } from "node:perf_hooks";
+import { createJiti, type Jiti } from "jiti";
 import { parseAppMapping, type AppMapping } from "./app-mapping.js";
+import { normalizeConfig, validateAppMappingReferences } from "./schema.js";
+import type { KeyshelfConfig, NormalizedConfig } from "./types.js";
 
-const SCHEMA_FILE = "keyshelf.yaml";
-const ENV_DIR = ".keyshelf";
+const CONFIG_FILE = "keyshelf.config.ts";
 const APP_MAPPING_FILE = ".env.keyshelf";
+
+let cachedJiti: Jiti | undefined;
+
+function getJiti(): Jiti {
+  if (cachedJiti === undefined) {
+    // Pin `keyshelf/config` to the running CLI build. If we let jiti resolve via
+    // node_modules, a user with a different keyshelf version installed would get
+    // factories whose `__kind` literals are produced by *that* package's source.
+    // The discriminated unions in schema.ts match by string equality, so values
+    // would parse — until the schemas drift. This alias keeps factory output and
+    // validators in lockstep regardless of what's installed.
+    // Bundlers (e.g. tsup with noExternal) collapse the config module into
+    // the same file as the loader, so the sibling `./index.js` doesn't exist
+    // at runtime. KEYSHELF_CONFIG_MODULE_PATH lets the bundled host (e.g. the
+    // GitHub Action) point the alias at a sidecar copy.
+    const override = process.env.KEYSHELF_CONFIG_MODULE_PATH;
+    const configModulePath =
+      override !== undefined
+        ? resolve(override)
+        : fileURLToPath(new URL("./index.js", import.meta.url));
+    cachedJiti = createJiti(import.meta.url, {
+      alias: {
+        "keyshelf/config": configModulePath
+      }
+    });
+  }
+  return cachedJiti;
+}
 
 export interface LoadedConfig {
   rootDir: string;
-  name?: string;
-  schema: KeyDefinition[];
-  env: EnvConfig;
+  configPath: string;
+  config: NormalizedConfig;
   appMapping: AppMapping[];
+  loadTimeMs: number;
+}
+
+export interface LoadConfigOptions {
+  configPath?: string;
+  mappingFile?: string;
 }
 
 export function findRootDir(from: string): string {
   let dir = resolve(from);
 
   while (true) {
-    if (existsSync(join(dir, SCHEMA_FILE))) {
+    if (existsSync(join(dir, CONFIG_FILE))) {
       return dir;
     }
     const parent = dirname(dir);
     if (parent === dir) {
-      throw new Error(`Could not find ${SCHEMA_FILE} in ${from} or any parent directory`);
+      throw new Error(`Could not find ${CONFIG_FILE} in ${from} or any parent directory`);
     }
     dir = parent;
   }
@@ -34,67 +69,50 @@ export function findRootDir(from: string): string {
 
 export async function loadConfig(
   appDir: string,
-  envName: string,
-  options?: { mappingFile?: string }
+  options: LoadConfigOptions = {}
 ): Promise<LoadedConfig> {
-  const rootDir = findRootDir(appDir);
+  const explicitConfigPath =
+    options.configPath === undefined ? undefined : resolve(options.configPath);
+  const rootDir =
+    explicitConfigPath === undefined ? findRootDir(appDir) : dirname(explicitConfigPath);
+  const configPath = explicitConfigPath ?? join(rootDir, CONFIG_FILE);
 
-  const schemaPath = join(rootDir, SCHEMA_FILE);
-  const schemaContent = await readFile(schemaPath, "utf-8");
-  const parsed = parseSchema(schemaContent);
-  const schema = parsed.keys;
+  const started = performance.now();
+  const rawConfig = await importConfig(configPath);
+  const config = normalizeConfig(rawConfig);
+  const loadTimeMs = performance.now() - started;
 
-  const envPath = join(rootDir, ENV_DIR, `${envName}.yaml`);
-  let env: EnvConfig;
-  try {
-    const envContent = await readFile(envPath, "utf-8");
-    env = parseEnvironment(envContent);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(`Environment file not found: ${envPath}`, {
-        cause: err
-      });
-    }
-    throw err;
-  }
-
-  const mappingPath = options?.mappingFile
+  const mappingPath = options.mappingFile
     ? resolve(options.mappingFile)
-    : join(appDir, APP_MAPPING_FILE);
-  let appMapping: AppMapping[];
+    : join(resolve(appDir), APP_MAPPING_FILE);
+  const appMapping = await loadAppMapping(mappingPath, options.mappingFile !== undefined);
+  validateAppMappingReferences(appMapping, config.keys);
+
+  return {
+    rootDir,
+    configPath,
+    config,
+    appMapping,
+    loadTimeMs
+  };
+}
+
+async function importConfig(configPath: string): Promise<KeyshelfConfig> {
+  return await getJiti().import<KeyshelfConfig>(configPath, { default: true });
+}
+
+async function loadAppMapping(mappingPath: string, required: boolean): Promise<AppMapping[]> {
   try {
-    const mappingContent = await readFile(mappingPath, "utf-8");
-    appMapping = parseAppMapping(mappingContent);
+    return parseAppMapping(await readFile(mappingPath, "utf-8"));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      if (options?.mappingFile) {
+      if (required) {
         throw new Error(`App mapping file not found: ${mappingPath}`, {
           cause: err
         });
       }
-      appMapping = [];
-    } else {
-      throw err;
+      return [];
     }
+    throw err;
   }
-
-  // Merge global provider config with env-level provider config
-  const globalProvider = parsed.config.provider;
-  if (globalProvider && !env.defaultProvider) {
-    env = { ...env, defaultProvider: globalProvider };
-  } else if (globalProvider && env.defaultProvider) {
-    const envProvider = env.defaultProvider;
-    env = {
-      ...env,
-      defaultProvider: {
-        name: envProvider.name,
-        options: {
-          ...(globalProvider.name === envProvider.name ? globalProvider.options : {}),
-          ...envProvider.options
-        }
-      }
-    };
-  }
-
-  return { rootDir, name: parsed.config.name, schema, env, appMapping };
 }

@@ -1,6 +1,6 @@
-import type { V5SkipCause } from "./types.js";
+import type { SkipCause } from "./types.js";
 
-export function formatSkipCause(cause: V5SkipCause): string {
+export function formatSkipCause(cause: SkipCause): string {
   switch (cause.type) {
     case "group-filter":
       return `is filtered out by --group=${cause.activeGroups.join(",")}`;

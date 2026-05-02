@@ -1,17 +1,32 @@
 import { Command } from "commander";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { findRootDir, loadConfig } from "../config/loader.js";
-import { parseSchema, type KeyDefinition } from "../config/schema.js";
-import { isTaggedValue, type TaggedValue } from "../config/yaml-tags.js";
-import type { EnvConfig } from "../config/environment.js";
-import { resolve } from "../resolver/index.js";
+import { loadConfig } from "../config/index.js";
+import {
+  formatSkipCause,
+  renderAppMapping,
+  resolveWithStatus,
+  validate
+} from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
-import { isTemplateMapping, resolveTemplate, type AppMapping } from "../config/app-mapping.js";
+import { splitList } from "./options.js";
+import type { BuiltinProviderRef, ConfigBinding, NormalizedRecord } from "../config/types.js";
+import type { KeyResolutionStatus, Resolution } from "../resolver/types.js";
+import type { AppMapping } from "../config/app-mapping.js";
+
+type LsFormat = "table" | "json";
+
+interface LsOptions {
+  env?: string;
+  group?: string;
+  filter?: string;
+  reveal?: boolean;
+  map?: string;
+  format?: string;
+}
 
 interface KeyRow {
   path: string;
-  type: string;
+  kind: string;
+  group: string;
   detail: string;
 }
 
@@ -23,43 +38,75 @@ interface JsonVar {
   template?: true;
 }
 
-type LsFormat = "table" | "json";
-
-interface LsOpts {
-  env?: string;
-  reveal?: boolean;
-  map?: string;
-  format?: string;
-}
-
 export const lsCommand = new Command("ls")
-  .description("List keys defined in the schema")
-  .option("--env <env>", "Environment name")
-  .option("--reveal", "Resolve and show actual values (requires --env)")
-  .option("--map <file>", "Path to app mapping file")
+  .description(
+    "List records declared in keyshelf.config.ts with their kind, group, and active binding"
+  )
+  .option("--env <env>", "Environment name; selects which per-env binding the detail column shows")
+  .option(
+    "--group <names>",
+    "Comma-separated group filter; keys outside the set are marked filtered"
+  )
+  .option(
+    "--filter <prefixes>",
+    "Comma-separated key-path prefix filter (e.g. db,log); non-matching keys are marked filtered"
+  )
+  .option("--reveal", "Resolve through bound providers and show resolved values (requires --env)")
+  .option("--map <file>", "Path to app mapping file (default: .env.keyshelf)")
   .option("--format <format>", "Output format: table (default) or json", "table")
-  .action(async (opts: LsOpts) => {
+  .action(async (opts: LsOptions) => {
     const format = parseFormat(opts.format);
 
     if (opts.reveal && !opts.env) {
       console.error("error: --reveal requires --env");
       process.exit(1);
     }
-
     if (format === "json" && !(opts.reveal && opts.env && opts.map)) {
       console.error("error: --format json requires --reveal, --env, and --map");
       process.exit(1);
     }
 
     const appDir = process.cwd();
+    const loaded = await loadConfig(appDir, { mappingFile: opts.map });
+    const groups = splitList(opts.group);
+    const filters = splitList(opts.filter);
 
-    if (opts.env && opts.reveal) {
-      await printRevealed(appDir, opts.env, opts.map, format);
-    } else if (opts.env) {
-      await printWithEnv(appDir, opts.env, opts.map);
-    } else {
-      await printSchemaOnly(appDir);
+    if (opts.reveal && opts.env !== undefined) {
+      const registry = createDefaultRegistry();
+      const resolveOpts = {
+        config: loaded.config,
+        envName: opts.env,
+        rootDir: loaded.rootDir,
+        registry,
+        groups,
+        filters
+      };
+
+      const validation = await validate(resolveOpts);
+      if (validation.topLevelErrors.length > 0) {
+        for (const err of validation.topLevelErrors) console.error(`error: ${err.message}`);
+        process.exit(1);
+      }
+      if (validation.keyErrors.length > 0) {
+        console.error("Validation errors:");
+        for (const err of validation.keyErrors) console.error(`  - ${err.path}: ${err.message}`);
+        process.exit(1);
+      }
+
+      const resolution = await resolveWithStatus(resolveOpts);
+
+      if (format === "json") {
+        const vars = buildJsonVars(loaded.appMapping, loaded.config.keys, resolution);
+        process.stdout.write(JSON.stringify({ env: opts.env, vars }, null, 2) + "\n");
+        return;
+      }
+
+      console.error("warning: revealing secret values");
+      printRows(buildRevealedRows(loaded.config.keys, resolution));
+      return;
     }
+
+    printRows(buildSchemaRows(loaded.config.keys, opts.env, groups, filters));
   });
 
 function parseFormat(raw: string | undefined): LsFormat {
@@ -69,143 +116,146 @@ function parseFormat(raw: string | undefined): LsFormat {
   process.exit(1);
 }
 
-async function printSchemaOnly(appDir: string): Promise<void> {
-  const rootDir = findRootDir(appDir);
-  const content = await readFile(join(rootDir, "keyshelf.yaml"), "utf-8");
-  const { keys } = parseSchema(content);
+function buildSchemaRows(
+  records: NormalizedRecord[],
+  envName: string | undefined,
+  groups: string[] | undefined,
+  filters: string[] | undefined
+): KeyRow[] {
+  const groupSet = groups ? new Set(groups) : undefined;
+  const filterPrefixes = filters ?? [];
 
-  const rows = keys.map((key): KeyRow => {
-    const type = key.isSecret ? "secret" : "config";
-    let detail = "";
-    if (key.defaultValue !== undefined) {
-      detail = `default: ${key.defaultValue}`;
-    } else if (key.optional) {
-      detail = "(optional)";
-    }
-    return { path: key.path, type, detail };
+  return records.map((record): KeyRow => {
+    const filtered = isFiltered(record, groupSet, filterPrefixes);
+    return {
+      path: record.path,
+      kind: record.kind,
+      group: record.group ?? "",
+      detail: filtered ? "(filtered)" : describeSource(record, envName)
+    };
   });
-
-  printRows(rows);
 }
 
-async function printWithEnv(appDir: string, envName: string, mapFile?: string): Promise<void> {
-  const config = await loadConfig(appDir, envName, { mappingFile: mapFile });
-
-  const rows = config.schema.map((key): KeyRow => {
-    const type = key.isSecret ? "secret" : "config";
-    const detail = describeSource(key, config.env);
-    return { path: key.path, type, detail };
+function buildRevealedRows(records: NormalizedRecord[], resolution: Resolution): KeyRow[] {
+  return records.map((record): KeyRow => {
+    const status = resolution.statusByPath.get(record.path);
+    return {
+      path: record.path,
+      kind: record.kind,
+      group: record.group ?? "",
+      detail: describeStatus(record, status)
+    };
   });
-
-  printRows(rows);
 }
 
-export function describeSource(key: KeyDefinition, env: EnvConfig): string {
-  const override = env.overrides[key.path];
-
-  if (override !== undefined && !isTaggedValue(override)) {
-    return `override: ${override}`;
+function describeStatus(record: NormalizedRecord, status: KeyResolutionStatus | undefined): string {
+  if (status?.status === "resolved") return status.value;
+  if (status?.status === "filtered") return "(filtered)";
+  if (status?.status === "skipped") {
+    if (record.optional) return "(optional, no value)";
+    return `key '${record.path}' ${formatSkipCause(status.cause)}`;
   }
-
-  if (override !== undefined && isTaggedValue(override)) {
-    return `provider: ${(override as TaggedValue).tag}`;
-  }
-
-  if (key.isSecret && env.defaultProvider) {
-    return `provider: ${env.defaultProvider.name}`;
-  }
-
-  if (!key.isSecret && key.defaultValue !== undefined) {
-    return `default: ${key.defaultValue}`;
-  }
-
-  if (key.optional) {
-    return "(optional, no value)";
-  }
-
+  if (status?.status === "error") return `error: ${status.message}`;
   return "(missing)";
 }
 
-async function printRevealed(
-  appDir: string,
-  envName: string,
-  mapFile: string | undefined,
-  format: LsFormat
-): Promise<void> {
-  if (format === "table") {
-    console.error("warning: revealing secret values");
+function describeSource(record: NormalizedRecord, envName: string | undefined): string {
+  const binding = getActiveBinding(record, envName);
+
+  if (record.kind === "secret") {
+    if (binding !== undefined) {
+      return `provider: ${(binding as BuiltinProviderRef).name}`;
+    }
+    if (record.optional) return "(optional, no provider)";
+    return "(no provider bound)";
   }
 
-  const config = await loadConfig(appDir, envName, { mappingFile: mapFile });
-  const registry = createDefaultRegistry();
-
-  const resolved = await resolve({
-    schema: config.schema,
-    env: config.env,
-    envName,
-    rootDir: config.rootDir,
-    registry,
-    keyshelfName: config.name
-  });
-
-  const resolvedMap = new Map(resolved.map((r) => [r.path, r.value]));
-
-  if (format === "json") {
-    const vars = buildJsonVars(config.appMapping, config.schema, resolvedMap);
-    process.stdout.write(JSON.stringify({ env: envName, vars }, null, 2) + "\n");
-    return;
+  if (binding !== undefined) {
+    return `value: ${formatScalar(binding as ConfigBinding)}`;
   }
-
-  const rows = config.schema.map((key): KeyRow => {
-    const type = key.isSecret ? "secret" : "config";
-    const value = resolvedMap.get(key.path);
-    const detail =
-      value !== undefined ? value : key.optional ? "(optional, no value)" : "(missing)";
-    return { path: key.path, type, detail };
-  });
-
-  printRows(rows);
+  if (record.optional) return "(optional, no value)";
+  return "(missing)";
 }
 
-export function buildJsonVars(
-  appMapping: AppMapping[],
-  schema: KeyDefinition[],
-  resolvedMap: Map<string, string>
-): JsonVar[] {
-  const schemaByPath = new Map(schema.map((k) => [k.path, k]));
-  const vars: JsonVar[] = [];
-
-  for (const mapping of appMapping) {
-    if (isTemplateMapping(mapping)) {
-      const { value, missing } = resolveTemplate(mapping.template, resolvedMap);
-      for (const m of missing) {
-        console.error(
-          `warning: ${mapping.envVar} references "${m}" which is not defined in schema`
-        );
-      }
-      const secret = mapping.keyPaths.some((p) => schemaByPath.get(p)?.isSecret === true);
-      vars.push({ envVar: mapping.envVar, keyPath: null, value, secret, template: true });
-    } else {
-      const value = resolvedMap.get(mapping.keyPath);
-      if (value === undefined) continue;
-      const secret = schemaByPath.get(mapping.keyPath)?.isSecret === true;
-      vars.push({ envVar: mapping.envVar, keyPath: mapping.keyPath, value, secret });
-    }
+function getActiveBinding(record: NormalizedRecord, envName: string | undefined): unknown {
+  if (
+    envName !== undefined &&
+    record.values !== undefined &&
+    Object.hasOwn(record.values, envName)
+  ) {
+    return record.values[envName];
   }
+  return record.value;
+}
 
-  return vars;
+function formatScalar(value: ConfigBinding): string {
+  return typeof value === "string" ? value : String(value);
+}
+
+function isFiltered(
+  record: NormalizedRecord,
+  groupSet: Set<string> | undefined,
+  filterPrefixes: string[]
+): boolean {
+  if (groupSet !== undefined && groupSet.size > 0) {
+    if (record.group !== undefined && !groupSet.has(record.group)) return true;
+  }
+  if (filterPrefixes.length > 0) {
+    const matches = filterPrefixes.some(
+      (prefix) => record.path === prefix || record.path.startsWith(`${prefix}/`)
+    );
+    if (!matches) return true;
+  }
+  return false;
+}
+
+function buildJsonVars(
+  mappings: AppMapping[],
+  records: NormalizedRecord[],
+  resolution: Resolution
+): JsonVar[] {
+  const recordByPath = new Map(records.map((record) => [record.path, record]));
+  const rendered = renderAppMapping(mappings, resolution);
+
+  return rendered.flatMap((result): JsonVar[] => {
+    if (result.status !== "rendered") return [];
+
+    if ("template" in result.mapping) {
+      const secret = result.mapping.keyPaths.some(
+        (path) => recordByPath.get(path)?.kind === "secret"
+      );
+      return [
+        {
+          envVar: result.envVar,
+          keyPath: null,
+          value: result.value,
+          secret,
+          template: true
+        }
+      ];
+    }
+
+    return [
+      {
+        envVar: result.envVar,
+        keyPath: result.mapping.keyPath,
+        value: result.value,
+        secret: recordByPath.get(result.mapping.keyPath)?.kind === "secret"
+      }
+    ];
+  });
 }
 
 function printRows(rows: KeyRow[]): void {
   if (rows.length === 0) return;
-
   const pathWidth = Math.max(...rows.map((r) => r.path.length));
-  const typeWidth = Math.max(...rows.map((r) => r.type.length));
+  const kindWidth = Math.max(...rows.map((r) => r.kind.length));
+  const groupWidth = Math.max(...rows.map((r) => r.group.length));
 
   for (const row of rows) {
-    const line = [row.path.padEnd(pathWidth), row.type.padEnd(typeWidth), row.detail]
-      .filter(Boolean)
-      .join("   ");
-    console.log(line);
+    const parts = [row.path.padEnd(pathWidth), row.kind.padEnd(kindWidth)];
+    if (groupWidth > 0) parts.push(row.group.padEnd(groupWidth));
+    parts.push(row.detail);
+    console.log(parts.filter((p) => p !== "").join("   "));
   }
 }

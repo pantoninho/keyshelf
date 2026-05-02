@@ -6,7 +6,7 @@ import { performance } from 'perf_hooks';
 import { createJiti } from 'jiti';
 import { z } from 'zod';
 
-// ../cli/dist/src/v5/config/factories.js
+// ../cli/dist/src/config/factories.js
 function defineConfig(input) {
   return { __kind: "keyshelf:config", ...input };
 }
@@ -373,7 +373,7 @@ function getKind(value) {
   return value.__kind;
 }
 
-// ../cli/dist/src/v5/config/loader.js
+// ../cli/dist/src/config/loader.js
 var CONFIG_FILE = "keyshelf.config.ts";
 var APP_MAPPING_FILE = ".env.keyshelf";
 var cachedJiti;
@@ -389,7 +389,7 @@ function getJiti() {
   }
   return cachedJiti;
 }
-function findV5RootDir(from) {
+function findRootDir(from) {
   let dir = resolve(from);
   while (true) {
     if (existsSync(join(dir, CONFIG_FILE))) {
@@ -402,9 +402,9 @@ function findV5RootDir(from) {
     dir = parent;
   }
 }
-async function loadV5Config(appDir, options = {}) {
+async function loadConfig(appDir, options = {}) {
   const explicitConfigPath = options.configPath === void 0 ? void 0 : resolve(options.configPath);
-  const rootDir = explicitConfigPath === void 0 ? findV5RootDir(appDir) : dirname(explicitConfigPath);
+  const rootDir = explicitConfigPath === void 0 ? findRootDir(appDir) : dirname(explicitConfigPath);
   const configPath = explicitConfigPath ?? join(rootDir, CONFIG_FILE);
   const started = performance.now();
   const rawConfig = await importConfig(configPath);
@@ -440,4 +440,4 @@ async function loadAppMapping(mappingPath, required) {
   }
 }
 
-export { age, config, defineConfig, findV5RootDir, gcp, isProviderRef, keyshelfConfigSchema, loadV5Config, normalizeConfig, providerRefSchema, secret, sops, validateAppMappingReferences };
+export { age, config, defineConfig, findRootDir, gcp, isProviderRef, keyshelfConfigSchema, loadConfig, normalizeConfig, providerRefSchema, secret, sops, validateAppMappingReferences };

@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { emitConfig } from "../src/emit.js";
 import { loadFixture } from "./test-utils.js";
 
-const V5_CONFIG_MODULE = resolve("../cli/src/v5/config/index.ts");
-const V5_LOADER_MODULE = `file://${resolve("../cli/src/v5/config/loader.ts")}`;
+const KEYSHELF_CONFIG_MODULE = resolve("../cli/src/config/index.ts");
+const KEYSHELF_LOADER_MODULE = `file://${resolve("../cli/src/config/loader.ts")}`;
 
-describe("round-trip through the v5 loader", () => {
+describe("round-trip through the keyshelf loader", () => {
   const roots: string[] = [];
 
   afterEach(async () => {
@@ -26,9 +26,9 @@ describe("round-trip through the v5 loader", () => {
       roots.push(root);
       await writeFile(join(root, "keyshelf.config.ts"), emitConfig(migration), "utf-8");
 
-      process.env.KEYSHELF_CONFIG_MODULE_PATH = V5_CONFIG_MODULE;
-      const { loadV5Config } = (await import(V5_LOADER_MODULE)) as {
-        loadV5Config(root: string): Promise<{
+      process.env.KEYSHELF_CONFIG_MODULE_PATH = KEYSHELF_CONFIG_MODULE;
+      const { loadConfig } = (await import(KEYSHELF_LOADER_MODULE)) as {
+        loadConfig(root: string): Promise<{
           config: {
             name: string;
             envs: string[];
@@ -43,7 +43,7 @@ describe("round-trip through the v5 loader", () => {
           };
         }>;
       };
-      const loaded = await loadV5Config(root);
+      const loaded = await loadConfig(root);
 
       expect({
         ...loaded.config,
