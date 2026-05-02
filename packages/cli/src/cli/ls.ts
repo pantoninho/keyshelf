@@ -56,58 +56,74 @@ export const lsCommand = new Command("ls")
   .option("--format <format>", "Output format: table (default) or json", "table")
   .action(async (opts: LsOptions) => {
     const format = parseFormat(opts.format);
+    assertValidOptions(opts, format);
 
-    if (opts.reveal && !opts.env) {
-      console.error("error: --reveal requires --env");
-      process.exit(1);
-    }
-    if (format === "json" && !(opts.reveal && opts.env && opts.map)) {
-      console.error("error: --format json requires --reveal, --env, and --map");
-      process.exit(1);
-    }
-
-    const appDir = process.cwd();
-    const loaded = await loadConfig(appDir, { mappingFile: opts.map });
+    const loaded = await loadConfig(process.cwd(), { mappingFile: opts.map });
     const groups = splitList(opts.group);
     const filters = splitList(opts.filter);
 
     if (opts.reveal && opts.env !== undefined) {
-      const registry = createDefaultRegistry();
-      const resolveOpts = {
-        config: loaded.config,
-        envName: opts.env,
-        rootDir: loaded.rootDir,
-        registry,
-        groups,
-        filters
-      };
-
-      const validation = await validate(resolveOpts);
-      if (validation.topLevelErrors.length > 0) {
-        for (const err of validation.topLevelErrors) console.error(`error: ${err.message}`);
-        process.exit(1);
-      }
-      if (validation.keyErrors.length > 0) {
-        console.error("Validation errors:");
-        for (const err of validation.keyErrors) console.error(`  - ${err.path}: ${err.message}`);
-        process.exit(1);
-      }
-
-      const resolution = await resolveWithStatus(resolveOpts);
-
-      if (format === "json") {
-        const vars = buildJsonVars(loaded.appMapping, loaded.config.keys, resolution);
-        process.stdout.write(JSON.stringify({ env: opts.env, vars }, null, 2) + "\n");
-        return;
-      }
-
-      console.error("warning: revealing secret values");
-      printRows(buildRevealedRows(loaded.config.keys, resolution));
+      await runReveal({ loaded, env: opts.env, groups, filters, format });
       return;
     }
 
     printRows(buildSchemaRows(loaded.config.keys, opts.env, groups, filters));
   });
+
+function assertValidOptions(opts: LsOptions, format: LsFormat): void {
+  if (opts.reveal && !opts.env) {
+    console.error("error: --reveal requires --env");
+    process.exit(1);
+  }
+  if (format === "json" && !(opts.reveal && opts.env && opts.map)) {
+    console.error("error: --format json requires --reveal, --env, and --map");
+    process.exit(1);
+  }
+}
+
+interface RevealArgs {
+  loaded: Awaited<ReturnType<typeof loadConfig>>;
+  env: string;
+  groups: string[] | undefined;
+  filters: string[] | undefined;
+  format: LsFormat;
+}
+
+async function runReveal({ loaded, env, groups, filters, format }: RevealArgs): Promise<void> {
+  const resolveOpts = {
+    config: loaded.config,
+    envName: env,
+    rootDir: loaded.rootDir,
+    registry: createDefaultRegistry(),
+    groups,
+    filters
+  };
+
+  await assertValidationPasses(resolveOpts);
+  const resolution = await resolveWithStatus(resolveOpts);
+
+  if (format === "json") {
+    const vars = buildJsonVars(loaded.appMapping, loaded.config.keys, resolution);
+    process.stdout.write(JSON.stringify({ env, vars }, null, 2) + "\n");
+    return;
+  }
+
+  console.error("warning: revealing secret values");
+  printRows(buildRevealedRows(loaded.config.keys, resolution));
+}
+
+async function assertValidationPasses(resolveOpts: Parameters<typeof validate>[0]): Promise<void> {
+  const validation = await validate(resolveOpts);
+  if (validation.topLevelErrors.length > 0) {
+    for (const err of validation.topLevelErrors) console.error(`error: ${err.message}`);
+    process.exit(1);
+  }
+  if (validation.keyErrors.length > 0) {
+    console.error("Validation errors:");
+    for (const err of validation.keyErrors) console.error(`  - ${err.path}: ${err.message}`);
+    process.exit(1);
+  }
+}
 
 function parseFormat(raw: string | undefined): LsFormat {
   if (raw === undefined || raw === "table") return "table";
@@ -178,14 +194,13 @@ function describeSource(record: NormalizedRecord, envName: string | undefined): 
 }
 
 function getActiveBinding(record: NormalizedRecord, envName: string | undefined): unknown {
-  if (
-    envName !== undefined &&
-    record.values !== undefined &&
-    Object.hasOwn(record.values, envName)
-  ) {
-    return record.values[envName];
-  }
-  return record.value;
+  const envBinding = pickEnvBinding(record, envName);
+  return envBinding ?? record.value;
+}
+
+function pickEnvBinding(record: NormalizedRecord, envName: string | undefined): unknown {
+  if (envName === undefined || record.values === undefined) return undefined;
+  return Object.hasOwn(record.values, envName) ? record.values[envName] : undefined;
 }
 
 function formatScalar(value: ConfigBinding): string {
