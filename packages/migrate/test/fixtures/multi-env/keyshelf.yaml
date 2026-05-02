@@ -1,0 +1,11 @@
+name: platform
+default-provider:
+  name: age
+  identityFile: ./keys/default.txt
+  secretsDir: ./.keyshelf/secrets/default
+keys:
+  api:
+    url: https://api.example.com
+    token: !secret
+  worker:
+    token: !secret

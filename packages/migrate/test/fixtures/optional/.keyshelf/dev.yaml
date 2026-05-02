@@ -1,0 +1,7 @@
+default-provider:
+  name: sops
+  identityFile: ./keys/dev.txt
+  secretsFile: ./.keyshelf/secrets/dev.json
+keys:
+  app:
+    mode: local

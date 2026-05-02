@@ -1,0 +1,7 @@
+name: optional-demo
+keys:
+  analytics:
+    key: !secret
+      optional: true
+  app:
+    mode: development

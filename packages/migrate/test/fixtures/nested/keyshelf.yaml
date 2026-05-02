@@ -1,0 +1,9 @@
+name: nested-demo
+keys:
+  services:
+    api:
+      host: localhost
+      port: 8080
+      token: !secret
+    web:
+      public-url: http://localhost:3000
