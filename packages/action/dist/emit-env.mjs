@@ -359,7 +359,7 @@ var cachedJiti;
 function getJiti() {
   if (cachedJiti === void 0) {
     const override = process.env.KEYSHELF_CONFIG_MODULE_PATH;
-    const configModulePath = override !== void 0 ? resolve(override) : fileURLToPath(new URL("./index.js", import.meta.url));
+    const configModulePath = override !== void 0 ? resolve(override) : fileURLToPath(new URL("./factories.js", import.meta.url));
     cachedJiti = createJiti(import.meta.url, {
       alias: {
         "keyshelf/config": configModulePath

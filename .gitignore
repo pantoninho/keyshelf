@@ -7,3 +7,4 @@ coverage
 !packages/migrate/test/fixtures/**/.keyshelf/
 !packages/migrate/test/fixtures/**/.keyshelf/*.yaml
 .claude/worktrees/
+.fallow/

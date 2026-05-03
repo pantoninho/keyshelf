@@ -21,15 +21,18 @@ function getJiti(): Jiti {
     // The discriminated unions in schema.ts match by string equality, so values
     // would parse — until the schemas drift. This alias keeps factory output and
     // validators in lockstep regardless of what's installed.
+    // Aliased to `./factories.js` (not the barrel `./index.js`) because that's
+    // the only module users need from `keyshelf/config` and it avoids a cycle
+    // with `index.ts → loader.ts`.
     // Bundlers (e.g. tsup with noExternal) collapse the config module into
-    // the same file as the loader, so the sibling `./index.js` doesn't exist
-    // at runtime. KEYSHELF_CONFIG_MODULE_PATH lets the bundled host (e.g. the
+    // the same file as the loader, so the sibling file doesn't exist at
+    // runtime. KEYSHELF_CONFIG_MODULE_PATH lets the bundled host (e.g. the
     // GitHub Action) point the alias at a sidecar copy.
     const override = process.env.KEYSHELF_CONFIG_MODULE_PATH;
     const configModulePath =
       override !== undefined
         ? resolve(override)
-        : fileURLToPath(new URL("./index.js", import.meta.url));
+        : fileURLToPath(new URL("./factories.js", import.meta.url));
     cachedJiti = createJiti(import.meta.url, {
       alias: {
         "keyshelf/config": configModulePath

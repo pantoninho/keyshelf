@@ -14,7 +14,7 @@ export default defineConfig({
   entry: {
     "write-identity": "scripts/write-identity.mjs",
     "emit-env": "scripts/emit-env.mjs",
-    "keyshelf-config": "../cli/dist/src/config/index.js"
+    "keyshelf-config": "../cli/dist/src/config/factories.js"
   },
   format: ["esm"],
   target: "node20",
