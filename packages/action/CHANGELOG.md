@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v0.4.0...keyshelf-action-v1.0.0) (2026-05-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* keyshelf no longer reads keyshelf.yaml or .keyshelf/<env>.yaml. Projects must migrate to keyshelf.config.ts (see @keyshelf/migrate). The keyshelf-next bin, the keyshelf/v5 and keyshelf/bin-next package exports, and the v4 GCP secret-id migrator (keyshelf migrate-gcp) are gone.
+
+### Features
+
+* v5 cutover (phase 8 in [#78](https://github.com/pantoninho/keyshelf/issues/78)) ([#100](https://github.com/pantoninho/keyshelf/issues/100)) ([98b1893](https://github.com/pantoninho/keyshelf/commit/98b1893b4671f74ed21aed5a63091ba640994d35))
+* **v5:** action smoke workflow and benchmark ([#99](https://github.com/pantoninho/keyshelf/issues/99)) ([b5e29a5](https://github.com/pantoninho/keyshelf/commit/b5e29a583b8f893aa99cdb0c099fdae27b4767ac))
+* **v5:** port the keyshelf action to v5 TS configs ([#96](https://github.com/pantoninho/keyshelf/issues/96)) ([c1d52cf](https://github.com/pantoninho/keyshelf/commit/c1d52cfb72976229e5930c0b1be51c89f1eb5cd1))
+
 ## [0.4.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v0.3.0...keyshelf-action-v0.4.0) (2026-05-01)
 
 
