@@ -1,3 +1,3 @@
 exclude_paths:
   - ".claude/plans/**"
-  - "CHANGELOG.md"
+  - "*CHANGELOG.md"
