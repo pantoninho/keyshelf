@@ -111,7 +111,7 @@ export async function loadV4Project(cwd: string): Promise<V4Project> {
   };
 }
 
-export function parseSchema(content: string): ParsedSchema {
+function parseSchema(content: string): ParsedSchema {
   const raw = yaml.load(content, { schema: KEYSHELF_SCHEMA });
   if (!raw || typeof raw !== "object") {
     throw new Error('keyshelf.yaml must contain a "keys:" block defining your keys');
@@ -165,7 +165,7 @@ export function parseSchema(content: string): ParsedSchema {
   return { keys: definitions, config: { name, provider } };
 }
 
-export function parseEnvironment(content: string): EnvConfig {
+function parseEnvironment(content: string): EnvConfig {
   const raw = yaml.load(content, { schema: KEYSHELF_SCHEMA });
   if (!raw || typeof raw !== "object") {
     return { overrides: {} };
@@ -192,7 +192,7 @@ export function parseEnvironment(content: string): EnvConfig {
   return { defaultProvider, overrides };
 }
 
-export function parseProviderBlock(raw: unknown): ProviderConfig | undefined {
+function parseProviderBlock(raw: unknown): ProviderConfig | undefined {
   if (!raw || typeof raw !== "object") return undefined;
 
   const block = raw as Record<string, unknown>;
@@ -209,7 +209,7 @@ export function parseProviderBlock(raw: unknown): ProviderConfig | undefined {
   return { name, options };
 }
 
-export function parseAppMapping(content: string): AppMapping[] {
+function parseAppMapping(content: string): AppMapping[] {
   const mappings: AppMapping[] = [];
 
   for (const raw of content.split("\n")) {
