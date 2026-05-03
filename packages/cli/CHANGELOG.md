@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.0.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v4.6.0...keyshelf-v5.0.0) (2026-05-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* keyshelf no longer reads keyshelf.yaml or .keyshelf/<env>.yaml. Projects must migrate to keyshelf.config.ts (see @keyshelf/migrate). The keyshelf-next bin, the keyshelf/v5 and keyshelf/bin-next package exports, and the v4 GCP secret-id migrator (keyshelf migrate-gcp) are gone.
+
+### Features
+
+* v5 cutover (phase 8 in [#78](https://github.com/pantoninho/keyshelf/issues/78)) ([#100](https://github.com/pantoninho/keyshelf/issues/100)) ([98b1893](https://github.com/pantoninho/keyshelf/commit/98b1893b4671f74ed21aed5a63091ba640994d35))
+* **v5:** add --group filter to import; polish CLI help text ([#97](https://github.com/pantoninho/keyshelf/issues/97)) ([30b8089](https://github.com/pantoninho/keyshelf/commit/30b80897e81bf66dd7ffb687c1a93f08086ec196))
+* **v5:** enrich resolver skip statuses with structured causes ([#93](https://github.com/pantoninho/keyshelf/issues/93)) ([0eaf9f5](https://github.com/pantoninho/keyshelf/commit/0eaf9f5551eb5b593b2a3e36a28aa2b5c3571a5d))
+* **v5:** honor KEYSHELF_CONFIG_MODULE_PATH env override in loader alias ([#95](https://github.com/pantoninho/keyshelf/issues/95)) ([b06729f](https://github.com/pantoninho/keyshelf/commit/b06729f13d64f2732557e2229d31f1cd11aa3469))
+* **v5:** port the keyshelf action to v5 TS configs ([#96](https://github.com/pantoninho/keyshelf/issues/96)) ([c1d52cf](https://github.com/pantoninho/keyshelf/commit/c1d52cfb72976229e5930c0b1be51c89f1eb5cd1))
+
 ## [4.6.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v4.5.0...keyshelf-v4.6.0) (2026-05-01)
 
 
