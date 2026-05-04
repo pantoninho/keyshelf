@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { findRootDir, loadConfig } from "../../src/config/index.js";
+import { findRootDir, loadConfig, V4ConfigDetectedError } from "../../src/config/index.js";
 
 async function createFixture() {
   const root = await mkdtemp(join(tmpdir(), "keyshelf-loader-"));
@@ -106,6 +106,35 @@ describe("config loader", () => {
       await expect(mod.loadConfig(appDir)).rejects.toThrow(
         new RegExp(expectedAbs.replace(/[\\/]/g, "[\\\\/]"))
       );
+    });
+  });
+
+  describe("v4 detection", () => {
+    it("throws V4ConfigDetectedError when only keyshelf.yaml is present in a parent dir", async () => {
+      const root = await mkdtemp(join(tmpdir(), "keyshelf-v4-detect-"));
+      await writeFile(join(root, "keyshelf.yaml"), "name: legacy\nkeys: {}\n");
+      const appDir = join(root, "apps", "api");
+      await mkdir(appDir, { recursive: true });
+
+      let caught: unknown;
+      try {
+        findRootDir(appDir);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(V4ConfigDetectedError);
+      const v4Err = caught as V4ConfigDetectedError;
+      expect(v4Err.v4RootDir).toBe(root);
+      expect(v4Err.v4SchemaPath).toBe(join(root, "keyshelf.yaml"));
+      expect(v4Err.message).toContain("@keyshelf/migrate");
+    });
+
+    it("prefers a keyshelf.config.ts even when a keyshelf.yaml is also present", async () => {
+      const { root, appDir } = await createFixture();
+      await writeFile(join(root, "keyshelf.yaml"), "name: legacy\nkeys: {}\n");
+
+      expect(findRootDir(appDir)).toBe(root);
     });
   });
 
