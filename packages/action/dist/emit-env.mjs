@@ -9589,6 +9589,36 @@ for (const mapFile of maps) {
     appendEnv(v.envVar, v.value);
   }
 }
+function failIfInvalid(validation) {
+  if (validation.topLevelErrors.length > 0) {
+    fail(validation.topLevelErrors.map((e) => e.message).join("; "));
+  }
+  if (validation.keyErrors.length > 0) {
+    const lines = validation.keyErrors.map((e) => `  - ${e.path}: ${e.message}`).join("\n");
+    fail(`Validation errors:
+${lines}`);
+  }
+}
+function isSecretMapping(mapping, recordByPath) {
+  if ("template" in mapping) {
+    return mapping.keyPaths.some((p) => recordByPath.get(p)?.kind === "secret");
+  }
+  return recordByPath.get(mapping.keyPath)?.kind === "secret";
+}
+function renderResultToVar(result, recordByPath) {
+  if (result.status === "skipped") {
+    process.stderr.write(
+      `keyshelf: skipping ${result.envVar} \u2014 referenced key '${result.keyPath}' ${formatSkipCause(result.cause)}
+`
+    );
+    return void 0;
+  }
+  return {
+    envVar: result.envVar,
+    value: result.value,
+    secret: isSecretMapping(result.mapping, recordByPath)
+  };
+}
 async function resolveMap(appDir, envName2, mapFile) {
   const loaded = await loadConfig(appDir, { mappingFile: mapFile });
   const resolveOpts = {
@@ -9599,31 +9629,11 @@ async function resolveMap(appDir, envName2, mapFile) {
     groups,
     filters
   };
-  const validation = await validate(resolveOpts);
-  if (validation.topLevelErrors.length > 0) {
-    fail(validation.topLevelErrors.map((e) => e.message).join("; "));
-  }
-  if (validation.keyErrors.length > 0) {
-    const lines = validation.keyErrors.map((e) => `  - ${e.path}: ${e.message}`).join("\n");
-    fail(`Validation errors:
-${lines}`);
-  }
+  failIfInvalid(await validate(resolveOpts));
   const resolution = await resolveWithStatus(resolveOpts);
   const rendered = renderAppMapping(loaded.appMapping, resolution);
   const recordByPath = new Map(loaded.config.keys.map((k) => [k.path, k]));
-  const vars = [];
-  for (const result of rendered) {
-    if (result.status === "skipped") {
-      process.stderr.write(
-        `keyshelf: skipping ${result.envVar} \u2014 referenced key '${result.keyPath}' ${formatSkipCause(result.cause)}
-`
-      );
-      continue;
-    }
-    const secret = "template" in result.mapping ? result.mapping.keyPaths.some((p) => recordByPath.get(p)?.kind === "secret") : recordByPath.get(result.mapping.keyPath)?.kind === "secret";
-    vars.push({ envVar: result.envVar, value: result.value, secret });
-  }
-  return vars;
+  return rendered.map((result) => renderResultToVar(result, recordByPath)).filter((v) => v !== void 0);
 }
 function splitList(raw) {
   return raw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
