@@ -129,37 +129,44 @@ function normalizeConfig(key: KeyDefinition, envs: V4Environment[]): NormalizedR
   };
 }
 
+function pickSecretProvider(env: V4Environment, keyPath: string): ProviderRef | undefined {
+  const override = env.env.overrides[keyPath];
+  if (override !== undefined && !isTaggedValue(override)) {
+    throw new Error(
+      `${env.name}:${keyPath} has a plaintext secret override. v5 secret records require provider bindings; move the value into a provider with keyshelf set before migrating.`
+    );
+  }
+  if (override !== undefined) {
+    return providerFromTag(override, env);
+  }
+  return env.env.defaultProvider === undefined ? undefined : providerRef(env.env.defaultProvider);
+}
+
+function ensureSecretBinding(
+  key: KeyDefinition,
+  defaultValue: ProviderRef | undefined,
+  values: Record<string, ProviderRef> | undefined
+): void {
+  if (defaultValue !== undefined || values !== undefined) return;
+  if (key.optional) {
+    throw new Error(
+      `${key.path} is optional, but v5 still requires at least one provider binding for secret records`
+    );
+  }
+  throw new Error(`${key.path} is a required secret with no provider binding in any env`);
+}
+
 function normalizeSecret(key: KeyDefinition, envs: V4Environment[]): NormalizedRecord {
   const envValues: Record<string, ProviderRef> = {};
-
   for (const env of envs) {
-    const override = env.env.overrides[key.path];
-    if (override !== undefined && !isTaggedValue(override)) {
-      throw new Error(
-        `${env.name}:${key.path} has a plaintext secret override. v5 secret records require provider bindings; move the value into a provider with keyshelf set before migrating.`
-      );
-    }
-
-    const provider =
-      override === undefined
-        ? env.env.defaultProvider === undefined
-          ? undefined
-          : providerRef(env.env.defaultProvider)
-        : providerFromTag(override, env);
+    const provider = pickSecretProvider(env, key.path);
     if (provider !== undefined) {
       envValues[env.name] = provider;
     }
   }
 
   const { defaultValue, values } = splitFallbackAndValues(undefined, envValues, envs);
-  if (defaultValue === undefined && values === undefined) {
-    if (key.optional) {
-      throw new Error(
-        `${key.path} is optional, but v5 still requires at least one provider binding for secret records`
-      );
-    }
-    throw new Error(`${key.path} is a required secret with no provider binding in any env`);
-  }
+  ensureSecretBinding(key, defaultValue, values);
 
   return {
     path: key.path,
