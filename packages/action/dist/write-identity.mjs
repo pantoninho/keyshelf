@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { mkdir, writeFile, chmod, readFile } from 'fs/promises';
-import { dirname, join, isAbsolute, resolve } from 'path';
-import { homedir } from 'os';
+import { dirname, resolve, join, isAbsolute } from 'path';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { performance } from 'perf_hooks';
 import { createJiti } from 'jiti';
 import { z } from 'zod';
+import { homedir } from 'os';
 
 // ../cli/dist/src/config/app-mapping.js
 var TEMPLATE_RE = /\$\{([^}]+)\}/g;
@@ -417,6 +417,34 @@ async function loadAppMapping(mappingPath, required) {
     throw err;
   }
 }
+function ageIdentityFile(binding) {
+  if (binding?.__kind !== "provider:age") return void 0;
+  const file = binding.options?.identityFile;
+  return typeof file === "string" && file.length > 0 ? file : void 0;
+}
+function collectAgeIdentityFiles(config) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const record of config.keys) {
+    if (record.kind !== "secret") continue;
+    addIfAge(seen, record.value);
+    for (const v of Object.values(record.values ?? {})) addIfAge(seen, v);
+  }
+  return [...seen];
+}
+function addIfAge(seen, binding) {
+  const file = ageIdentityFile(binding);
+  if (file !== void 0) seen.add(file);
+}
+function resolveIdentityPath(filePath, rootDir) {
+  if (filePath === "~" || filePath.startsWith("~/")) {
+    return join(homedir(), filePath.slice(1));
+  }
+  if (isAbsolute(filePath)) return filePath;
+  return resolve(rootDir, filePath);
+}
+function ensureTrailingNewline(content) {
+  return content.endsWith("\n") ? content : content + "\n";
+}
 
 // scripts/write-identity.mjs
 var identity = process.env.KEYSHELF_IDENTITY;
@@ -441,30 +469,4 @@ for (const filePath of identityFiles) {
   await chmod(target, 384);
   process.stdout.write(`Wrote identity to ${target} (mode 0600)
 `);
-}
-function collectAgeIdentityFiles(config) {
-  const seen = /* @__PURE__ */ new Set();
-  for (const record of config.keys) {
-    if (record.kind !== "secret") continue;
-    visitBinding(record.value);
-    for (const v of Object.values(record.values ?? {})) visitBinding(v);
-  }
-  return [...seen];
-  function visitBinding(binding) {
-    if (binding === void 0) return;
-    if (typeof binding !== "object" || binding === null) return;
-    if (binding.__kind !== "provider:age") return;
-    const file = binding.options?.identityFile;
-    if (typeof file === "string" && file.length > 0) seen.add(file);
-  }
-}
-function resolveIdentityPath(filePath, rootDir) {
-  if (filePath === "~" || filePath.startsWith("~/")) {
-    return join(homedir(), filePath.slice(1));
-  }
-  if (isAbsolute(filePath)) return filePath;
-  return resolve(rootDir, filePath);
-}
-function ensureTrailingNewline(content) {
-  return content.endsWith("\n") ? content : content + "\n";
 }
