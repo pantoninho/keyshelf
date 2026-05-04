@@ -9355,14 +9355,6 @@ function compareBytes(a, b) {
 function isCryptoKey3(key) {
   return typeof CryptoKey !== "undefined" && key instanceof CryptoKey;
 }
-
-// ../cli/dist/src/providers/age.js
-function keyPathToFileName(keyPath) {
-  return keyPath.replace(/\//g, "_");
-}
-function secretFilePath(secretsDir, keyPath) {
-  return join(secretsDir, `${keyPathToFileName(keyPath)}.age`);
-}
 function resolvePath(filePath, rootDir) {
   if (filePath.startsWith("~/") || filePath === "~") {
     return join(homedir(), filePath.slice(1));
@@ -9376,20 +9368,27 @@ async function readIdentity(identityFile) {
   const content = await readFile(identityFile, "utf-8");
   return content.trim();
 }
+function requireStringConfig(providerName, ctx, key) {
+  const value = ctx.config[key];
+  if (typeof value !== "string") {
+    throw new Error(`${providerName} provider requires "${key}" config for "${ctx.keyPath}"`);
+  }
+  return value;
+}
+
+// ../cli/dist/src/providers/age.js
+function keyPathToFileName(keyPath) {
+  return keyPath.replace(/\//g, "_");
+}
+function secretFilePath(secretsDir, keyPath) {
+  return join(secretsDir, `${keyPathToFileName(keyPath)}.age`);
+}
 var AgeProvider = class {
   name = "age";
   resolveOptions(ctx) {
-    const identityFile = ctx.config.identityFile;
-    const secretsDir = ctx.config.secretsDir;
-    if (typeof identityFile !== "string") {
-      throw new Error(`age provider requires "identityFile" config for "${ctx.keyPath}"`);
-    }
-    if (typeof secretsDir !== "string") {
-      throw new Error(`age provider requires "secretsDir" config for "${ctx.keyPath}"`);
-    }
     return {
-      identityFile: resolvePath(identityFile, ctx.rootDir),
-      secretsDir: resolvePath(secretsDir, ctx.rootDir)
+      identityFile: resolvePath(requireStringConfig("age", ctx, "identityFile"), ctx.rootDir),
+      secretsDir: resolvePath(requireStringConfig("age", ctx, "secretsDir"), ctx.rootDir)
     };
   }
   async resolve(ctx) {
@@ -9423,19 +9422,6 @@ var AgeProvider = class {
     await writeFile(filePath, ciphertext);
   }
 };
-function resolvePath2(filePath, rootDir) {
-  if (filePath.startsWith("~/") || filePath === "~") {
-    return join(homedir(), filePath.slice(1));
-  }
-  if (isAbsolute(filePath)) {
-    return filePath;
-  }
-  return resolve(rootDir, filePath);
-}
-async function readIdentity2(identityFile) {
-  const content = await readFile(identityFile, "utf-8");
-  return content.trim();
-}
 function generateDataKey() {
   return randomBytes$1(32);
 }
@@ -9496,23 +9482,15 @@ async function writeSecretsFile(path, file) {
 var SopsProvider = class {
   name = "sops";
   resolveOptions(ctx) {
-    const identityFile = ctx.config.identityFile;
-    const secretsFile = ctx.config.secretsFile;
-    if (typeof identityFile !== "string") {
-      throw new Error(`sops provider requires "identityFile" config for "${ctx.keyPath}"`);
-    }
-    if (typeof secretsFile !== "string") {
-      throw new Error(`sops provider requires "secretsFile" config for "${ctx.keyPath}"`);
-    }
     return {
-      identityFile: resolvePath2(identityFile, ctx.rootDir),
-      secretsFile: resolvePath2(secretsFile, ctx.rootDir)
+      identityFile: resolvePath(requireStringConfig("sops", ctx, "identityFile"), ctx.rootDir),
+      secretsFile: resolvePath(requireStringConfig("sops", ctx, "secretsFile"), ctx.rootDir)
     };
   }
   async resolve(ctx) {
     const opts2 = this.resolveOptions(ctx);
     const file = await readSecretsFile(opts2.secretsFile);
-    const identity = await readIdentity2(opts2.identityFile);
+    const identity = await readIdentity(opts2.identityFile);
     const dataKey = await decryptDataKey(file.sops.dataKey, identity);
     verifyMac(dataKey, file);
     const entry = file.entries[ctx.keyPath];
@@ -9532,7 +9510,7 @@ var SopsProvider = class {
   }
   async set(ctx, value) {
     const opts2 = this.resolveOptions(ctx);
-    const identity = await readIdentity2(opts2.identityFile);
+    const identity = await readIdentity(opts2.identityFile);
     const recipient = await identityToRecipient(identity);
     let file;
     let dataKey;
