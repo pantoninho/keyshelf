@@ -165,14 +165,19 @@ function buildRevealedRows(records: NormalizedRecord[], resolution: Resolution):
 }
 
 function describeStatus(record: NormalizedRecord, status: KeyResolutionStatus | undefined): string {
-  if (status?.status === "resolved") return status.value;
-  if (status?.status === "filtered") return "(filtered)";
-  if (status?.status === "skipped") {
-    if (record.optional) return "(optional, no value)";
-    return `key '${record.path}' ${formatSkipCause(status.cause)}`;
+  if (status === undefined) return "(missing)";
+  switch (status.status) {
+    case "resolved":
+      return status.value;
+    case "filtered":
+      return "(filtered)";
+    case "skipped":
+      return record.optional
+        ? "(optional, no value)"
+        : `key '${record.path}' ${formatSkipCause(status.cause)}`;
+    case "error":
+      return `error: ${status.message}`;
   }
-  if (status?.status === "error") return `error: ${status.message}`;
-  return "(missing)";
 }
 
 function describeSource(record: NormalizedRecord, envName: string | undefined): string {
