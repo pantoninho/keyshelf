@@ -6,7 +6,6 @@ import {
   collectAgeIdentityFiles,
   ensureTrailingNewline,
   resolveIdentityPath
-  // @ts-expect-error mjs has no types
 } from "../scripts/identity-paths.mjs";
 
 describe("ageIdentityFile", () => {
