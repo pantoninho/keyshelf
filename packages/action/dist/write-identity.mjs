@@ -353,7 +353,21 @@ function getKind(value) {
 
 // ../cli/dist/src/config/loader.js
 var CONFIG_FILE = "keyshelf.config.ts";
+var V4_SCHEMA_FILE = "keyshelf.yaml";
 var APP_MAPPING_FILE = ".env.keyshelf";
+var V4ConfigDetectedError = class extends Error {
+  v4SchemaPath;
+  v4RootDir;
+  constructor(v4RootDir) {
+    const v4SchemaPath = join(v4RootDir, V4_SCHEMA_FILE);
+    super(
+      `Detected v4 keyshelf.yaml at ${v4SchemaPath} but no ${CONFIG_FILE} in any parent directory. Run \`npx @keyshelf/migrate\` from ${v4RootDir} to migrate to v5.`
+    );
+    this.name = "V4ConfigDetectedError";
+    this.v4SchemaPath = v4SchemaPath;
+    this.v4RootDir = v4RootDir;
+  }
+};
 var cachedJiti;
 function getJiti() {
   if (cachedJiti === void 0) {
@@ -369,12 +383,19 @@ function getJiti() {
 }
 function findRootDir(from) {
   let dir = resolve(from);
+  let v4RootDir;
   while (true) {
     if (existsSync(join(dir, CONFIG_FILE))) {
       return dir;
     }
+    if (v4RootDir === void 0 && existsSync(join(dir, V4_SCHEMA_FILE))) {
+      v4RootDir = dir;
+    }
     const parent = dirname(dir);
     if (parent === dir) {
+      if (v4RootDir !== void 0) {
+        throw new V4ConfigDetectedError(v4RootDir);
+      }
       throw new Error(`Could not find ${CONFIG_FILE} in ${from} or any parent directory`);
     }
     dir = parent;
