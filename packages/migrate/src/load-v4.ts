@@ -126,21 +126,22 @@ function parseSchemaDoc(content: string): Record<string, unknown> {
 
 const SCHEMA_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
-function assertValidSchemaName(value: unknown): asserts value is string {
-  if (typeof value !== "string" || value === "") {
-    throw new Error('keyshelf.yaml "name" must be a non-empty string');
-  }
-  if (!SCHEMA_NAME_RE.test(value)) {
-    throw new Error(
-      'keyshelf.yaml "name" must contain only letters, digits, hyphens, and underscores'
-    );
-  }
+function throwInvalidSchemaName(): never {
+  throw new Error('keyshelf.yaml "name" must be a non-empty string');
+}
+
+function throwInvalidSchemaNamePattern(): never {
+  throw new Error(
+    'keyshelf.yaml "name" must contain only letters, digits, hyphens, and underscores'
+  );
 }
 
 function parseSchemaName(doc: Record<string, unknown>): string | undefined {
-  const value = "name" in doc ? doc.name : undefined;
+  const value = doc.name;
   if (value === undefined) return undefined;
-  assertValidSchemaName(value);
+  if (typeof value !== "string") throwInvalidSchemaName();
+  if (value === "") throwInvalidSchemaName();
+  if (!SCHEMA_NAME_RE.test(value)) throwInvalidSchemaNamePattern();
   return value;
 }
 
