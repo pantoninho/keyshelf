@@ -1,43 +1,28 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { generateIdentity } from "../../src/providers/age.js";
 import { CLI, TSX } from "./helpers/cli.js";
+import { setupAgeFixtureDir, writeEnvKeyshelf, writeKeyshelfConfig } from "./helpers/fixture.js";
 
 async function writeAgeFixture(root: string) {
-  const identityFile = join(root, "key.txt");
-  const secretsDir = join(root, ".keyshelf", "secrets");
-  await writeFile(identityFile, await generateIdentity());
-  await mkdir(secretsDir, { recursive: true });
-
-  await writeFile(
-    join(root, "keyshelf.config.ts"),
-    [
-      `import { defineConfig, config, secret, age } from "keyshelf/config";`,
-      ``,
-      `export default defineConfig({`,
-      `  name: "demo",`,
-      `  envs: ["dev", "production"],`,
-      `  groups: ["app", "ci"],`,
-      `  keys: {`,
-      `    db: {`,
-      `      host: config({ group: "app", default: "localhost", values: { production: "prod-db" } }),`,
-      `      password: secret({ group: "app", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
-      `    },`,
-      `    ci: {`,
-      `      token: secret({ group: "ci", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
-      `    },`,
-      `  },`,
-      `});`,
-      ``
-    ].join("\n")
-  );
-  await writeFile(
-    join(root, ".env.keyshelf"),
-    ["DB_HOST=db/host", "DB_PASSWORD=db/password", "CI_TOKEN=ci/token"].join("\n")
-  );
+  const { identityFile, secretsDir } = await setupAgeFixtureDir(root);
+  await writeKeyshelfConfig(root, [
+    `name: "demo",`,
+    `envs: ["dev", "production"],`,
+    `groups: ["app", "ci"],`,
+    `keys: {`,
+    `  db: {`,
+    `    host: config({ group: "app", default: "localhost", values: { production: "prod-db" } }),`,
+    `    password: secret({ group: "app", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+    `  },`,
+    `  ci: {`,
+    `    token: secret({ group: "ci", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
+    `  },`,
+    `},`
+  ]);
+  await writeEnvKeyshelf(root, ["DB_HOST=db/host", "DB_PASSWORD=db/password", "CI_TOKEN=ci/token"]);
 }
 
 describe("keyshelf-next ls", () => {
