@@ -1,67 +1,47 @@
 import { describe, it, expect, beforeEach, beforeAll } from "vitest";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
-import { generateIdentity } from "../../src/providers/age.js";
 import { CLI, TSX } from "./helpers/cli.js";
+import {
+  setupAgeFixtureDir,
+  writeEnvKeyshelf,
+  writeKeyshelfConfig,
+  type AgeFixturePaths
+} from "./helpers/fixture.js";
 
 async function writeBaseFixture(root: string) {
-  await writeFile(
-    join(root, "keyshelf.config.ts"),
-    [
-      `import { defineConfig, config } from "keyshelf/config";`,
-      ``,
-      `export default defineConfig({`,
-      `  name: "demo",`,
-      `  envs: ["dev", "production"],`,
-      `  keys: {`,
-      `    db: {`,
-      `      host: config({ default: "localhost", values: { production: "prod-db" } }),`,
-      `      port: 5432,`,
-      `    },`,
-      `  },`,
-      `});`,
-      ``
-    ].join("\n")
-  );
-  await writeFile(join(root, ".env.keyshelf"), ["DB_HOST=db/host", "DB_PORT=db/port"].join("\n"));
+  await writeKeyshelfConfig(root, [
+    `name: "demo",`,
+    `envs: ["dev", "production"],`,
+    `keys: {`,
+    `  db: {`,
+    `    host: config({ default: "localhost", values: { production: "prod-db" } }),`,
+    `    port: 5432,`,
+    `  },`,
+    `},`
+  ]);
+  await writeEnvKeyshelf(root, ["DB_HOST=db/host", "DB_PORT=db/port"]);
 }
 
-async function writeGroupFixture(root: string) {
-  const identityFile = join(root, "key.txt");
-  const secretsDir = join(root, ".keyshelf", "secrets");
-  await writeFile(identityFile, await generateIdentity());
-  await mkdir(secretsDir, { recursive: true });
-
-  await writeFile(
-    join(root, "keyshelf.config.ts"),
-    [
-      `import { defineConfig, config, secret, age } from "keyshelf/config";`,
-      ``,
-      `export default defineConfig({`,
-      `  name: "demo",`,
-      `  envs: ["dev"],`,
-      `  groups: ["app", "ci"],`,
-      `  keys: {`,
-      `    app: {`,
-      `      host: config({ group: "app", value: "localhost" }),`,
-      `    },`,
-      `    ci: {`,
-      `      token: secret({ group: "ci", value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) }),`,
-      `    },`,
-      `  },`,
-      `});`,
-      ``
-    ].join("\n")
-  );
-
-  await writeFile(
-    join(root, ".env.keyshelf"),
-    ["APP_HOST=app/host", "CI_TOKEN=ci/token"].join("\n")
-  );
-
-  return { identityFile, secretsDir };
+async function writeGroupFixture(root: string): Promise<AgeFixturePaths> {
+  const paths = await setupAgeFixtureDir(root);
+  await writeKeyshelfConfig(root, [
+    `name: "demo",`,
+    `envs: ["dev"],`,
+    `groups: ["app", "ci"],`,
+    `keys: {`,
+    `  app: {`,
+    `    host: config({ group: "app", value: "localhost" }),`,
+    `  },`,
+    `  ci: {`,
+    `    token: secret({ group: "ci", value: age({ identityFile: ${JSON.stringify(paths.identityFile)}, secretsDir: ${JSON.stringify(paths.secretsDir)} }) }),`,
+    `  },`,
+    `},`
+  ]);
+  await writeEnvKeyshelf(root, ["APP_HOST=app/host", "CI_TOKEN=ci/token"]);
+  return paths;
 }
 
 describe("keyshelf-next run", () => {
