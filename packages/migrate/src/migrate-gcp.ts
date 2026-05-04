@@ -1,5 +1,8 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import type { NormalizedMigration, NormalizedRecord, ProviderRef } from "./normalize.js";
+import { toSecretId } from "./secret-id.js";
+
+export { toSecretId };
 
 export interface GcpMigrateOptions {
   dryRun?: boolean;
@@ -57,18 +60,6 @@ function isAuthError(err: unknown): boolean {
 
 function isNotFound(err: unknown): boolean {
   return err instanceof Error && (err as { code?: number }).code === 5;
-}
-
-export function toSecretId(
-  keyshelfName: string | undefined,
-  envName: string,
-  keyPath: string
-): string {
-  const path = keyPath.replace(/\//g, "__");
-  const segments = ["keyshelf"];
-  if (keyshelfName !== undefined) segments.push(keyshelfName);
-  segments.push(envName, path);
-  return segments.join("__");
 }
 
 interface PlannedMigration {
