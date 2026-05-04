@@ -18,6 +18,19 @@ async function ageFixture() {
   return { dir, identityFile, secretsDir };
 }
 
+function gcpClientMock(secretValue: string) {
+  const accessSecretVersion = vi
+    .fn()
+    .mockResolvedValue([{ payload: { data: Buffer.from(secretValue) } }]);
+  const client = {
+    accessSecretVersion,
+    getSecret: vi.fn(),
+    createSecret: vi.fn(),
+    addSecretVersion: vi.fn()
+  };
+  return { client: client as unknown as SecretManagerServiceClient, accessSecretVersion };
+}
+
 describe("resolver → providers", () => {
   it("resolves an age secret end-to-end through the resolver", async () => {
     const { dir, identityFile, secretsDir } = await ageFixture();
@@ -60,18 +73,10 @@ describe("resolver → providers", () => {
   });
 
   it("uses keyshelf name + env in the gcp secret id", async () => {
-    const accessSecretVersion = vi
-      .fn()
-      .mockResolvedValue([{ payload: { data: Buffer.from("dbpass") } }]);
-    const client = {
-      accessSecretVersion,
-      getSecret: vi.fn(),
-      createSecret: vi.fn(),
-      addSecretVersion: vi.fn()
-    };
+    const { client, accessSecretVersion } = gcpClientMock("dbpass");
 
     const registry = new ProviderRegistry();
-    registry.register(new GcpSmProvider(client as unknown as SecretManagerServiceClient));
+    registry.register(new GcpSmProvider(client));
 
     const normalized = normalizeConfig(
       defineConfig({
@@ -101,18 +106,10 @@ describe("resolver → providers", () => {
   });
 
   it("omits the env segment for envless gcp secrets", async () => {
-    const accessSecretVersion = vi
-      .fn()
-      .mockResolvedValue([{ payload: { data: Buffer.from("ghp_xxx") } }]);
-    const client = {
-      accessSecretVersion,
-      getSecret: vi.fn(),
-      createSecret: vi.fn(),
-      addSecretVersion: vi.fn()
-    };
+    const { client, accessSecretVersion } = gcpClientMock("ghp_xxx");
 
     const registry = new ProviderRegistry();
-    registry.register(new GcpSmProvider(client as unknown as SecretManagerServiceClient));
+    registry.register(new GcpSmProvider(client));
 
     const normalized = normalizeConfig(
       defineConfig({
