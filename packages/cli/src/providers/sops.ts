@@ -1,9 +1,9 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { randomBytes, createCipheriv, createDecipheriv, createHmac } from "node:crypto";
-import { homedir } from "node:os";
-import { dirname, join, resolve, isAbsolute } from "node:path";
+import { dirname } from "node:path";
 import { Encrypter, Decrypter, identityToRecipient } from "age-encryption";
 import type { Provider, ProviderContext } from "./types.js";
+import { readIdentity, requireStringConfig, resolvePath } from "./_paths.js";
 
 export interface SopsProviderOptions {
   identityFile: string;
@@ -22,21 +22,6 @@ interface SecretsFile {
     dataKey: string;
     mac: string;
   };
-}
-
-function resolvePath(filePath: string, rootDir: string): string {
-  if (filePath.startsWith("~/") || filePath === "~") {
-    return join(homedir(), filePath.slice(1));
-  }
-  if (isAbsolute(filePath)) {
-    return filePath;
-  }
-  return resolve(rootDir, filePath);
-}
-
-async function readIdentity(identityFile: string): Promise<string> {
-  const content = await readFile(identityFile, "utf-8");
-  return content.trim();
 }
 
 function generateDataKey(): Buffer {
@@ -110,19 +95,9 @@ export class SopsProvider implements Provider {
   name = "sops";
 
   private resolveOptions(ctx: ProviderContext): SopsProviderOptions {
-    const identityFile = ctx.config.identityFile;
-    const secretsFile = ctx.config.secretsFile;
-
-    if (typeof identityFile !== "string") {
-      throw new Error(`sops provider requires "identityFile" config for "${ctx.keyPath}"`);
-    }
-    if (typeof secretsFile !== "string") {
-      throw new Error(`sops provider requires "secretsFile" config for "${ctx.keyPath}"`);
-    }
-
     return {
-      identityFile: resolvePath(identityFile, ctx.rootDir),
-      secretsFile: resolvePath(secretsFile, ctx.rootDir)
+      identityFile: resolvePath(requireStringConfig("sops", ctx, "identityFile"), ctx.rootDir),
+      secretsFile: resolvePath(requireStringConfig("sops", ctx, "secretsFile"), ctx.rootDir)
     };
   }
 

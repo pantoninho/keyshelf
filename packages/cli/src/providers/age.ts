@@ -1,8 +1,8 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join, resolve, isAbsolute } from "node:path";
+import { dirname, join } from "node:path";
 import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
 import type { Provider, ProviderContext } from "./types.js";
+import { readIdentity, requireStringConfig, resolvePath } from "./_paths.js";
 
 export interface AgeProviderOptions {
   identityFile: string;
@@ -17,38 +17,13 @@ function secretFilePath(secretsDir: string, keyPath: string): string {
   return join(secretsDir, `${keyPathToFileName(keyPath)}.age`);
 }
 
-function resolvePath(filePath: string, rootDir: string): string {
-  if (filePath.startsWith("~/") || filePath === "~") {
-    return join(homedir(), filePath.slice(1));
-  }
-  if (isAbsolute(filePath)) {
-    return filePath;
-  }
-  return resolve(rootDir, filePath);
-}
-
-async function readIdentity(identityFile: string): Promise<string> {
-  const content = await readFile(identityFile, "utf-8");
-  return content.trim();
-}
-
 export class AgeProvider implements Provider {
   name = "age";
 
   private resolveOptions(ctx: ProviderContext): AgeProviderOptions {
-    const identityFile = ctx.config.identityFile;
-    const secretsDir = ctx.config.secretsDir;
-
-    if (typeof identityFile !== "string") {
-      throw new Error(`age provider requires "identityFile" config for "${ctx.keyPath}"`);
-    }
-    if (typeof secretsDir !== "string") {
-      throw new Error(`age provider requires "secretsDir" config for "${ctx.keyPath}"`);
-    }
-
     return {
-      identityFile: resolvePath(identityFile, ctx.rootDir),
-      secretsDir: resolvePath(secretsDir, ctx.rootDir)
+      identityFile: resolvePath(requireStringConfig("age", ctx, "identityFile"), ctx.rootDir),
+      secretsDir: resolvePath(requireStringConfig("age", ctx, "secretsDir"), ctx.rootDir)
     };
   }
 
