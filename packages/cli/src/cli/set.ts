@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { createInterface } from "node:readline";
 import { loadConfig } from "../config/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
-import type { BuiltinProviderRef, NormalizedRecord } from "../config/types.js";
+import { pickProviderRef, writeSecret } from "./secret-binding.js";
 
 interface SetOptions {
   env?: string;
@@ -47,36 +47,12 @@ export const setCommand = new Command("set")
 
     const value = await readValue(keyPath, opts.value);
     const registry = createDefaultRegistry();
-    const provider = registry.get(providerRef.name);
 
-    await provider.set(
-      {
-        keyPath,
-        envName: opts.env,
-        rootDir: loaded.rootDir,
-        config: { ...(providerRef.options as unknown as Record<string, unknown>) },
-        keyshelfName: loaded.config.name
-      },
-      value
-    );
+    await writeSecret(registry, loaded, providerRef, keyPath, opts.env, value);
 
     const where = opts.env ? ` for ${opts.env}` : "";
     console.log(`Stored "${keyPath}" via ${providerRef.name} provider${where}`);
   });
-
-function pickProviderRef(
-  record: NormalizedRecord & { kind: "secret" },
-  envName: string | undefined
-): BuiltinProviderRef | undefined {
-  if (
-    envName !== undefined &&
-    record.values !== undefined &&
-    Object.hasOwn(record.values, envName)
-  ) {
-    return record.values[envName];
-  }
-  return record.value;
-}
 
 async function readValue(keyPath: string, explicit: string | undefined): Promise<string> {
   if (explicit !== undefined) return explicit;
