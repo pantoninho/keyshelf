@@ -4,7 +4,7 @@ import { loadConfig } from "../config/index.js";
 import { isTemplateMapping } from "../config/app-mapping.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { splitList } from "./options.js";
-import type { BuiltinProviderRef, NormalizedRecord } from "../config/types.js";
+import { pickProviderRef, writeSecret } from "./secret-binding.js";
 
 interface ImportOptions {
   env?: string;
@@ -94,34 +94,10 @@ export const importCommand = new Command("import")
         continue;
       }
 
-      const provider = registry.get(providerRef.name);
-      await provider.set(
-        {
-          keyPath,
-          envName: opts.env,
-          rootDir: loaded.rootDir,
-          config: { ...(providerRef.options as unknown as Record<string, unknown>) },
-          keyshelfName: loaded.config.name
-        },
-        value
-      );
+      await writeSecret(registry, loaded, providerRef, keyPath, opts.env, value);
       console.log(`  secret: ${envVar} -> ${keyPath} (via ${providerRef.name})`);
       imported++;
     }
 
     console.log(`\nImported ${imported} values, skipped ${skipped}`);
   });
-
-function pickProviderRef(
-  record: NormalizedRecord & { kind: "secret" },
-  envName: string | undefined
-): BuiltinProviderRef | undefined {
-  if (
-    envName !== undefined &&
-    record.values !== undefined &&
-    Object.hasOwn(record.values, envName)
-  ) {
-    return record.values[envName];
-  }
-  return record.value;
-}
