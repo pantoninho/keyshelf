@@ -126,7 +126,7 @@ function parseSchemaDoc(content: string): Record<string, unknown> {
 
 const SCHEMA_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
-function parseSchemaName(doc: Record<string, unknown>): string | undefined {
+function extractSchemaName(doc: Record<string, unknown>): string | undefined {
   const value = doc.name;
   if (value === undefined) return undefined;
   return validateSchemaName(value);
@@ -171,7 +171,7 @@ function toKeyDefinition(path: string, value: unknown): KeyDefinition {
 function parseSchema(content: string): ParsedSchema {
   const doc = parseSchemaDoc(content);
   const provider = parseProviderBlock(doc["default-provider"]);
-  const name = parseSchemaName(doc);
+  const name = extractSchemaName(doc);
   const flat = flattenKeys(doc.keys as Record<string, unknown>);
   const definitions = Object.entries(flat).map(([path, value]) => toKeyDefinition(path, value));
   return { keys: definitions, config: { name, provider } };
