@@ -126,12 +126,6 @@ function parseSchemaDoc(content: string): Record<string, unknown> {
 
 const SCHEMA_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
-function extractSchemaName(doc: Record<string, unknown>): string | undefined {
-  const value = doc.name;
-  if (value === undefined) return undefined;
-  return validateSchemaName(value);
-}
-
 function validateSchemaName(value: unknown): string {
   if (typeof value !== "string") {
     throw new Error('keyshelf.yaml "name" must be a non-empty string');
@@ -171,7 +165,7 @@ function toKeyDefinition(path: string, value: unknown): KeyDefinition {
 function parseSchema(content: string): ParsedSchema {
   const doc = parseSchemaDoc(content);
   const provider = parseProviderBlock(doc["default-provider"]);
-  const name = extractSchemaName(doc);
+  const name = doc.name === undefined ? undefined : validateSchemaName(doc.name);
   const flat = flattenKeys(doc.keys as Record<string, unknown>);
   const definitions = Object.entries(flat).map(([path, value]) => toKeyDefinition(path, value));
   return { keys: definitions, config: { name, provider } };
