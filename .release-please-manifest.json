@@ -1,5 +1,5 @@
 {
   "packages/cli": "5.0.0",
   "packages/action": "1.0.0",
-  "packages/migrate": "1.0.0"
+  "packages/migrate": "1.1.0"
 }
