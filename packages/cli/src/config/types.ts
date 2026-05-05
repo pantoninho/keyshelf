@@ -30,6 +30,7 @@ export interface BaseRecord<GroupName extends string = string> {
   group?: GroupName;
   optional?: boolean;
   description?: string;
+  movedFrom?: string | string[];
 }
 
 export interface ConfigRecordInput<
@@ -136,6 +137,7 @@ export type NormalizedRecord =
       group?: string;
       optional: boolean;
       description?: string;
+      movedFrom?: string[];
       value?: ConfigBinding;
       values?: Record<string, ConfigBinding>;
     }
@@ -145,6 +147,7 @@ export type NormalizedRecord =
       group?: string;
       optional: boolean;
       description?: string;
+      movedFrom?: string[];
       value?: BuiltinProviderRef;
       values?: Record<string, BuiltinProviderRef>;
     };

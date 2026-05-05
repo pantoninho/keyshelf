@@ -61,10 +61,15 @@ const providerRefSchema = z.discriminatedUnion("__kind", [
   sopsProviderSchema
 ]);
 
+const movedFromSchema = z
+  .union([z.string().min(1), z.array(z.string().min(1)).nonempty()])
+  .optional();
+
 const baseRecordSchema = {
   group: z.string().optional(),
   optional: z.boolean().optional(),
-  description: z.string().optional()
+  description: z.string().optional(),
+  movedFrom: movedFromSchema
 };
 
 const configRecordSchema = z
@@ -148,6 +153,7 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
 
   validatePathConflicts(flattened, errors);
   validateRecords(flattened, parsed.envs, groups, errors);
+  validateMovedFrom(flattened, paths, errors);
   validateTemplateReferences(flattened, paths, errors);
 
   if (errors.length > 0) {
@@ -278,6 +284,7 @@ function normalizeConfigRecord(
     group: input.group,
     optional: input.optional ?? false,
     description: input.description,
+    movedFrom: normalizeMovedFrom(input.movedFrom),
     value: resolveBinding(path, input.value, input.default, errors),
     values: copyDefinedRecord(input.values)
   };
@@ -294,9 +301,15 @@ function normalizeSecretRecord(
     group: input.group,
     optional: input.optional ?? false,
     description: input.description,
+    movedFrom: normalizeMovedFrom(input.movedFrom),
     value: resolveBinding(path, input.value, input.default, errors),
     values: copyDefinedRecord(input.values)
   };
+}
+
+function normalizeMovedFrom(value: string | string[] | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  return Array.isArray(value) ? [...value] : [value];
 }
 
 function resolveBinding<T>(
@@ -344,6 +357,25 @@ function validatePathConflicts(records: NormalizedRecord[], errors: string[]): v
       const prefix = segments.slice(0, index).join("/");
       if (seen.has(prefix)) {
         errors.push(`${record.path}: conflicts with leaf path "${prefix}"`);
+      }
+    }
+  }
+}
+
+function validateMovedFrom(
+  records: NormalizedRecord[],
+  paths: Set<string>,
+  errors: string[]
+): void {
+  for (const record of records) {
+    if (record.movedFrom === undefined) continue;
+    for (const from of record.movedFrom) {
+      if (from === record.path) {
+        errors.push(`${record.path}: movedFrom cannot reference itself`);
+        continue;
+      }
+      if (paths.has(from)) {
+        errors.push(`${record.path}: movedFrom "${from}" collides with a declared key path`);
       }
     }
   }
