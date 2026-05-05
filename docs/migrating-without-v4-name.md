@@ -1,23 +1,18 @@
 # Migrating from v4 without a `name`
 
-The `name:` field was introduced in v4.6 to namespace GCP secret IDs. v5 requires it. If your `keyshelf.yaml` has no `name:`, the migrator stops with:
+The `name:` field was introduced in v4.6 to namespace GCP secret IDs. v5 requires it, both for `keyshelf.config.ts` and for v4-style YAML configs at runtime. If your `keyshelf.yaml` has no `name:`, you'll see:
 
 ```
-keyshelf.yaml must set top-level "name" before it can be migrated
+keyshelf.yaml requires a top-level "name" string
 ```
 
-The migrator refuses to invent a name because that name becomes the namespace for your GCP secret IDs and your v5 project identity — guessing wrong would silently fork your secret store. Pick one yourself, add it to `keyshelf.yaml`, then run the migrator.
+The runtime refuses to invent a name because that name becomes the namespace for your GCP secret IDs and your v5 project identity — guessing wrong would silently fork your secret store. Pick one yourself, add it to `keyshelf.yaml`, then carry on.
 
 This guide covers the two cases: projects that don't use GCP, and projects that do.
 
 ## 1. Pick a name
 
-Constraints, in the order they're applied:
-
-- v4 load-time check: matches `/^[a-zA-Z0-9_-]+$/` (letters, digits, `-`, `_`).
-- v5 normalization: lowercased and `_` → `-`, then must match `/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/`.
-
-If the v4 name you write contains `_`, you'll need `--accept-renamed-name` later to acknowledge `my_app` → `my-app`. Easiest path: write it in lower-kebab-case to begin with.
+The name must match `/^[A-Za-z0-9_-]+$/` (letters, digits, `-`, `_`). Anything that was a valid v4 name is still a valid v5 name — no rename required.
 
 Add it at the top of `keyshelf.yaml`:
 
@@ -29,25 +24,19 @@ keys:
 
 Don't change anything else yet.
 
-## 2a. No GCP bindings — run the migrator
+## 2a. No GCP bindings — you're done
 
-If none of your secrets use `!gcp`, you're done with the prep. Run:
-
-```sh
-npx @keyshelf/migrate --dry-run
-```
-
-Inspect the generated config on stdout. If it looks right:
+If none of your secrets use `!gcp`, adding `name:` is the entire migration. The v5 CLI accepts your existing YAML as-is. Verify:
 
 ```sh
-npx @keyshelf/migrate
+keyshelf ls --env <env>
 ```
 
-Then follow the standard post-migration checklist in [`migrating-from-v4.md`](./migrating-from-v4.md).
+If you'd rather author in TypeScript, see the optional converter in [`migrating-from-v4.md`](./migrating-from-v4.md#optional-switch-to-typescript).
 
-## 2b. GCP bindings — expect a secret-id rename
+## 2b. GCP bindings — re-namespace the secret IDs
 
-Adding a `name` changes how the migrator addresses GCP secrets. Secret IDs in v5 are built as:
+Adding a `name` changes how v5 addresses GCP secrets. v5 secret IDs are built as:
 
 ```
 keyshelf__<name>__<env>__<key/path with / -> __>
@@ -59,15 +48,15 @@ Pre-4.6 secrets in your project were written without the `<name>` segment:
 keyshelf__<env>__<key/path with / -> __>
 ```
 
-The migrator's GCP step reads each legacy ID, copies the value to the new namespaced ID, and reports each row. It runs **before** `keyshelf.config.ts` is written, so a failure leaves your v4 setup fully usable.
+The `project-name` subcommand reads each legacy ID, copies the value to the new namespaced ID, and reports each row. It does not touch your config file — only remote secret stores.
 
 ### Dry-run first
 
 ```sh
-npx @keyshelf/migrate --dry-run
+npx @keyshelf/migrate project-name --dry-run
 ```
 
-This dry-runs the GCP copy too. Each row prints one of these statuses:
+Each row prints one of these statuses:
 
 | Status             | Meaning                                                                      |
 | ------------------ | ---------------------------------------------------------------------------- |
@@ -75,7 +64,7 @@ This dry-runs the GCP copy too. Each row prints one of these statuses:
 | `already-migrated` | New secret already exists and matches the legacy value. No action needed.    |
 | `no-legacy`        | No legacy secret found at that ID. Probably already cleaned up, or unbound.  |
 | `value-mismatch`   | New secret exists with a **different** value. The migrator refuses to write. |
-| `deleted-legacy`   | Only with `--delete-legacy-gcp` (and not `--dry-run`).                       |
+| `deleted-legacy`   | Only with `--delete-legacy` (and not `--dry-run`).                           |
 
 `value-mismatch` is the one to investigate. It usually means someone already created the namespaced secret manually with a different value, or you ran a partial migration before. Resolve it (delete one, copy the right value over) before re-running.
 
@@ -84,17 +73,17 @@ This dry-runs the GCP copy too. Each row prints one of these statuses:
 Once the dry-run is clean:
 
 ```sh
-npx @keyshelf/migrate
+npx @keyshelf/migrate project-name
 ```
 
-This writes new namespaced secrets and emits `keyshelf.config.ts`. Legacy secrets are kept by default.
+This writes the new namespaced secrets. Legacy secrets are kept by default.
 
 ### Optional: clean up legacy secrets
 
-After verifying v5 reads the new secrets correctly (`keyshelf ls --env <env>` against the new config), you can delete the legacy un-namespaced secrets in one shot:
+After verifying v5 reads the new secrets correctly (`keyshelf ls --env <env>`), you can delete the legacy un-namespaced secrets in one shot:
 
 ```sh
-npx @keyshelf/migrate --force --delete-legacy-gcp
+npx @keyshelf/migrate project-name --delete-legacy
 ```
 
 Or delete them manually in the GCP console once you're confident nothing else reads them.
@@ -108,8 +97,6 @@ keyshelf ls --env <env>          # all keys resolve
 keyshelf get --env <env> <path>  # spot-check a secret value
 ```
 
-Compare against the same commands on the old v4 install before deleting `keyshelf.yaml` and `.keyshelf/`.
-
 ## Authentication note (GCP only)
 
 The GCP step uses application-default credentials. If you see a `GcpAuthError`, run:
@@ -118,4 +105,4 @@ The GCP step uses application-default credentials. If you see a `GcpAuthError`, 
 gcloud auth application-default login
 ```
 
-and re-run the migrator. v4 was left untouched, so it's safe to retry.
+and re-run the migrator. Legacy secrets are kept in place by default, so it's safe to retry.

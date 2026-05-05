@@ -383,10 +383,13 @@ const rendered = renderAppMapping(loaded.appMapping, resolution);
 
 ## Migrating from v4
 
-v5 is a clean rewrite. There is no implicit upgrade path — run the migrator to generate a starter `keyshelf.config.ts` from your existing YAML, then review.
+In most cases, upgrading is not a migration — v5 accepts v4-style `keyshelf.yaml` + `.keyshelf/<env>.yaml` as a runtime config format. Bump the `keyshelf` version and your existing YAML keeps working.
+
+`@keyshelf/migrate` covers the two cases that aren't automatic:
 
 ```sh
-npx @keyshelf/migrate
+npx @keyshelf/migrate yaml-to-typescript   # opt-in: convert YAML to keyshelf.config.ts
+npx @keyshelf/migrate project-name         # opt-in: re-namespace pre-v4.6 GCP secret IDs under name:
 ```
 
 See the [migration guide](https://github.com/pantoninho/keyshelf/blob/main/docs/migrating-from-v4.md) for the full walk-through.

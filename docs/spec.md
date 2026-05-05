@@ -7,8 +7,11 @@ the source of truth.
 
 ## Configuration entry point
 
-A keyshelf project has exactly one `keyshelf.config.ts` at the repo root. It
-must default-export the result of `defineConfig({ ... })`.
+A keyshelf project has exactly one config file at the repo root. The supported
+formats are `keyshelf.config.ts` (default-exporting the result of
+`defineConfig({ ... })`) and v4-style `keyshelf.yaml` + `.keyshelf/<env>.yaml`.
+Both are first-class at runtime; the YAML form is parsed into the same internal
+shape `defineConfig` produces.
 
 ```ts
 import { defineConfig } from "keyshelf/config";
@@ -31,7 +34,7 @@ The `.env.keyshelf` file (app-name → key-path mapping) is unchanged from v4.
 
 ```ts
 defineConfig({
-  name:   string;            // required; lower-kebab-case identity for this config
+  name:   string;            // required; stable identity for this config
   envs:   string[];          // required, non-empty, unique
   groups?: string[];          // optional, unique; if omitted, no group filtering
   keys:   KeyTree;           // required, non-empty
@@ -41,8 +44,8 @@ defineConfig({
 - `name` is the keyshelf project's stable identity. Providers that share a
   backend with other keyshelf configs (e.g. multiple apps using one GCP
   project) use `name` to namespace their secrets so they don't collide. Must
-  match `/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/` — lowercase letters, digits, and
-  internal dashes only. Required; there is no fallback.
+  match `/^[A-Za-z0-9_-]+$/` — letters, digits, hyphens, and underscores.
+  Required; there is no fallback.
 - `envs` enumerates every environment name the config recognises. Any
   `values` map elsewhere in the config may only use names from this list. There
   is no implicit / dynamic env support in v5.
