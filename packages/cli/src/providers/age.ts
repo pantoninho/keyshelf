@@ -1,4 +1,5 @@
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
 import type { Provider, ProviderContext, ProviderListContext, StoredKey } from "./types.js";
@@ -70,7 +71,7 @@ export class AgeProvider implements Provider {
   async list(ctx: ProviderListContext): Promise<StoredKey[]> {
     const secretsDir = resolvePath(requireStringConfig("age", ctx, "secretsDir"), ctx.rootDir);
 
-    let entries;
+    let entries: Dirent[];
     try {
       entries = await readdir(secretsDir, { withFileTypes: true });
     } catch (err) {

@@ -165,7 +165,7 @@ function parseSecretId(
   envs: Set<string>
 ): StoredKey | null {
   const id = secretName?.split("/").pop();
-  if (!id || !id.startsWith(prefix)) return null;
+  if (!id?.startsWith(prefix)) return null;
 
   const remainder = id.slice(prefix.length);
   if (remainder.length === 0) return null;

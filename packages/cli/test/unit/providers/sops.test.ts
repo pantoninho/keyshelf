@@ -114,7 +114,7 @@ describe("SopsProvider", () => {
     it("rejects tampered files via MAC verification", async () => {
       await state.provider.set(state.ctx("db/password"), "v1");
       const content = JSON.parse(await readFile(secretsFilePath(), "utf-8"));
-      content.entries["injected"] = {
+      content.entries.injected = {
         data: "ZmFrZQ==",
         iv: "AAAAAAAAAAAAAAAA",
         tag: "AAAAAAAAAAAAAAAAAAAAAA=="
