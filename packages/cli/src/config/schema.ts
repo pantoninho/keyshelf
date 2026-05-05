@@ -13,7 +13,7 @@ import type {
 
 const PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const TEMPLATE_RE = /(?<!\$)\$\{([^}]+)\}/g;
-const CONFIG_NAME_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const CONFIG_NAME_RE = /^[A-Za-z0-9_-]+$/;
 
 const configScalarSchema = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -127,8 +127,7 @@ const keyshelfConfigSchema = z
       .string()
       .min(1)
       .refine((value) => CONFIG_NAME_RE.test(value), {
-        message:
-          "name must match /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/ (lowercase, digits, dashes; no leading or trailing dash)"
+        message: "name must contain only letters, digits, hyphens, and underscores"
       }),
     envs: z.array(z.string().min(1)).nonempty(),
     groups: z.array(z.string().min(1)).optional(),
