@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import { identityToRecipient } from "age-encryption";
 import type { ProviderContext } from "./types.js";
 
 export function resolvePath(filePath: string, rootDir: string): string {
@@ -16,6 +17,14 @@ export function resolvePath(filePath: string, rootDir: string): string {
 export async function readIdentity(identityFile: string): Promise<string> {
   const content = await readFile(identityFile, "utf-8");
   return content.trim();
+}
+
+export async function readIdentityWithRecipient(
+  identityFile: string
+): Promise<{ identity: string; recipient: string }> {
+  const identity = await readIdentity(identityFile);
+  const recipient = await identityToRecipient(identity);
+  return { identity, recipient };
 }
 
 export function requireStringConfig(

@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { readFile } from "node:fs/promises";
 import { loadConfig } from "../config/index.js";
-import { isTemplateMapping } from "../config/app-mapping.js";
+import { isTemplateMapping, iterDotEnvEntries } from "../config/app-mapping.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { splitList } from "./options.js";
 import { pickProviderRef, writeSecret } from "./secret-binding.js";
@@ -15,14 +15,8 @@ interface ImportOptions {
 
 function parseDotEnv(content: string): Record<string, string> {
   const vars: Record<string, string> = {};
-  for (const raw of content.split("\n")) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eqIndex = line.indexOf("=");
-    if (eqIndex === -1) continue;
-    const key = line.slice(0, eqIndex).trim();
-    const value = line.slice(eqIndex + 1).trim();
-    if (key) vars[key] = value;
+  for (const { key, value } of iterDotEnvEntries(content)) {
+    vars[key] = value;
   }
   return vars;
 }

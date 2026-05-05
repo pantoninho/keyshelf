@@ -1,14 +1,10 @@
 import { Command } from "commander";
 import spawn from "cross-spawn";
 import { loadConfig } from "../config/index.js";
-import {
-  formatSkipCause,
-  renderAppMapping,
-  resolveWithStatus,
-  validate
-} from "../resolver/index.js";
+import { formatSkipCause, renderAppMapping, resolveWithStatus } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { splitList } from "./options.js";
+import { assertValidationPasses } from "./validation.js";
 
 interface RunOptions {
   env?: string;
@@ -47,16 +43,7 @@ export const runCommand = new Command("run")
       filters: splitList(opts.filter)
     };
 
-    const validation = await validate(resolveOpts);
-    if (validation.topLevelErrors.length > 0) {
-      for (const err of validation.topLevelErrors) console.error(`error: ${err.message}`);
-      process.exit(1);
-    }
-    if (validation.keyErrors.length > 0) {
-      console.error("Validation errors:");
-      for (const err of validation.keyErrors) console.error(`  - ${err.path}: ${err.message}`);
-      process.exit(1);
-    }
+    await assertValidationPasses(resolveOpts);
 
     const resolution = await resolveWithStatus(resolveOpts);
     const rendered = renderAppMapping(loaded.appMapping, resolution);

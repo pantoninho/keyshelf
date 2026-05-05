@@ -1,13 +1,9 @@
 import { Command } from "commander";
 import { loadConfig } from "../config/index.js";
-import {
-  formatSkipCause,
-  renderAppMapping,
-  resolveWithStatus,
-  validate
-} from "../resolver/index.js";
+import { formatSkipCause, renderAppMapping, resolveWithStatus } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { splitList } from "./options.js";
+import { assertValidationPasses } from "./validation.js";
 import type { BuiltinProviderRef, ConfigBinding, NormalizedRecord } from "../config/types.js";
 import type { KeyResolutionStatus, Resolution } from "../resolver/types.js";
 import type { AppMapping } from "../config/app-mapping.js";
@@ -110,19 +106,6 @@ async function runReveal({ loaded, env, groups, filters, format }: RevealArgs): 
 
   console.error("warning: revealing secret values");
   printRows(buildRevealedRows(loaded.config.keys, resolution));
-}
-
-async function assertValidationPasses(resolveOpts: Parameters<typeof validate>[0]): Promise<void> {
-  const validation = await validate(resolveOpts);
-  if (validation.topLevelErrors.length > 0) {
-    for (const err of validation.topLevelErrors) console.error(`error: ${err.message}`);
-    process.exit(1);
-  }
-  if (validation.keyErrors.length > 0) {
-    console.error("Validation errors:");
-    for (const err of validation.keyErrors) console.error(`  - ${err.path}: ${err.message}`);
-    process.exit(1);
-  }
 }
 
 function parseFormat(raw: string | undefined): LsFormat {
