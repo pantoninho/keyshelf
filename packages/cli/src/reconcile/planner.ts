@@ -22,13 +22,18 @@ interface InstanceState {
   providerName: string;
   providerParams: unknown;
   storageScope: StorageScope;
-  desired: Map<string, Set<EnvKey>>;
-  actual: Map<string, Set<EnvKey>>;
+  desired: Map<string, EnvSet>;
+  actual: Map<string, EnvSet>;
   movedFromByPath: Map<string, string[]>;
 }
 
 type EnvKey = string;
+type EnvSet = Set<EnvKey>;
 const ENVLESS: EnvKey = "\0envless";
+
+function newEnvSet(): EnvSet {
+  return new Set<EnvKey>();
+}
 
 function envKey(envName: string | undefined): EnvKey {
   return envName ?? ENVLESS;
@@ -108,9 +113,9 @@ function attachMovedFrom(config: NormalizedConfig, instances: Map<string, Instan
 }
 
 interface InstanceDiff {
-  matched: Map<string, Set<EnvKey>>;
-  unmetByPath: Map<string, Set<EnvKey>>;
-  orphansByPath: Map<string, Set<EnvKey>>;
+  matched: Map<string, EnvSet>;
+  unmetByPath: Map<string, EnvSet>;
+  orphansByPath: Map<string, EnvSet>;
 }
 
 function planInstance(state: InstanceState): Action[] {
@@ -130,12 +135,12 @@ function appendList<T extends Action>(actions: Action[], items: T[]): void {
 }
 
 function diffInstance(state: InstanceState): InstanceDiff {
-  const matched = new Map<string, Set<EnvKey>>();
-  const unmetByPath = new Map<string, Set<EnvKey>>();
-  const orphansByPath = new Map<string, Set<EnvKey>>();
+  const matched = new Map<string, EnvSet>();
+  const unmetByPath = new Map<string, EnvSet>();
+  const orphansByPath = new Map<string, EnvSet>();
 
   for (const [path, desiredEnvs] of state.desired) {
-    const actualEnvs = state.actual.get(path) ?? new Set<EnvKey>();
+    const actualEnvs = state.actual.get(path) ?? newEnvSet();
     for (const env of desiredEnvs) {
       const bucket = actualEnvs.has(env) ? matched : unmetByPath;
       upsertSet(bucket, path).add(env);
@@ -143,7 +148,7 @@ function diffInstance(state: InstanceState): InstanceDiff {
   }
 
   for (const [path, actualEnvs] of state.actual) {
-    const desiredEnvs = state.desired.get(path) ?? new Set<EnvKey>();
+    const desiredEnvs = state.desired.get(path) ?? newEnvSet();
     for (const env of actualEnvs) {
       if (!desiredEnvs.has(env)) {
         upsertSet(orphansByPath, path).add(env);
@@ -160,7 +165,7 @@ function appendLeafActions(
   actions: Action[],
   state: InstanceState,
   kind: LeafKind,
-  byPath: Map<string, Set<EnvKey>>
+  byPath: Map<string, EnvSet>
 ): void {
   for (const [path, envs] of byPath) {
     for (const env of envs) {
@@ -180,16 +185,16 @@ interface RenamePlan {
 }
 
 interface MatchPools {
-  pureCreates: Map<string, Set<EnvKey>>;
-  pureOrphans: Map<string, Set<EnvKey>>;
+  pureCreates: Map<string, EnvSet>;
+  pureOrphans: Map<string, EnvSet>;
   consumedOrphanPaths: Set<string>;
   consumedDesiredPaths: Set<string>;
 }
 
 function resolveRenames(
   state: InstanceState,
-  unmetByPath: Map<string, Set<EnvKey>>,
-  orphansByPath: Map<string, Set<EnvKey>>
+  unmetByPath: Map<string, EnvSet>,
+  orphansByPath: Map<string, EnvSet>
 ): RenamePlan {
   const renames: RenameAction[] = [];
   const ambiguous: AmbiguousAction[] = [];
@@ -203,15 +208,15 @@ function resolveRenames(
 
 function buildMatchPools(
   state: InstanceState,
-  unmetByPath: Map<string, Set<EnvKey>>,
-  orphansByPath: Map<string, Set<EnvKey>>
+  unmetByPath: Map<string, EnvSet>,
+  orphansByPath: Map<string, EnvSet>
 ): MatchPools {
   // A path is rename-eligible only when *all* of its desired envs are unmet
   // (no overlap with actual storage at this path) and the path itself does
   // not appear in actual storage. Partial-env mismatches stay as Create.
-  const pureCreates = new Map<string, Set<EnvKey>>();
+  const pureCreates = new Map<string, EnvSet>();
   for (const [path, envs] of unmetByPath) {
-    const desiredEnvs = state.desired.get(path) ?? new Set<EnvKey>();
+    const desiredEnvs = state.desired.get(path) ?? newEnvSet();
     if (envs.size === desiredEnvs.size && !state.actual.has(path)) {
       pureCreates.set(path, envs);
     }
@@ -219,7 +224,7 @@ function buildMatchPools(
 
   // An orphan path is rename-eligible only when it doesn't also appear as
   // desired (e.g. partial overlap stays as Delete).
-  const pureOrphans = new Map<string, Set<EnvKey>>();
+  const pureOrphans = new Map<string, EnvSet>();
   for (const [path, envs] of orphansByPath) {
     if (!state.desired.has(path)) {
       pureOrphans.set(path, envs);
@@ -241,8 +246,8 @@ function resolveMovedFromMatches(
   state: InstanceState,
   pools: MatchPools,
   renames: RenameAction[],
-  unmetByPath: Map<string, Set<EnvKey>>,
-  orphansByPath: Map<string, Set<EnvKey>>
+  unmetByPath: Map<string, EnvSet>,
+  orphansByPath: Map<string, EnvSet>
 ): void {
   for (const [desiredPath, desiredEnvs] of pools.pureCreates) {
     const movedFrom = state.movedFromByPath.get(desiredPath);
@@ -275,8 +280,8 @@ function resolveShapeMatches(
   pools: MatchPools,
   renames: RenameAction[],
   ambiguous: AmbiguousAction[],
-  unmetByPath: Map<string, Set<EnvKey>>,
-  orphansByPath: Map<string, Set<EnvKey>>
+  unmetByPath: Map<string, EnvSet>,
+  orphansByPath: Map<string, EnvSet>
 ): void {
   for (const [desiredPath, desiredEnvs] of pools.pureCreates) {
     if (pools.consumedDesiredPaths.has(desiredPath)) continue;
@@ -314,7 +319,7 @@ function resolveShapeMatches(
   }
 }
 
-function findShapeMatches(pools: MatchPools, desiredEnvs: Set<EnvKey>): string[] {
+function findShapeMatches(pools: MatchPools, desiredEnvs: EnvSet): string[] {
   const matches: string[] = [];
   for (const [orphanPath, orphanEnvs] of pools.pureOrphans) {
     if (pools.consumedOrphanPaths.has(orphanPath)) continue;
@@ -329,12 +334,12 @@ function commitRename(
   state: InstanceState,
   pools: MatchPools,
   renames: RenameAction[],
-  unmetByPath: Map<string, Set<EnvKey>>,
-  orphansByPath: Map<string, Set<EnvKey>>,
+  unmetByPath: Map<string, EnvSet>,
+  orphansByPath: Map<string, EnvSet>,
   fromPath: string,
   toPath: string,
-  desiredEnvs: Set<EnvKey>,
-  orphanEnvs: Set<EnvKey>
+  desiredEnvs: EnvSet,
+  orphanEnvs: EnvSet
 ): void {
   const rename = buildRename(state, fromPath, toPath, desiredEnvs, orphanEnvs);
   renames.push(rename);
@@ -362,7 +367,7 @@ function buildAmbiguous(
 }
 
 function consumeEnvs(
-  byPath: Map<string, Set<EnvKey>>,
+  byPath: Map<string, EnvSet>,
   path: string,
   envs: Array<string | undefined>
 ): void {
@@ -378,8 +383,8 @@ function buildRename(
   state: InstanceState,
   fromPath: string,
   toPath: string,
-  desiredEnvs: Set<EnvKey>,
-  orphanEnvs: Set<EnvKey>
+  desiredEnvs: EnvSet,
+  orphanEnvs: EnvSet
 ): RenameAction {
   // envBindings is the set of envs the apply step must move bytes for —
   // i.e. the intersection of "envs the desired side wants" and "envs the
@@ -406,7 +411,7 @@ function envSorter(a: string | undefined, b: string | undefined): number {
   return a.localeCompare(b);
 }
 
-function envSetsEqual(a: Set<EnvKey>, b: Set<EnvKey>): boolean {
+function envSetsEqual(a: EnvSet, b: EnvSet): boolean {
   if (a.size !== b.size) return false;
   for (const value of a) {
     if (!b.has(value)) return false;
