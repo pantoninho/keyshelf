@@ -114,7 +114,24 @@ export class GcpSmProvider implements Provider {
     const secretId = toSecretId(ctx.keyshelfName, ctx.envName, ctx.keyPath);
     const parent = `projects/${opts.project}`;
 
-    // Create secret if it doesn't exist
+    await this.ensureSecret(parent, secretId);
+    await this.addVersion(parent, secretId, Buffer.from(value, "utf-8"));
+  }
+
+  async copy(from: ProviderContext, to: ProviderContext): Promise<void> {
+    const opts = this.resolveOptions(from);
+    const fromId = toSecretId(from.keyshelfName, from.envName, from.keyPath);
+    const toId = toSecretId(to.keyshelfName, to.envName, to.keyPath);
+    const parent = `projects/${opts.project}`;
+
+    const payload = await this.readPayload(parent, fromId);
+    await this.ensureSecret(parent, toId);
+    await this.addVersion(parent, toId, payload);
+  }
+
+  // Idempotent: a 6/ALREADY_EXISTS response is treated as success so callers
+  // can use this for both create and copy paths.
+  private async ensureSecret(parent: string, secretId: string): Promise<void> {
     try {
       await this.client.createSecret({
         parent,
@@ -124,22 +141,53 @@ export class GcpSmProvider implements Provider {
     } catch (err: unknown) {
       if (isAuthError(err)) throw new GcpAuthError(err as Error);
       const code = (err as { code?: number }).code;
-      if (code !== 6) {
-        // 6 = ALREADY_EXISTS
-        throw err;
-      }
+      if (code !== 6) throw err;
     }
+  }
 
-    // Add new version
+  private async addVersion(parent: string, secretId: string, data: Buffer): Promise<void> {
     try {
       await this.client.addSecretVersion({
         parent: `${parent}/secrets/${secretId}`,
-        payload: { data: Buffer.from(value, "utf-8") }
+        payload: { data }
       });
     } catch (err) {
       if (isAuthError(err)) throw new GcpAuthError(err as Error);
       throw err;
     }
+  }
+
+  async delete(ctx: ProviderContext): Promise<void> {
+    const opts = this.resolveOptions(ctx);
+    const id = toSecretId(ctx.keyshelfName, ctx.envName, ctx.keyPath);
+    try {
+      await this.client.deleteSecret({
+        name: `projects/${opts.project}/secrets/${id}`
+      });
+    } catch (err) {
+      if (isAuthError(err)) throw new GcpAuthError(err as Error);
+      // 5 = NOT_FOUND. Idempotent: deleting an already-gone secret succeeds.
+      const code = (err as { code?: number }).code;
+      if (code === 5) return;
+      throw err;
+    }
+  }
+
+  private async readPayload(parent: string, secretId: string): Promise<Buffer> {
+    let version;
+    try {
+      [version] = await this.client.accessSecretVersion({
+        name: `${parent}/secrets/${secretId}/versions/latest`
+      });
+    } catch (err) {
+      if (isAuthError(err)) throw new GcpAuthError(err as Error);
+      throw err;
+    }
+    const data = version.payload?.data;
+    if (data === null || data === undefined) {
+      throw new Error(`gcp: source secret "${secretId}" has no payload`);
+    }
+    return typeof data === "string" ? Buffer.from(data, "utf-8") : Buffer.from(data);
   }
 
   async list(ctx: ProviderListContext): Promise<StoredKey[]> {

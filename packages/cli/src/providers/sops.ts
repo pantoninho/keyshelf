@@ -115,11 +115,7 @@ export class SopsProvider implements Provider {
 
   async resolve(ctx: ProviderContext): Promise<string> {
     const opts = this.resolveOptions(ctx);
-    const file = await readSecretsFile(opts.secretsFile);
-    const identity = await readIdentity(opts.identityFile);
-    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
-
-    verifyMac(dataKey, file);
+    const { file, dataKey } = await this.openVerified(opts);
 
     const entry = file.entries[ctx.keyPath];
     if (!entry) {
@@ -127,6 +123,19 @@ export class SopsProvider implements Provider {
     }
 
     return decryptValue(dataKey, entry);
+  }
+
+  // Read the secrets file, decrypt the data key with the provider identity,
+  // and verify the MAC. Shared between read paths (resolve, copy) so the
+  // tamper-detection sequence stays in one place.
+  private async openVerified(
+    opts: SopsProviderOptions
+  ): Promise<{ file: SecretsFile; dataKey: Buffer }> {
+    const file = await readSecretsFile(opts.secretsFile);
+    const identity = await readIdentity(opts.identityFile);
+    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
+    verifyMac(dataKey, file);
+    return { file, dataKey };
   }
 
   async validate(ctx: ProviderContext): Promise<boolean> {
@@ -168,6 +177,36 @@ export class SopsProvider implements Provider {
     file.entries[ctx.keyPath] = encryptValue(dataKey, value);
     file.sops.mac = computeMac(dataKey, file.entries);
 
+    await writeSecretsFile(opts.secretsFile, file);
+  }
+
+  async copy(from: ProviderContext, to: ProviderContext): Promise<void> {
+    const opts = this.resolveOptions(from);
+    const { file, dataKey } = await this.openVerified(opts);
+
+    const entry = file.entries[from.keyPath];
+    if (!entry) {
+      throw new Error(`sops: source key "${from.keyPath}" not found in ${opts.secretsFile}`);
+    }
+    file.entries[to.keyPath] = entry;
+    file.sops.mac = computeMac(dataKey, file.entries);
+    await writeSecretsFile(opts.secretsFile, file);
+  }
+
+  async delete(ctx: ProviderContext): Promise<void> {
+    const opts = this.resolveOptions(ctx);
+    let probe: SecretsFile;
+    try {
+      probe = await readSecretsFile(opts.secretsFile);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw err;
+    }
+    if (!(ctx.keyPath in probe.entries)) return;
+
+    const { file, dataKey } = await this.openVerified(opts);
+    delete file.entries[ctx.keyPath];
+    file.sops.mac = computeMac(dataKey, file.entries);
     await writeSecretsFile(opts.secretsFile, file);
   }
 

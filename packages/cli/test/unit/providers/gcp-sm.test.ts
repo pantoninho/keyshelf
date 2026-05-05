@@ -8,7 +8,8 @@ function mockClient() {
     getSecret: vi.fn(),
     createSecret: vi.fn(),
     addSecretVersion: vi.fn(),
-    listSecrets: vi.fn()
+    listSecrets: vi.fn(),
+    deleteSecret: vi.fn()
   };
 }
 
@@ -320,6 +321,96 @@ describe("GcpSmProvider", () => {
         Object.assign(new Error("UNAUTHENTICATED"), { code: 16 })
       );
       await expect(provider.list(listCtx())).rejects.toThrow(GcpAuthError);
+    });
+  });
+
+  describe("copy", () => {
+    function copyCtx(keyPath: string, envName: string | undefined = "prod") {
+      return { keyPath, envName, rootDir: "/tmp", config: { project: "my-proj" } };
+    }
+
+    it("reads payload from source then creates target and adds version", async () => {
+      client.accessSecretVersion.mockResolvedValue([
+        { payload: { data: Buffer.from("payload-bytes") } }
+      ]);
+      client.createSecret.mockResolvedValue([{}]);
+      client.addSecretVersion.mockResolvedValue([{}]);
+
+      await provider.copy(copyCtx("old/key"), copyCtx("new/key"));
+
+      expect(client.accessSecretVersion).toHaveBeenCalledWith({
+        name: "projects/my-proj/secrets/keyshelf__prod__old__key/versions/latest"
+      });
+      expect(client.createSecret).toHaveBeenCalledWith({
+        parent: "projects/my-proj",
+        secretId: "keyshelf__prod__new__key",
+        secret: { replication: { automatic: {} } }
+      });
+      expect(client.addSecretVersion).toHaveBeenCalledWith({
+        parent: "projects/my-proj/secrets/keyshelf__prod__new__key",
+        payload: { data: Buffer.from("payload-bytes") }
+      });
+      // copy must NOT delete the source — apply pipeline does that after validate.
+      expect(client.deleteSecret).not.toHaveBeenCalled();
+    });
+
+    it("treats ALREADY_EXISTS on createSecret as recoverable (still adds version)", async () => {
+      client.accessSecretVersion.mockResolvedValue([{ payload: { data: Buffer.from("v") } }]);
+      client.createSecret.mockRejectedValue(
+        Object.assign(new Error("ALREADY_EXISTS"), { code: 6 })
+      );
+      client.addSecretVersion.mockResolvedValue([{}]);
+
+      await provider.copy(copyCtx("a"), copyCtx("b"));
+      expect(client.addSecretVersion).toHaveBeenCalled();
+    });
+
+    it("rethrows non-recoverable createSecret errors", async () => {
+      client.accessSecretVersion.mockResolvedValue([{ payload: { data: Buffer.from("v") } }]);
+      client.createSecret.mockRejectedValue(
+        Object.assign(new Error("PERMISSION_DENIED"), { code: 7 })
+      );
+
+      await expect(provider.copy(copyCtx("a"), copyCtx("b"))).rejects.toThrow("PERMISSION_DENIED");
+    });
+
+    it("throws when source has no payload", async () => {
+      client.accessSecretVersion.mockResolvedValue([{ payload: { data: null } }]);
+      await expect(provider.copy(copyCtx("a"), copyCtx("b"))).rejects.toThrow("has no payload");
+    });
+
+    it("wraps auth errors during accessSecretVersion as GcpAuthError", async () => {
+      client.accessSecretVersion.mockRejectedValue(
+        Object.assign(new Error("UNAUTHENTICATED"), { code: 16 })
+      );
+      await expect(provider.copy(copyCtx("a"), copyCtx("b"))).rejects.toThrow(GcpAuthError);
+    });
+  });
+
+  describe("delete", () => {
+    it("calls deleteSecret with the derived id", async () => {
+      client.deleteSecret.mockResolvedValue([{}]);
+      await provider.delete(ctx("legacy/key"));
+      expect(client.deleteSecret).toHaveBeenCalledWith({
+        name: "projects/my-proj/secrets/keyshelf__prod__legacy__key"
+      });
+    });
+
+    it("is idempotent on NOT_FOUND (gRPC code 5)", async () => {
+      client.deleteSecret.mockRejectedValue(Object.assign(new Error("NOT_FOUND"), { code: 5 }));
+      await expect(provider.delete(ctx("ghost"))).resolves.toBeUndefined();
+    });
+
+    it("rethrows other errors", async () => {
+      client.deleteSecret.mockRejectedValue(Object.assign(new Error("INTERNAL"), { code: 13 }));
+      await expect(provider.delete(ctx("k"))).rejects.toThrow("INTERNAL");
+    });
+
+    it("wraps auth errors as GcpAuthError", async () => {
+      client.deleteSecret.mockRejectedValue(
+        Object.assign(new Error("UNAUTHENTICATED"), { code: 16 })
+      );
+      await expect(provider.delete(ctx("k"))).rejects.toThrow(GcpAuthError);
     });
   });
 });

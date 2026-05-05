@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { appendFileSync, existsSync } from 'fs';
 import { randomBytes as randomBytes$1, createDecipheriv, createCipheriv, createHmac } from 'crypto';
-import { readFile, mkdir, writeFile, readdir } from 'fs/promises';
+import { readFile, mkdir, writeFile, copyFile, rm, readdir } from 'fs/promises';
 import { dirname, resolve, join, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 import { performance } from 'perf_hooks';
@@ -3024,6 +3024,10 @@ var PlaintextProvider = class {
   }
   async list() {
     return [];
+  }
+  async copy() {
+  }
+  async delete() {
   }
 };
 
@@ -11680,6 +11684,18 @@ var AgeProvider = class {
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, ciphertext);
   }
+  async copy(from, to) {
+    const opts2 = this.resolveOptions(from);
+    const fromPath = secretFilePath(opts2.secretsDir, from.keyPath);
+    const toPath = secretFilePath(opts2.secretsDir, to.keyPath);
+    await mkdir(dirname(toPath), { recursive: true });
+    await copyFile(fromPath, toPath);
+  }
+  async delete(ctx) {
+    const opts2 = this.resolveOptions(ctx);
+    const filePath = secretFilePath(opts2.secretsDir, ctx.keyPath);
+    await rm(filePath, { force: true });
+  }
   async list(ctx) {
     const secretsDir = resolvePath(requireStringConfig("age", ctx, "secretsDir"), ctx.rootDir);
     let entries;
@@ -11763,15 +11779,22 @@ var SopsProvider = class {
   }
   async resolve(ctx) {
     const opts2 = this.resolveOptions(ctx);
-    const file = await readSecretsFile(opts2.secretsFile);
-    const identity = await readIdentity(opts2.identityFile);
-    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
-    verifyMac(dataKey, file);
+    const { file, dataKey } = await this.openVerified(opts2);
     const entry = file.entries[ctx.keyPath];
     if (!entry) {
       throw new Error(`sops: secret "${ctx.keyPath}" not found in ${opts2.secretsFile}`);
     }
     return decryptValue(dataKey, entry);
+  }
+  // Read the secrets file, decrypt the data key with the provider identity,
+  // and verify the MAC. Shared between read paths (resolve, copy) so the
+  // tamper-detection sequence stays in one place.
+  async openVerified(opts2) {
+    const file = await readSecretsFile(opts2.secretsFile);
+    const identity = await readIdentity(opts2.identityFile);
+    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
+    verifyMac(dataKey, file);
+    return { file, dataKey };
   }
   async validate(ctx) {
     try {
@@ -11804,6 +11827,32 @@ var SopsProvider = class {
       };
     }
     file.entries[ctx.keyPath] = encryptValue(dataKey, value);
+    file.sops.mac = computeMac(dataKey, file.entries);
+    await writeSecretsFile(opts2.secretsFile, file);
+  }
+  async copy(from, to) {
+    const opts2 = this.resolveOptions(from);
+    const { file, dataKey } = await this.openVerified(opts2);
+    const entry = file.entries[from.keyPath];
+    if (!entry) {
+      throw new Error(`sops: source key "${from.keyPath}" not found in ${opts2.secretsFile}`);
+    }
+    file.entries[to.keyPath] = entry;
+    file.sops.mac = computeMac(dataKey, file.entries);
+    await writeSecretsFile(opts2.secretsFile, file);
+  }
+  async delete(ctx) {
+    const opts2 = this.resolveOptions(ctx);
+    let probe;
+    try {
+      probe = await readSecretsFile(opts2.secretsFile);
+    } catch (err) {
+      if (err.code === "ENOENT") return;
+      throw err;
+    }
+    if (!(ctx.keyPath in probe.entries)) return;
+    const { file, dataKey } = await this.openVerified(opts2);
+    delete file.entries[ctx.keyPath];
     file.sops.mac = computeMac(dataKey, file.entries);
     await writeSecretsFile(opts2.secretsFile, file);
   }
