@@ -1,53 +1,29 @@
 # Migrating from keyshelf v4
 
-v5 is a clean rewrite. Configs are TypeScript, every key is a self-contained record, and `set` no longer touches the config file. There is no in-place upgrade — generate a starter config with the migrator, then review.
+In v5, your existing `keyshelf.yaml` + `.keyshelf/<env>.yaml` files are still a valid runtime format — the v5 CLI parses them into the same internal shape as `keyshelf.config.ts`. For most projects, **upgrading is no migration at all**: bump the `keyshelf` version, run the CLI, and your YAML keeps working.
 
-## Run the migrator
+The `@keyshelf/migrate` package covers the two cases that aren't automatic:
 
-From the repo root that contains your v4 `keyshelf.yaml`:
+- You want to switch authoring formats from YAML to TypeScript (autocomplete on key paths, IDE help on provider options).
+- You're using GCP secrets that were written before v4.6 added a `name:` field, and you want their secret IDs re-namespaced under the new `name`.
 
-```sh
-npx @keyshelf/migrate
-```
+If neither applies, you can stop reading here. Run `keyshelf ls --env <env>` against your existing config and confirm everything resolves.
 
-This reads `keyshelf.yaml`, every `.keyshelf/<env>.yaml`, and the root `.env.keyshelf` (if present), and writes a starter `keyshelf.config.ts`. The v4 YAML files are left in place. App-level `.env.keyshelf` mappings keep working as-is.
+## What changed at runtime
 
-Useful flags:
-
-```sh
-npx @keyshelf/migrate --dry-run                 # print the generated config to stdout
-npx @keyshelf/migrate --out ./keyshelf.config.ts --force
-npx @keyshelf/migrate --accept-renamed-name     # if your v4 name has underscores
-```
-
-## What changed
-
-### Config file
-
-| v4                                                     | v5                                                       |
-| ------------------------------------------------------ | -------------------------------------------------------- |
-| `keyshelf.yaml` + `.keyshelf/<env>.yaml` (one per env) | One `keyshelf.config.ts`                                 |
-| `default-provider:` block per env file                 | Provider binding lives on each `secret(...)` record      |
-| `!secret`, `!age`, `!gcp`, `!sops` YAML tags           | `secret(...)`, `age(...)`, `gcp(...)`, `sops(...)` calls |
-| Plaintext values in env files override schema defaults | `values: { <env>: ... }` on the record itself            |
-| `name:` introduced in v4.6 to namespace GCP secrets    | `name:` is required and validated as `lower-kebab-case`  |
-
-Every key's full story is now local to its declaration. There are no env-file-level overrides — to override a value per env, set `values` on the record:
-
-```ts
-db: {
-  host: config({
-    default: "localhost",
-    values: { production: "prod-db.internal" }
-  });
-}
-```
+| v4                                                     | v5                                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `keyshelf.yaml` + `.keyshelf/<env>.yaml`               | Same files still work, **or** a single `keyshelf.config.ts`                           |
+| `default-provider:` block per env file                 | YAML form unchanged; TS form binds providers per `secret(...)` record                 |
+| `!secret`, `!age`, `!gcp`, `!sops` YAML tags           | Still valid in YAML; TS uses `secret(...)`, `age(...)`, `gcp(...)`, `sops(...)` calls |
+| Plaintext values in env files override schema defaults | YAML form unchanged; TS form expresses the same thing as `values: { <env>: ... }`     |
+| `name:` introduced in v4.6 to namespace GCP secrets    | `name:` is required (`/^[A-Za-z0-9_-]+$/`) — same rule the v4 loader applied          |
 
 ### `keyshelf set`
 
 v4: `set` could write a plaintext value into `.keyshelf/<env>.yaml` _or_ encrypt through a provider. The CLI picked based on `--provider`.
 
-v5: `set` only writes to providers. Config keys are hand-edited in `keyshelf.config.ts`. The provider used is the one bound on the record (`values[env]` or `default`/`value`); there is no `--provider` flag.
+v5: `set` only writes to providers. Config keys are hand-edited. The provider used is the one bound on the record (the `default-provider` for the env in YAML, or `values[env]` / `default` in TS); there is no `--provider` flag.
 
 ```sh
 # v4
@@ -57,7 +33,7 @@ keyshelf set --env production --provider age db/password --value "s3cret"
 keyshelf set --env production db/password --value "s3cret"
 ```
 
-If you used `set` to update plaintext config values in v4, edit `keyshelf.config.ts` directly in v5.
+If you used `set` to update plaintext config values in v4, edit the YAML file (or `keyshelf.config.ts`) directly in v5.
 
 ### `--env` is optional
 
@@ -72,24 +48,64 @@ v5 introduces two new selectors. Both live on the CLI; nothing in `.env.keyshelf
 
 When a filter excludes a key referenced by an `.env.keyshelf` template, that env var is skipped with a stderr warning, not failed and not emitted as empty. Same rule for optional unresolved keys.
 
+Group filtering is only available in the TypeScript config format — YAML configs have no `groups:` field.
+
+## Optional: switch to TypeScript
+
+If you want the IDE help, run the converter from the repo root that contains your v4 `keyshelf.yaml`:
+
+```sh
+npx @keyshelf/migrate yaml-to-typescript                 # writes keyshelf.config.ts
+npx @keyshelf/migrate yaml-to-typescript --dry-run       # print to stdout instead
+npx @keyshelf/migrate yaml-to-typescript --out ./keyshelf.config.ts --force
+```
+
+The converter reads `keyshelf.yaml`, every `.keyshelf/<env>.yaml`, and the root `.env.keyshelf` (if present). The v4 YAML files are left in place. App-level `.env.keyshelf` mappings keep working as-is.
+
+After conversion, review:
+
+1. **`groups: []`** — placeholder. Add group names if you want `--group` filtering, then assign `group:` on each record.
+2. **Provider paths** — `identityFile`, `secretsDir`, `secretsFile` are copied verbatim. They must resolve from the directory containing `keyshelf.config.ts`.
+3. **`.env.keyshelf` references** — load-time validation rejects references to keys that don't exist. Run `keyshelf ls` once to confirm.
+
+Once the new config resolves correctly (`keyshelf ls --env <env>`), delete `keyshelf.yaml` and `.keyshelf/`.
+
 ### Editor setup
 
-v4 needed YAML custom-tag configuration to silence `unknown tag !secret` warnings. v5 doesn't — `keyshelf.config.ts` is a normal TypeScript module. You can delete the `yaml.customTags` and `yamllint custom-tags` entries from your editor config.
+v4 needed YAML custom-tag configuration to silence `unknown tag !secret` warnings. After switching to TypeScript, you can delete the `yaml.customTags` and `yamllint custom-tags` entries from your editor config.
 
-## Review checklist after running the migrator
+## Optional: re-namespace GCP secret IDs
 
-1. **`name`** — confirm the generated value. v4 names with underscores are converted to kebab-case (`my_app` → `my-app`) only with `--accept-renamed-name`.
-2. **`groups: []`** — placeholder. Add group names if you want `--group` filtering, then assign `group:` on each record.
-3. **Provider paths** — `identityFile`, `secretsDir`, `secretsFile` are copied from v4 verbatim. They must resolve from the directory containing `keyshelf.config.ts`.
-4. **Secrets are not migrated automatically.** The migrator prints a list of `keyshelf set` commands at the end of its run; copy those out and re-bind each secret with the value from your old store. (Drop any `--provider <name>` flag — v5 picks the provider from the record's binding.)
-5. **`.env.keyshelf` references** — load-time validation rejects references to keys that don't exist in the new config. Run `keyshelf ls` once to confirm.
+If your project uses GCP and was created before v4.6 (when `name:` was added), your stored secret IDs look like `keyshelf__<env>__<key>` instead of the v5 form `keyshelf__<name>__<env>__<key>`. The `project-name` subcommand copies the legacy IDs to the namespaced ones:
 
-## Best-effort caveats
+```sh
+npx @keyshelf/migrate project-name --dry-run
+npx @keyshelf/migrate project-name
+npx @keyshelf/migrate project-name --delete-legacy
+```
 
-The migrator is best-effort, not exact. Known limitations:
+The dry run reports each row with one of these statuses:
 
-- Per-key provider overrides spread across multiple v4 env files collapse into one `secret(...)` declaration. If a single key was bound to providers with conflicting options, the migrator picks one and reports the rest in the migration log.
-- Multi-mapping `.env.keyshelf` files in subdirectories aren't relocated — they keep working from their existing paths.
-- Comments in v4 YAML are not preserved.
+| Status             | Meaning                                                                      |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `migrated`         | Will copy legacy → new. With `--dry-run`, no write happens.                  |
+| `already-migrated` | New secret already exists and matches the legacy value. No action needed.    |
+| `no-legacy`        | No legacy secret found at that ID. Probably already cleaned up, or unbound.  |
+| `value-mismatch`   | New secret exists with a **different** value. The migrator refuses to write. |
+| `deleted-legacy`   | Only with `--delete-legacy` (and not `--dry-run`).                           |
 
-When in doubt, run `keyshelf ls --env <env>` against the migrated config and compare to `keyshelf ls --env <env>` on the old install before deleting v4 YAML.
+`value-mismatch` is the one to investigate. It usually means someone created the namespaced secret manually with a different value, or you ran a partial migration before. Resolve it (delete one, copy the right value over) before re-running.
+
+For `age` and `sops`, the subcommand is a no-op — those providers store secrets co-located with the project and have no remote namespace to migrate.
+
+See [`migrating-without-v4-name.md`](./migrating-without-v4-name.md) for the case where your v4 config never had a `name:` at all.
+
+## Authentication note (GCP only)
+
+The GCP step uses application-default credentials. If you see a `GcpAuthError`, run:
+
+```sh
+gcloud auth application-default login
+```
+
+and re-run the migrator. Legacy secrets are kept in place by default, so it's safe to retry.
