@@ -1,7 +1,10 @@
-import type { Provider, ProviderContext, StoredKey } from "./types.js";
+import type { Provider, ProviderContext, StorageScope, StoredKey } from "./types.js";
 
 export class PlaintextProvider implements Provider {
   name = "plaintext";
+  // Plaintext values live inline in the config tree, not in storage. No
+  // listing exists; scope is moot but envless matches the empty-list shape.
+  storageScope: StorageScope = "envless";
 
   async resolve(ctx: ProviderContext): Promise<string> {
     const value = ctx.config.value;
