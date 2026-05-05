@@ -298,8 +298,10 @@ The Phase 2 validator must enforce, in addition to the type-level constraints:
 6. A leaf path may not be a prefix of any other leaf path. Declaring `foo`
    as a leaf and `'foo/x'` as another leaf in the same config is rejected:
    any given path is either a leaf or a namespace prefix, never both.
-7. Path segments must match `/^[A-Za-z_][A-Za-z0-9_-]*$/`. The `/` separator
-   is reserved.
+7. Path segments must match `/^[A-Za-z][A-Za-z0-9-]*$/`. The `/` separator
+   is reserved. `_` is forbidden so per-provider storage ids (which mangle
+   `/` into `_` for age and `__` for gcp) round-trip unambiguously when
+   listed.
 8. Template references in `config` bindings must resolve to declared key
    paths and must not form cycles.
 9. `.env.keyshelf` references must point to declared key paths

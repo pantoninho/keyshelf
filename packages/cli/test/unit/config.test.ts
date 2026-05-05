@@ -185,6 +185,32 @@ describe("config factories and validation", () => {
     ).toThrow('invalid path segment "db.host"');
   });
 
+  it("rejects underscore in path segments (reserved by per-provider storage ids)", () => {
+    expect(() =>
+      normalizeConfig(
+        defineConfig({
+          name: "test",
+          envs: ["dev"],
+          keys: {
+            db_host: "localhost"
+          }
+        })
+      )
+    ).toThrow('invalid path segment "db_host"');
+
+    expect(() =>
+      normalizeConfig(
+        defineConfig({
+          name: "test",
+          envs: ["dev"],
+          keys: {
+            _leading: "x"
+          }
+        })
+      )
+    ).toThrow('invalid path segment "_leading"');
+  });
+
   it("validates template references and cycles", () => {
     expect(() =>
       normalizeConfig(

@@ -11,7 +11,7 @@ import type {
   SecretRecord
 } from "./types.js";
 
-const PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+const PATH_SEGMENT_RE = /^[A-Za-z][A-Za-z0-9-]*$/;
 const TEMPLATE_RE = /(?<!\$)\$\{([^}]+)\}/g;
 const CONFIG_NAME_RE = /^[A-Za-z0-9_-]+$/;
 

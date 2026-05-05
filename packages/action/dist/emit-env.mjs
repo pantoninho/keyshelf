@@ -40,7 +40,7 @@ function parseAppMapping(content) {
   }
   return mappings;
 }
-var PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+var PATH_SEGMENT_RE = /^[A-Za-z][A-Za-z0-9-]*$/;
 var TEMPLATE_RE2 = /(?<!\$)\$\{([^}]+)\}/g;
 var CONFIG_NAME_RE = /^[A-Za-z0-9_-]+$/;
 var configScalarSchema = z.union([z.string(), z.number(), z.boolean()]);

@@ -49,7 +49,7 @@ const cfg = normalizeConfig(
   defineConfig({
     name: "myapp",
     envs: ["dev", "prod"],
-    keys: { _placeholder: "x" }
+    keys: { placeholder: "x" }
   })
 );
 
