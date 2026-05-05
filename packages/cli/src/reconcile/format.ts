@@ -77,7 +77,7 @@ function renderRenames(items: RenameAction[]): string {
     lines.push(`      provider: ${r.providerName}`);
     lines.push(`      envs: ${formatEnvBindings(r.envBindings)}`);
   }
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 function renderCreates(items: CreateAction[]): string {
@@ -88,7 +88,7 @@ function renderCreates(items: CreateAction[]): string {
     );
     lines.push(`      provider: ${c.providerName}`);
   }
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 function renderDeletes(items: DeleteAction[]): string {
@@ -99,7 +99,7 @@ function renderDeletes(items: DeleteAction[]): string {
     );
     lines.push(`      provider: ${d.providerName}`);
   }
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 function renderAmbiguous(items: AmbiguousAction[]): string {
@@ -117,7 +117,7 @@ function renderAmbiguous(items: AmbiguousAction[]): string {
       lines.push(`        secret({ movedFrom: ${JSON.stringify(cand.keyPath)}, ... })`);
     }
   }
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 function renderSummary(grouped: GroupedActions): string {
