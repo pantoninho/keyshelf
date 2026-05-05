@@ -115,8 +115,26 @@ function attachMovedFrom(config: NormalizedConfig, instances: Map<string, Instan
   }
 }
 
+interface InstanceDiff {
+  matched: Map<string, Set<EnvKey>>;
+  unmetByPath: Map<string, Set<EnvKey>>;
+  orphansByPath: Map<string, Set<EnvKey>>;
+}
+
 function planInstance(state: InstanceState): Action[] {
-  const actions: Action[] = [];
+  const diff = diffInstance(state);
+  const renamePlan = resolveRenames(state, diff.unmetByPath, diff.orphansByPath);
+
+  return [
+    ...emitLeafActions(state, "noop", diff.matched),
+    ...renamePlan.renames,
+    ...renamePlan.ambiguous,
+    ...emitLeafActions(state, "create", diff.unmetByPath),
+    ...emitLeafActions(state, "delete", diff.orphansByPath)
+  ];
+}
+
+function diffInstance(state: InstanceState): InstanceDiff {
   const matched = new Map<string, Set<EnvKey>>();
   const unmetByPath = new Map<string, Set<EnvKey>>();
   const orphansByPath = new Map<string, Set<EnvKey>>();
@@ -124,11 +142,8 @@ function planInstance(state: InstanceState): Action[] {
   for (const [path, desiredEnvs] of state.desired) {
     const actualEnvs = state.actual.get(path) ?? new Set<EnvKey>();
     for (const env of desiredEnvs) {
-      if (actualEnvs.has(env)) {
-        upsertSet(matched, path).add(env);
-      } else {
-        upsertSet(unmetByPath, path).add(env);
-      }
+      const bucket = actualEnvs.has(env) ? matched : unmetByPath;
+      upsertSet(bucket, path).add(env);
     }
   }
 
@@ -141,46 +156,27 @@ function planInstance(state: InstanceState): Action[] {
     }
   }
 
-  for (const [path, envs] of matched) {
+  return { matched, unmetByPath, orphansByPath };
+}
+
+type LeafKind = "noop" | "create" | "delete";
+
+function emitLeafActions(
+  state: InstanceState,
+  kind: LeafKind,
+  byPath: Map<string, Set<EnvKey>>
+): Array<NoOpAction | CreateAction | DeleteAction> {
+  const actions: Array<NoOpAction | CreateAction | DeleteAction> = [];
+  for (const [path, envs] of byPath) {
     for (const env of envs) {
-      const action: NoOpAction = {
-        kind: "noop",
+      actions.push({
+        kind,
         keyPath: path,
         envName: envKeyValue(env),
         providerName: state.providerName
-      };
-      actions.push(action);
+      });
     }
   }
-
-  const renamePlan = resolveRenames(state, unmetByPath, orphansByPath);
-  for (const rename of renamePlan.renames) actions.push(rename);
-  for (const ambiguous of renamePlan.ambiguous) actions.push(ambiguous);
-
-  for (const [path, envs] of unmetByPath) {
-    for (const env of envs) {
-      const action: CreateAction = {
-        kind: "create",
-        keyPath: path,
-        envName: envKeyValue(env),
-        providerName: state.providerName
-      };
-      actions.push(action);
-    }
-  }
-
-  for (const [path, envs] of orphansByPath) {
-    for (const env of envs) {
-      const action: DeleteAction = {
-        kind: "delete",
-        keyPath: path,
-        envName: envKeyValue(env),
-        providerName: state.providerName
-      };
-      actions.push(action);
-    }
-  }
-
   return actions;
 }
 
