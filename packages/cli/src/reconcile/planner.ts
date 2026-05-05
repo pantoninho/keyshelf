@@ -189,6 +189,13 @@ interface RenamePlan {
   ambiguous: AmbiguousAction[];
 }
 
+interface MatchPools {
+  pureCreates: Map<string, Set<EnvKey>>;
+  pureOrphans: Map<string, Set<EnvKey>>;
+  consumedOrphanPaths: Set<string>;
+  consumedDesiredPaths: Set<string>;
+}
+
 function resolveRenames(
   state: InstanceState,
   unmetByPath: Map<string, Set<EnvKey>>,
@@ -196,7 +203,19 @@ function resolveRenames(
 ): RenamePlan {
   const renames: RenameAction[] = [];
   const ambiguous: AmbiguousAction[] = [];
+  const pools = buildMatchPools(state, unmetByPath, orphansByPath);
 
+  resolveMovedFromMatches(state, pools, renames, unmetByPath, orphansByPath);
+  resolveShapeMatches(state, pools, renames, ambiguous, unmetByPath, orphansByPath);
+
+  return { renames, ambiguous };
+}
+
+function buildMatchPools(
+  state: InstanceState,
+  unmetByPath: Map<string, Set<EnvKey>>,
+  orphansByPath: Map<string, Set<EnvKey>>
+): MatchPools {
   // A path is rename-eligible only when *all* of its desired envs are unmet
   // (no overlap with actual storage at this path) and the path itself does
   // not appear in actual storage. Partial-env mismatches stay as Create.
@@ -217,74 +236,134 @@ function resolveRenames(
     }
   }
 
-  const consumedOrphanPaths = new Set<string>();
-  const consumedDesiredPaths = new Set<string>();
+  return {
+    pureCreates,
+    pureOrphans,
+    consumedOrphanPaths: new Set(),
+    consumedDesiredPaths: new Set()
+  };
+}
 
-  // Pass 1: movedFrom forces a match. Consumes the intersection of desired
-  // and orphan envs; leftover envs on either side fall through to
-  // Create/Delete respectively.
-  for (const [desiredPath, desiredEnvs] of pureCreates) {
+// Pass 1: movedFrom forces a match. Consumes the intersection of desired
+// and orphan envs; leftover envs on either side fall through to
+// Create/Delete respectively.
+function resolveMovedFromMatches(
+  state: InstanceState,
+  pools: MatchPools,
+  renames: RenameAction[],
+  unmetByPath: Map<string, Set<EnvKey>>,
+  orphansByPath: Map<string, Set<EnvKey>>
+): void {
+  for (const [desiredPath, desiredEnvs] of pools.pureCreates) {
     const movedFrom = state.movedFromByPath.get(desiredPath);
     if (movedFrom === undefined) continue;
     for (const candidate of movedFrom) {
-      if (consumedOrphanPaths.has(candidate)) continue;
-      const orphanEnvs = pureOrphans.get(candidate);
+      if (pools.consumedOrphanPaths.has(candidate)) continue;
+      const orphanEnvs = pools.pureOrphans.get(candidate);
       if (orphanEnvs === undefined) continue;
-      const rename = buildRename(state, candidate, desiredPath, desiredEnvs, orphanEnvs);
-      renames.push(rename);
-      consumeEnvs(unmetByPath, desiredPath, rename.envBindings);
-      consumeEnvs(orphansByPath, candidate, rename.envBindings);
-      consumedOrphanPaths.add(candidate);
-      consumedDesiredPaths.add(desiredPath);
+      commitRename(
+        state,
+        pools,
+        renames,
+        unmetByPath,
+        orphansByPath,
+        candidate,
+        desiredPath,
+        desiredEnvs,
+        orphanEnvs
+      );
       break;
     }
   }
+}
 
-  // Pass 2: shape match by envCoverage. Within an instance, providerName and
-  // providerParams already match by construction, so envCoverage is the only
-  // remaining shape axis.
-  for (const [desiredPath, desiredEnvs] of pureCreates) {
-    if (consumedDesiredPaths.has(desiredPath)) continue;
+// Pass 2: shape match by envCoverage. Within an instance, providerName and
+// providerParams already match by construction, so envCoverage is the only
+// remaining shape axis.
+function resolveShapeMatches(
+  state: InstanceState,
+  pools: MatchPools,
+  renames: RenameAction[],
+  ambiguous: AmbiguousAction[],
+  unmetByPath: Map<string, Set<EnvKey>>,
+  orphansByPath: Map<string, Set<EnvKey>>
+): void {
+  for (const [desiredPath, desiredEnvs] of pools.pureCreates) {
+    if (pools.consumedDesiredPaths.has(desiredPath)) continue;
 
-    const matches: string[] = [];
-    for (const [orphanPath, orphanEnvs] of pureOrphans) {
-      if (consumedOrphanPaths.has(orphanPath)) continue;
-      if (envSetsEqual(desiredEnvs, orphanEnvs)) {
-        matches.push(orphanPath);
-      }
-    }
-
+    const matches = findShapeMatches(pools, desiredEnvs);
     if (matches.length === 1) {
       const candidate = matches[0];
-      const orphanEnvs = pureOrphans.get(candidate)!;
-      const rename = buildRename(state, candidate, desiredPath, desiredEnvs, orphanEnvs);
-      renames.push(rename);
-      consumeEnvs(unmetByPath, desiredPath, rename.envBindings);
-      consumeEnvs(orphansByPath, candidate, rename.envBindings);
-      consumedOrphanPaths.add(candidate);
-      consumedDesiredPaths.add(desiredPath);
+      const orphanEnvs = pools.pureOrphans.get(candidate)!;
+      commitRename(
+        state,
+        pools,
+        renames,
+        unmetByPath,
+        orphansByPath,
+        candidate,
+        desiredPath,
+        desiredEnvs,
+        orphanEnvs
+      );
     } else if (matches.length > 1) {
-      ambiguous.push({
-        kind: "ambiguous",
-        desired: { keyPath: desiredPath, providerName: state.providerName },
-        candidates: matches.map((path) => ({
-          keyPath: path,
-          providerName: state.providerName
-        })),
-        hint: `Annotate movedFrom: '<old>' on ${desiredPath} to disambiguate.`
-      });
+      ambiguous.push(buildAmbiguous(state, desiredPath, matches));
       // Suppress both sides while ambiguity is unresolved — emitting a
       // Delete on a possibly-renamed path would destroy data.
       unmetByPath.delete(desiredPath);
-      consumedDesiredPaths.add(desiredPath);
+      pools.consumedDesiredPaths.add(desiredPath);
       for (const path of matches) {
         orphansByPath.delete(path);
-        consumedOrphanPaths.add(path);
+        pools.consumedOrphanPaths.add(path);
       }
     }
   }
+}
 
-  return { renames, ambiguous };
+function findShapeMatches(pools: MatchPools, desiredEnvs: Set<EnvKey>): string[] {
+  const matches: string[] = [];
+  for (const [orphanPath, orphanEnvs] of pools.pureOrphans) {
+    if (pools.consumedOrphanPaths.has(orphanPath)) continue;
+    if (envSetsEqual(desiredEnvs, orphanEnvs)) {
+      matches.push(orphanPath);
+    }
+  }
+  return matches;
+}
+
+function commitRename(
+  state: InstanceState,
+  pools: MatchPools,
+  renames: RenameAction[],
+  unmetByPath: Map<string, Set<EnvKey>>,
+  orphansByPath: Map<string, Set<EnvKey>>,
+  fromPath: string,
+  toPath: string,
+  desiredEnvs: Set<EnvKey>,
+  orphanEnvs: Set<EnvKey>
+): void {
+  const rename = buildRename(state, fromPath, toPath, desiredEnvs, orphanEnvs);
+  renames.push(rename);
+  consumeEnvs(unmetByPath, toPath, rename.envBindings);
+  consumeEnvs(orphansByPath, fromPath, rename.envBindings);
+  pools.consumedOrphanPaths.add(fromPath);
+  pools.consumedDesiredPaths.add(toPath);
+}
+
+function buildAmbiguous(
+  state: InstanceState,
+  desiredPath: string,
+  matches: string[]
+): AmbiguousAction {
+  return {
+    kind: "ambiguous",
+    desired: { keyPath: desiredPath, providerName: state.providerName },
+    candidates: matches.map((path) => ({
+      keyPath: path,
+      providerName: state.providerName
+    })),
+    hint: `Annotate movedFrom: '<old>' on ${desiredPath} to disambiguate.`
+  };
 }
 
 function consumeEnvs(
