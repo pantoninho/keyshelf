@@ -1,14 +1,6 @@
 import type { BuiltinProviderRef, NormalizedConfig, NormalizedRecord } from "../config/types.js";
 import type { StoredKey } from "../providers/types.js";
-import type {
-  Action,
-  AmbiguousAction,
-  CreateAction,
-  DeleteAction,
-  NoOpAction,
-  Plan,
-  RenameAction
-} from "./plan.js";
+import type { Action, AmbiguousAction, Plan, RenameAction } from "./plan.js";
 
 export type StorageScope = "envless" | "perEnv";
 
