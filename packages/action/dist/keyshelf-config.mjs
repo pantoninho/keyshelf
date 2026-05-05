@@ -11,6 +11,9 @@ function secret(input) {
 function age(options) {
   return { __kind: "provider:age", name: "age", options };
 }
+function aws(options = {}) {
+  return { __kind: "provider:aws", name: "aws", options };
+}
 function gcp(options) {
   return { __kind: "provider:gcp", name: "gcp", options };
 }
@@ -18,4 +21,4 @@ function sops(options) {
   return { __kind: "provider:sops", name: "sops", options };
 }
 
-export { age, config, defineConfig, gcp, secret, sops };
+export { age, aws, config, defineConfig, gcp, secret, sops };

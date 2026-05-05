@@ -11,13 +11,13 @@ If neither applies, you can stop reading here. Run `keyshelf ls --env <env>` aga
 
 ## What changed at runtime
 
-| v4                                                     | v5                                                                                    |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| `keyshelf.yaml` + `.keyshelf/<env>.yaml`               | Same files still work, **or** a single `keyshelf.config.ts`                           |
-| `default-provider:` block per env file                 | YAML form unchanged; TS form binds providers per `secret(...)` record                 |
-| `!secret`, `!age`, `!gcp`, `!sops` YAML tags           | Still valid in YAML; TS uses `secret(...)`, `age(...)`, `gcp(...)`, `sops(...)` calls |
-| Plaintext values in env files override schema defaults | YAML form unchanged; TS form expresses the same thing as `values: { <env>: ... }`     |
-| `name:` introduced in v4.6 to namespace GCP secrets    | `name:` is required (`/^[A-Za-z0-9_-]+$/`) — same rule the v4 loader applied          |
+| v4                                                     | v5                                                                                                |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `keyshelf.yaml` + `.keyshelf/<env>.yaml`               | Same files still work, **or** a single `keyshelf.config.ts`                                       |
+| `default-provider:` block per env file                 | YAML form unchanged; TS form binds providers per `secret(...)` record                             |
+| `!secret`, `!age`, `!aws`, `!gcp`, `!sops` YAML tags   | Still valid in YAML; TS uses `secret(...)`, `age(...)`, `aws(...)`, `gcp(...)`, `sops(...)` calls |
+| Plaintext values in env files override schema defaults | YAML form unchanged; TS form expresses the same thing as `values: { <env>: ... }`                 |
+| `name:` introduced in v4.6 to namespace GCP secrets    | `name:` is required (`/^[A-Za-z0-9_-]+$/`) — same rule the v4 loader applied                      |
 
 ### `keyshelf set`
 

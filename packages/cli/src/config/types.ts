@@ -12,6 +12,11 @@ export interface AgeProviderOptions {
   secretsDir: string;
 }
 
+export interface AwsProviderOptions {
+  region?: string;
+  kmsKeyId?: string;
+}
+
 export interface GcpProviderOptions {
   project: string;
 }
@@ -23,6 +28,7 @@ export interface SopsProviderOptions {
 
 export type BuiltinProviderRef =
   | ProviderRef<"age", AgeProviderOptions>
+  | ProviderRef<"aws", AwsProviderOptions>
   | ProviderRef<"gcp", GcpProviderOptions>
   | ProviderRef<"sops", SopsProviderOptions>;
 

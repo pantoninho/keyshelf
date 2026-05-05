@@ -30,6 +30,19 @@ const ageProviderSchema = z
   })
   .strict();
 
+const awsProviderSchema = z
+  .object({
+    __kind: z.literal("provider:aws"),
+    name: z.literal("aws"),
+    options: z
+      .object({
+        region: z.string().min(1).optional(),
+        kmsKeyId: z.string().min(1).optional()
+      })
+      .strict()
+  })
+  .strict();
+
 const gcpProviderSchema = z
   .object({
     __kind: z.literal("provider:gcp"),
@@ -57,6 +70,7 @@ const sopsProviderSchema = z
 
 const providerRefSchema = z.discriminatedUnion("__kind", [
   ageProviderSchema,
+  awsProviderSchema,
   gcpProviderSchema,
   sopsProviderSchema
 ]);

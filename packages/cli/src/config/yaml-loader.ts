@@ -2,9 +2,10 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DEFAULT_SCHEMA, load as loadYaml, Type as YamlType } from "js-yaml";
-import { age, config as configRecord, gcp, secret, sops } from "./factories.js";
+import { age, aws, config as configRecord, gcp, secret, sops } from "./factories.js";
 import type {
   AgeProviderOptions,
+  AwsProviderOptions,
   BuiltinProviderRef,
   ConfigBinding,
   ConfigRecord,
@@ -48,7 +49,7 @@ interface EnvFile {
   overrides: Record<string, ConfigBinding | TaggedValue>;
 }
 
-const PROVIDER_TAGS = ["age", "gcp", "sops"] as const;
+const PROVIDER_TAGS = ["age", "aws", "gcp", "sops"] as const;
 const ALL_TAGS = ["secret", ...PROVIDER_TAGS] as const;
 
 function makeMappingTag(name: string): YamlType {
@@ -353,6 +354,8 @@ function providerRef(
       return age(
         requireOptions<AgeProviderOptions>(options, ["identityFile", "secretsDir"], label, "age")
       );
+    case "aws":
+      return aws(requireOptions<AwsProviderOptions>(options, [], label, "aws"));
     case "gcp":
       return gcp(requireOptions<GcpProviderOptions>(options, ["project"], label, "gcp"));
     case "sops":
