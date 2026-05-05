@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import yaml from "js-yaml";
+import { DEFAULT_SCHEMA, load as loadYaml, Type as YamlType } from "js-yaml";
 import { age, config as configRecord, gcp, secret, sops } from "./factories.js";
 import type {
   AgeProviderOptions,
@@ -51,8 +51,8 @@ interface EnvFile {
 const PROVIDER_TAGS = ["age", "gcp", "sops"] as const;
 const ALL_TAGS = ["secret", ...PROVIDER_TAGS] as const;
 
-function makeMappingTag(name: string): yaml.Type {
-  return new yaml.Type(`!${name}`, {
+function makeMappingTag(name: string): YamlType {
+  return new YamlType(`!${name}`, {
     kind: "mapping",
     construct(data: Record<string, unknown> | null): TaggedValue {
       return { tag: name, options: data ?? {} };
@@ -60,8 +60,8 @@ function makeMappingTag(name: string): yaml.Type {
   });
 }
 
-function makeBareTag(name: string): yaml.Type {
-  return new yaml.Type(`!${name}`, {
+function makeBareTag(name: string): YamlType {
+  return new YamlType(`!${name}`, {
     kind: "scalar",
     construct(): TaggedValue {
       return { tag: name, options: {} };
@@ -69,16 +69,16 @@ function makeBareTag(name: string): yaml.Type {
   });
 }
 
-// js-yaml v4: `load` IS the safe loader (the unsafe path was removed). We
-// extend DEFAULT_SCHEMA only with our own keyshelf tags, so no `!!js/*`
+// js-yaml v4 has no unsafe loader — `load` always uses the schema we pass.
+// We extend DEFAULT_SCHEMA only with our own keyshelf tags, so no `!!js/*`
 // constructors are reachable from user content.
-const KEYSHELF_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
+const KEYSHELF_SCHEMA = DEFAULT_SCHEMA.extend([
   ...ALL_TAGS.map(makeBareTag),
   ...ALL_TAGS.map(makeMappingTag)
 ]);
 
 function safeYamlLoad(content: string): unknown {
-  return yaml.load(content, { schema: KEYSHELF_SCHEMA });
+  return loadYaml(content, { schema: KEYSHELF_SCHEMA });
 }
 
 function isTaggedValue(value: unknown): value is TaggedValue {
