@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { createInterface } from "node:readline/promises";
 import { loadConfig } from "../config/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
-import { ProviderRegistry } from "../providers/registry.js";
+import type { ProviderRegistry } from "../providers/registry.js";
 import {
   AmbiguousActionsError,
   ApplyValidationError,

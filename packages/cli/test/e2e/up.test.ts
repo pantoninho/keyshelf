@@ -322,14 +322,9 @@ describe("keyshelf up --yes (apply)", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("ambiguous");
     // Storage left untouched.
-    const ctxFor = (keyPath: string) => ({
-      keyPath,
-      envName: undefined,
-      rootDir: root,
-      config: { identityFile, secretsDir }
-    });
-    expect(await provider.validate(ctxFor("oldA"))).toBe(true);
-    expect(await provider.validate(ctxFor("oldB"))).toBe(true);
+    const baseCtx = { envName: undefined, rootDir: root, config: { identityFile, secretsDir } };
+    expect(await provider.validate({ ...baseCtx, keyPath: "oldA" })).toBe(true);
+    expect(await provider.validate({ ...baseCtx, keyPath: "oldB" })).toBe(true);
   });
 
   it("interactive default: 'n' on the prompt cancels without mutating storage (exit 0)", async () => {

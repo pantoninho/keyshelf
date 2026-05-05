@@ -114,32 +114,8 @@ export class GcpSmProvider implements Provider {
     const secretId = toSecretId(ctx.keyshelfName, ctx.envName, ctx.keyPath);
     const parent = `projects/${opts.project}`;
 
-    // Create secret if it doesn't exist
-    try {
-      await this.client.createSecret({
-        parent,
-        secretId,
-        secret: { replication: { automatic: {} } }
-      });
-    } catch (err: unknown) {
-      if (isAuthError(err)) throw new GcpAuthError(err as Error);
-      const code = (err as { code?: number }).code;
-      if (code !== 6) {
-        // 6 = ALREADY_EXISTS
-        throw err;
-      }
-    }
-
-    // Add new version
-    try {
-      await this.client.addSecretVersion({
-        parent: `${parent}/secrets/${secretId}`,
-        payload: { data: Buffer.from(value, "utf-8") }
-      });
-    } catch (err) {
-      if (isAuthError(err)) throw new GcpAuthError(err as Error);
-      throw err;
-    }
+    await this.ensureSecret(parent, secretId);
+    await this.addVersion(parent, secretId, Buffer.from(value, "utf-8"));
   }
 
   async copy(from: ProviderContext, to: ProviderContext): Promise<void> {
@@ -149,11 +125,17 @@ export class GcpSmProvider implements Provider {
     const parent = `projects/${opts.project}`;
 
     const payload = await this.readPayload(parent, fromId);
+    await this.ensureSecret(parent, toId);
+    await this.addVersion(parent, toId, payload);
+  }
 
+  // Idempotent: a 6/ALREADY_EXISTS response is treated as success so callers
+  // can use this for both create and copy paths.
+  private async ensureSecret(parent: string, secretId: string): Promise<void> {
     try {
       await this.client.createSecret({
         parent,
-        secretId: toId,
+        secretId,
         secret: { replication: { automatic: {} } }
       });
     } catch (err: unknown) {
@@ -161,11 +143,13 @@ export class GcpSmProvider implements Provider {
       const code = (err as { code?: number }).code;
       if (code !== 6) throw err;
     }
+  }
 
+  private async addVersion(parent: string, secretId: string, data: Buffer): Promise<void> {
     try {
       await this.client.addSecretVersion({
-        parent: `${parent}/secrets/${toId}`,
-        payload: { data: payload }
+        parent: `${parent}/secrets/${secretId}`,
+        payload: { data }
       });
     } catch (err) {
       if (isAuthError(err)) throw new GcpAuthError(err as Error);
