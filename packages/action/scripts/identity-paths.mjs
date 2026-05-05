@@ -1,24 +1,27 @@
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve as pathResolve } from "node:path";
 
-export function ageIdentityFile(binding) {
-  if (binding?.__kind !== "provider:age") return undefined;
+const IDENTITY_PROVIDER_KINDS = new Set(["provider:age", "provider:sops"]);
+
+export function identityFile(binding) {
+  if (typeof binding !== "object" || binding === null) return undefined;
+  if (!IDENTITY_PROVIDER_KINDS.has(binding.__kind)) return undefined;
   const file = binding.options?.identityFile;
   return typeof file === "string" && file.length > 0 ? file : undefined;
 }
 
-export function collectAgeIdentityFiles(config) {
+export function collectIdentityFiles(config) {
   const seen = new Set();
   for (const record of config.keys) {
     if (record.kind !== "secret") continue;
-    addIfAge(seen, record.value);
-    for (const v of Object.values(record.values ?? {})) addIfAge(seen, v);
+    addIfIdentity(seen, record.value);
+    for (const v of Object.values(record.values ?? {})) addIfIdentity(seen, v);
   }
   return [...seen];
 }
 
-function addIfAge(seen, binding) {
-  const file = ageIdentityFile(binding);
+function addIfIdentity(seen, binding) {
+  const file = identityFile(binding);
   if (file !== undefined) seen.add(file);
 }
 

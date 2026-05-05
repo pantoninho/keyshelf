@@ -13,7 +13,7 @@ inputs:
     description: Path(s) to .env.keyshelf mapping file(s); newline-separated for multiple
     required: true
   identity:
-    description: Raw identity material (e.g. age private key). Written to the path declared on the matching age provider with mode 0600. Pass via secrets.* — never hard-code.
+    description: Raw identity material (e.g. age private key). Written with mode 0600 to every identityFile path declared by age and sops providers in the config. Pass via secrets.* — never hard-code.
     required: false
     default: ""
   working-directory:

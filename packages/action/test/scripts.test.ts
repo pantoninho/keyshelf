@@ -81,7 +81,7 @@ describe("write-identity.mjs", () => {
     expect((await stat(target)).mode & 0o777).toBe(0o600);
   });
 
-  it("warns and skips when the config declares no age providers", async () => {
+  it("warns and skips when the config declares no providers that consume an identity file", async () => {
     const root = await mkdtemp(join(tmpdir(), "keyshelf-action-noage-"));
     await writeFile(
       join(root, "keyshelf.config.ts"),
@@ -104,7 +104,47 @@ describe("write-identity.mjs", () => {
 
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("::warning::");
-    expect(res.stdout).toContain("declares no age providers");
+    expect(res.stdout).toContain("no providers that consume an identity file");
+  });
+
+  it("writes identity for sops-only configs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "keyshelf-action-sops-"));
+    const identity = await generateIdentity();
+
+    await writeFile(
+      join(root, "keyshelf.config.ts"),
+      [
+        'import { defineConfig, secret, sops } from "keyshelf/config";',
+        "",
+        "export default defineConfig({",
+        '  name: "sops-only",',
+        '  envs: ["test"],',
+        "  keys: {",
+        "    db: {",
+        "      password: secret({",
+        "        values: {",
+        '          test: sops({ identityFile: "./keys/sops.txt", secretsFile: "./.keyshelf/secrets/test.json" })',
+        "        }",
+        "      })",
+        "    }",
+        "  }",
+        "});"
+      ].join("\n")
+    );
+
+    const res = spawnSync(process.execPath, [WRITE_IDENTITY], {
+      cwd: root,
+      env: { ...process.env, KEYSHELF_IDENTITY: identity, KEYSHELF_CWD: root },
+      encoding: "utf-8"
+    });
+
+    expect(res.status, res.stderr).toBe(0);
+    expect(res.stdout).toContain("Wrote identity to");
+    expect(res.stdout).toContain("keys/sops.txt");
+
+    const target = join(root, "keys/sops.txt");
+    expect((await readFile(target, "utf-8")).trim()).toBe(identity.trim());
+    expect((await stat(target)).mode & 0o777).toBe(0o600);
   });
 
   it("is a no-op when no identity is provided", async () => {
