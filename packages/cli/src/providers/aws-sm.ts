@@ -106,11 +106,7 @@ export class AwsSmProvider implements Provider {
     return client;
   }
 
-  private async send<T>(
-    opts: AwsSmProviderOptions,
-    keyPath: string,
-    op: () => Promise<T>
-  ): Promise<T> {
+  private async send<T>(keyPath: string, op: () => Promise<T>): Promise<T> {
     try {
       return await op();
     } catch (err) {
@@ -125,7 +121,7 @@ export class AwsSmProvider implements Provider {
     const client = this.getClient(opts);
     const secretId = toSecretId(ctx.keyshelfName, ctx.envName, ctx.keyPath);
 
-    const result = await this.send(opts, ctx.keyPath, () =>
+    const result = await this.send(ctx.keyPath, () =>
       client.send(new GetSecretValueCommand({ SecretId: secretId }))
     );
 
@@ -167,7 +163,7 @@ export class AwsSmProvider implements Provider {
     const fromId = toSecretId(from.keyshelfName, from.envName, from.keyPath);
     const toId = toSecretId(to.keyshelfName, to.envName, to.keyPath);
 
-    const result = await this.send(opts, from.keyPath, () =>
+    const result = await this.send(from.keyPath, () =>
       client.send(new GetSecretValueCommand({ SecretId: fromId }))
     );
 
@@ -209,7 +205,7 @@ export class AwsSmProvider implements Provider {
     const stored: StoredKey[] = [];
     let nextToken: string | undefined;
     do {
-      const result = await this.send(opts, "<list>", () =>
+      const result = await this.send("<list>", () =>
         client.send(
           new ListSecretsCommand({
             Filters: [{ Key: "name", Values: [prefix] }],
@@ -249,7 +245,7 @@ export class AwsSmProvider implements Provider {
       if (!(err instanceof ResourceExistsException)) throw err;
     }
 
-    await this.send(opts, keyPath, () =>
+    await this.send(keyPath, () =>
       client.send(new PutSecretValueCommand({ SecretId: secretId, SecretString: value }))
     );
   }
