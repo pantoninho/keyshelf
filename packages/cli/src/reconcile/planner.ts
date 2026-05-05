@@ -124,14 +124,17 @@ interface InstanceDiff {
 function planInstance(state: InstanceState): Action[] {
   const diff = diffInstance(state);
   const renamePlan = resolveRenames(state, diff.unmetByPath, diff.orphansByPath);
+  const actions: Action[] = [];
+  appendLeafActions(actions, state, "noop", diff.matched);
+  appendList(actions, renamePlan.renames);
+  appendList(actions, renamePlan.ambiguous);
+  appendLeafActions(actions, state, "create", diff.unmetByPath);
+  appendLeafActions(actions, state, "delete", diff.orphansByPath);
+  return actions;
+}
 
-  return [
-    ...emitLeafActions(state, "noop", diff.matched),
-    ...renamePlan.renames,
-    ...renamePlan.ambiguous,
-    ...emitLeafActions(state, "create", diff.unmetByPath),
-    ...emitLeafActions(state, "delete", diff.orphansByPath)
-  ];
+function appendList<T extends Action>(actions: Action[], items: T[]): void {
+  for (const item of items) actions.push(item);
 }
 
 function diffInstance(state: InstanceState): InstanceDiff {
@@ -161,12 +164,12 @@ function diffInstance(state: InstanceState): InstanceDiff {
 
 type LeafKind = "noop" | "create" | "delete";
 
-function emitLeafActions(
+function appendLeafActions(
+  actions: Action[],
   state: InstanceState,
   kind: LeafKind,
   byPath: Map<string, Set<EnvKey>>
-): Array<NoOpAction | CreateAction | DeleteAction> {
-  const actions: Array<NoOpAction | CreateAction | DeleteAction> = [];
+): void {
   for (const [path, envs] of byPath) {
     for (const env of envs) {
       actions.push({
@@ -177,7 +180,6 @@ function emitLeafActions(
       });
     }
   }
-  return actions;
 }
 
 interface RenamePlan {
@@ -355,13 +357,14 @@ function buildAmbiguous(
   desiredPath: string,
   matches: string[]
 ): AmbiguousAction {
+  const candidates = [];
+  for (const keyPath of matches) {
+    candidates.push({ keyPath, providerName: state.providerName });
+  }
   return {
     kind: "ambiguous",
     desired: { keyPath: desiredPath, providerName: state.providerName },
-    candidates: matches.map((path) => ({
-      keyPath: path,
-      providerName: state.providerName
-    })),
+    candidates,
     hint: `Annotate movedFrom: '<old>' on ${desiredPath} to disambiguate.`
   };
 }
