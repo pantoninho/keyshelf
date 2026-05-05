@@ -1,8 +1,10 @@
 import { Command } from "commander";
 import { readFile } from "node:fs/promises";
-import { loadConfig } from "../config/index.js";
+import { loadConfig, type LoadedConfig } from "../config/index.js";
 import { isTemplateMapping, iterDotEnvEntries } from "../config/app-mapping.js";
 import { createDefaultRegistry } from "../providers/setup.js";
+import type { ProviderRegistry } from "../providers/registry.js";
+import type { NormalizedRecord } from "../config/types.js";
 import { splitList } from "./options.js";
 import { findStaleRenameSource, pickProviderRef, writeSecret } from "./secret-binding.js";
 
@@ -12,6 +14,19 @@ interface ImportOptions {
   map?: string;
   group?: string;
 }
+
+interface ImportContext {
+  loaded: LoadedConfig;
+  registry: ProviderRegistry;
+  recordByPath: Map<string, NormalizedRecord>;
+  reverseMap: Map<string, string>;
+  groupSet: Set<string> | undefined;
+  envName: string | undefined;
+}
+
+type ImportOutcome =
+  | { kind: "imported"; stale: string | undefined }
+  | { kind: "skipped"; warning?: string };
 
 function parseDotEnv(content: string): Record<string, string> {
   const vars: Record<string, string> = {};
@@ -33,72 +48,39 @@ export const importCommand = new Command("import")
     const appDir = process.cwd();
     const loaded = await loadConfig(appDir, { mappingFile: opts.map });
 
-    const recordByPath = new Map(loaded.config.keys.map((record) => [record.path, record]));
-    const reverseMap = new Map(
-      loaded.appMapping
-        .filter((mapping) => !isTemplateMapping(mapping))
-        .map((mapping) => [mapping.envVar, (mapping as { keyPath: string }).keyPath])
-    );
-
     const groupList = splitList(opts.group);
-    const groupSet = groupList ? new Set(groupList) : undefined;
-
     const dotEnvContent = await readFile(opts.file, "utf-8");
     const dotEnvVars = parseDotEnv(dotEnvContent);
 
-    const registry = createDefaultRegistry();
+    const ctx: ImportContext = {
+      loaded,
+      registry: createDefaultRegistry(),
+      recordByPath: new Map(loaded.config.keys.map((record) => [record.path, record])),
+      reverseMap: new Map(
+        loaded.appMapping
+          .filter((mapping) => !isTemplateMapping(mapping))
+          .map((mapping) => [mapping.envVar, (mapping as { keyPath: string }).keyPath])
+      ),
+      groupSet: groupList ? new Set(groupList) : undefined,
+      envName: opts.env
+    };
+
     let imported = 0;
     let skipped = 0;
     const staleRenames: string[] = [];
 
     for (const [envVar, value] of Object.entries(dotEnvVars)) {
-      const keyPath = reverseMap.get(envVar);
-      if (keyPath === undefined) {
+      const outcome = await importOne(ctx, envVar, value);
+      if (outcome.kind === "imported") {
+        imported++;
+        if (outcome.stale !== undefined) staleRenames.push(outcome.stale);
+      } else {
         skipped++;
-        continue;
+        if (outcome.warning !== undefined) console.error(outcome.warning);
       }
-
-      const record = recordByPath.get(keyPath);
-      if (record === undefined) {
-        console.error(`warning: ${envVar} maps to "${keyPath}" which is not declared in config`);
-        skipped++;
-        continue;
-      }
-
-      if (record.kind === "config") {
-        console.error(
-          `warning: ${envVar} -> ${keyPath} is a config key; keyshelf does not write config via import (edit keyshelf.config.ts directly)`
-        );
-        skipped++;
-        continue;
-      }
-
-      if (groupSet !== undefined && (record.group === undefined || !groupSet.has(record.group))) {
-        console.error(`warning: ${envVar} -> ${keyPath} filtered out by --group; skipping`);
-        skipped++;
-        continue;
-      }
-
-      const providerRef = pickProviderRef(record, opts.env);
-      if (providerRef === undefined) {
-        const envHint = opts.env ?? "(envless)";
-        console.error(
-          `warning: ${envVar} -> ${keyPath} has no provider binding for env ${envHint}; skipping`
-        );
-        skipped++;
-        continue;
-      }
-
-      await writeSecret(registry, loaded, providerRef, keyPath, opts.env, value);
-      console.log(`  secret: ${envVar} -> ${keyPath} (via ${providerRef.name})`);
-      imported++;
-
-      const stale = await findStaleRenameSource(registry, loaded, record, providerRef, opts.env);
-      if (stale !== undefined) staleRenames.push(stale);
     }
 
     console.log(`\nImported ${imported} values, skipped ${skipped}`);
-
     if (staleRenames.length > 0) {
       const list = staleRenames.map((p) => `"${p}"`).join(", ");
       console.log(
@@ -106,3 +88,56 @@ export const importCommand = new Command("import")
       );
     }
   });
+
+async function importOne(
+  ctx: ImportContext,
+  envVar: string,
+  value: string
+): Promise<ImportOutcome> {
+  const keyPath = ctx.reverseMap.get(envVar);
+  if (keyPath === undefined) return { kind: "skipped" };
+
+  const record = ctx.recordByPath.get(keyPath);
+  if (record === undefined) {
+    return {
+      kind: "skipped",
+      warning: `warning: ${envVar} maps to "${keyPath}" which is not declared in config`
+    };
+  }
+  if (record.kind === "config") {
+    return {
+      kind: "skipped",
+      warning: `warning: ${envVar} -> ${keyPath} is a config key; keyshelf does not write config via import (edit keyshelf.config.ts directly)`
+    };
+  }
+  if (
+    ctx.groupSet !== undefined &&
+    (record.group === undefined || !ctx.groupSet.has(record.group))
+  ) {
+    return {
+      kind: "skipped",
+      warning: `warning: ${envVar} -> ${keyPath} filtered out by --group; skipping`
+    };
+  }
+
+  const providerRef = pickProviderRef(record, ctx.envName);
+  if (providerRef === undefined) {
+    const envHint = ctx.envName ?? "(envless)";
+    return {
+      kind: "skipped",
+      warning: `warning: ${envVar} -> ${keyPath} has no provider binding for env ${envHint}; skipping`
+    };
+  }
+
+  await writeSecret(ctx.registry, ctx.loaded, providerRef, keyPath, ctx.envName, value);
+  console.log(`  secret: ${envVar} -> ${keyPath} (via ${providerRef.name})`);
+
+  const stale = await findStaleRenameSource(
+    ctx.registry,
+    ctx.loaded,
+    record,
+    providerRef,
+    ctx.envName
+  );
+  return { kind: "imported", stale };
+}
