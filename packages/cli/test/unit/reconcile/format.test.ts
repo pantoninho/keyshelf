@@ -32,7 +32,13 @@ describe("renderPlan", () => {
 
   it("renders delete actions with orphan annotation", () => {
     const plan: Plan = [
-      { kind: "delete", keyPath: "legacy", envName: undefined, providerName: "age" }
+      {
+        kind: "delete",
+        keyPath: "legacy",
+        envName: undefined,
+        providerName: "age",
+        providerParams: {}
+      }
     ];
     const out = renderPlan(plan);
     expect(out).toContain("- legacy   (orphan; will be deleted on apply)");
@@ -46,6 +52,7 @@ describe("renderPlan", () => {
         from: { keyPath: "supabase/db-password" },
         to: { keyPath: "databases/auth/dbPassword" },
         providerName: "age",
+        providerParams: {},
         envBindings: [undefined]
       }
     ];
@@ -80,12 +87,19 @@ describe("renderPlan", () => {
     const plan: Plan = [
       { kind: "noop", keyPath: "a", envName: undefined, providerName: "age" },
       { kind: "create", keyPath: "b", envName: undefined, providerName: "age" },
-      { kind: "delete", keyPath: "c", envName: undefined, providerName: "age" },
+      {
+        kind: "delete",
+        keyPath: "c",
+        envName: undefined,
+        providerName: "age",
+        providerParams: {}
+      },
       {
         kind: "rename",
         from: { keyPath: "d-old" },
         to: { keyPath: "d" },
         providerName: "age",
+        providerParams: {},
         envBindings: [undefined]
       },
       {

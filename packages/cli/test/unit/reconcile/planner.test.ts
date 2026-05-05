@@ -114,7 +114,8 @@ describe("planReconciliation", () => {
         kind: "delete",
         keyPath: "legacy/old-thing",
         envName: undefined,
-        providerName: "age"
+        providerName: "age",
+        providerParams: ageOpts
       }
     ]);
   });
@@ -140,6 +141,7 @@ describe("planReconciliation", () => {
         from: { keyPath: "supabase/db-password" },
         to: { keyPath: "databases/auth/dbPassword" },
         providerName: "age",
+        providerParams: ageOpts,
         envBindings: [undefined]
       }
     ]);
@@ -193,6 +195,7 @@ describe("planReconciliation", () => {
         from: { keyPath: "old-a" },
         to: { keyPath: "newKey" },
         providerName: "age",
+        providerParams: ageOpts,
         envBindings: [undefined]
       }
     ]);
@@ -203,7 +206,8 @@ describe("planReconciliation", () => {
         kind: "delete",
         keyPath: "old-b",
         envName: undefined,
-        providerName: "age"
+        providerName: "age",
+        providerParams: ageOpts
       }
     ]);
   });
@@ -237,7 +241,8 @@ describe("planReconciliation", () => {
         kind: "delete",
         keyPath: "old-key",
         envName: "dev",
-        providerName: "gcp"
+        providerName: "gcp",
+        providerParams: gcpOpts
       }
     ]);
   });
@@ -267,6 +272,7 @@ describe("planReconciliation", () => {
         from: { keyPath: "old-key" },
         to: { keyPath: "newKey" },
         providerName: "gcp",
+        providerParams: gcpOpts,
         envBindings: ["dev"]
       }
     ]);
@@ -325,7 +331,8 @@ describe("planReconciliation", () => {
         kind: "delete",
         keyPath: "token",
         envName: "dev",
-        providerName: "gcp"
+        providerName: "gcp",
+        providerParams: { project: "proj-a" }
       }
     ]);
   });

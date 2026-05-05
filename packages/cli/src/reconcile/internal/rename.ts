@@ -149,7 +149,7 @@ class RenameResolver {
     desiredEnvs: EnvSet,
     orphanEnvs: EnvSet
   ): void {
-    const rename = buildRename(this.state.providerName, fromPath, toPath, desiredEnvs, orphanEnvs);
+    const rename = buildRename(this.state, fromPath, toPath, desiredEnvs, orphanEnvs);
     this.renames.push(rename);
     consumeEnvs(this.unmetByPath, toPath, rename.envBindings);
     consumeEnvs(this.orphansByPath, fromPath, rename.envBindings);
@@ -189,7 +189,7 @@ function consumeEnvs(
 }
 
 function buildRename(
-  providerName: string,
+  state: InstanceState,
   fromPath: string,
   toPath: string,
   desiredEnvs: EnvSet,
@@ -208,7 +208,8 @@ function buildRename(
     kind: "rename",
     from: { keyPath: fromPath },
     to: { keyPath: toPath },
-    providerName,
+    providerName: state.providerName,
+    providerParams: state.providerParams,
     envBindings
   };
 }

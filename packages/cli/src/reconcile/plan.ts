@@ -16,6 +16,10 @@ export interface RenameAction {
   from: { keyPath: string };
   to: { keyPath: string };
   providerName: string;
+  // Provider params for the instance both endpoints belong to. Apply uses
+  // this to construct the ProviderContext that copy/delete need; the
+  // formatter ignores it.
+  providerParams: unknown;
   envBindings: Array<string | undefined>;
 }
 
@@ -24,6 +28,9 @@ export interface DeleteAction {
   keyPath: string;
   envName: string | undefined;
   providerName: string;
+  // Provider params for the instance the orphan belongs to. Apply uses
+  // this to scope the delete to the correct instance.
+  providerParams: unknown;
 }
 
 export interface NoOpAction {

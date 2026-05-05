@@ -19,18 +19,27 @@ export function appendLeafActions(
 ): void {
   for (const [path, envs] of byPath) {
     for (const env of envs) {
-      actions.push(buildLeafAction(state.providerName, kind, path, env));
+      actions.push(buildLeafAction(state, kind, path, env));
     }
   }
 }
 
 function buildLeafAction(
-  providerName: string,
+  state: InstanceState,
   kind: LeafKind,
   path: string,
   env: string
 ): NoOpAction | CreateAction | DeleteAction {
-  return { kind, keyPath: path, envName: envKeyValue(env), providerName };
+  if (kind === "delete") {
+    return {
+      kind,
+      keyPath: path,
+      envName: envKeyValue(env),
+      providerName: state.providerName,
+      providerParams: state.providerParams
+    };
+  }
+  return { kind, keyPath: path, envName: envKeyValue(env), providerName: state.providerName };
 }
 
 export function appendList<T extends RenameAction | AmbiguousAction>(
