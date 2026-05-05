@@ -1,5 +1,6 @@
-import type { BuiltinProviderRef, NormalizedConfig, NormalizedRecord } from "../config/types.js";
+import type { BuiltinProviderRef, NormalizedConfig } from "../config/types.js";
 import type { ProviderRegistry } from "../providers/registry.js";
+import { collectProviderRefs } from "./internal/desired-bindings.js";
 import { instanceKey } from "./internal/instance-key.js";
 import type { ProviderListing } from "./planner.js";
 
@@ -86,17 +87,9 @@ async function listOne(
 function collectProviderInstances(config: NormalizedConfig): Map<string, BuiltinProviderRef> {
   const out = new Map<string, BuiltinProviderRef>();
   for (const record of config.keys) {
-    for (const ref of providerRefsOf(record)) {
+    for (const ref of collectProviderRefs(record)) {
       out.set(instanceKey(ref.name, ref.options), ref);
     }
   }
   return out;
-}
-
-function providerRefsOf(record: NormalizedRecord): BuiltinProviderRef[] {
-  if (record.kind !== "secret") return [];
-  const refs: BuiltinProviderRef[] = [];
-  if (record.value !== undefined) refs.push(record.value);
-  for (const ref of Object.values(record.values ?? {})) refs.push(ref);
-  return refs;
 }
