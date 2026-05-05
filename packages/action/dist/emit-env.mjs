@@ -72,10 +72,12 @@ var providerRefSchema = z.discriminatedUnion("__kind", [
   gcpProviderSchema,
   sopsProviderSchema
 ]);
+var movedFromSchema = z.union([z.string().min(1), z.array(z.string().min(1)).nonempty()]).optional();
 var baseRecordSchema = {
   group: z.string().optional(),
   optional: z.boolean().optional(),
-  description: z.string().optional()
+  description: z.string().optional(),
+  movedFrom: movedFromSchema
 };
 var configRecordSchema = z.object({
   __kind: z.literal("config"),
@@ -124,6 +126,7 @@ function normalizeConfig(input) {
   const paths = new Set(flattened.map((record) => record.path));
   validatePathConflicts(flattened, errors);
   validateRecords(flattened, parsed.envs, groups2, errors);
+  validateMovedFrom(flattened, paths, errors);
   validateTemplateReferences(flattened, paths, errors);
   if (errors.length > 0) {
     throw new Error(
@@ -206,6 +209,7 @@ function normalizeConfigRecord(path, input, errors) {
     group: input.group,
     optional: input.optional ?? false,
     description: input.description,
+    movedFrom: normalizeMovedFrom(input.movedFrom),
     value: resolveBinding(path, input.value, input.default, errors),
     values: copyDefinedRecord(input.values)
   };
@@ -217,9 +221,14 @@ function normalizeSecretRecord(path, input, errors) {
     group: input.group,
     optional: input.optional ?? false,
     description: input.description,
+    movedFrom: normalizeMovedFrom(input.movedFrom),
     value: resolveBinding(path, input.value, input.default, errors),
     values: copyDefinedRecord(input.values)
   };
+}
+function normalizeMovedFrom(value) {
+  if (value === void 0) return void 0;
+  return Array.isArray(value) ? [...value] : [value];
 }
 function resolveBinding(path, value, fallback, errors) {
   if (value !== void 0 && fallback !== void 0) {
@@ -256,6 +265,20 @@ function validatePathConflicts(records, errors) {
       const prefix = segments.slice(0, index).join("/");
       if (seen.has(prefix)) {
         errors.push(`${record.path}: conflicts with leaf path "${prefix}"`);
+      }
+    }
+  }
+}
+function validateMovedFrom(records, paths, errors) {
+  for (const record of records) {
+    if (record.movedFrom === void 0) continue;
+    for (const from of record.movedFrom) {
+      if (from === record.path) {
+        errors.push(`${record.path}: movedFrom cannot reference itself`);
+        continue;
+      }
+      if (paths.has(from)) {
+        errors.push(`${record.path}: movedFrom "${from}" collides with a declared key path`);
       }
     }
   }

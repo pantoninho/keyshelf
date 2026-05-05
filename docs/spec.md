@@ -111,6 +111,7 @@ config({
   value?: ConfigScalar | TemplateString;             // envless binding
   default?: ConfigScalar | TemplateString;           // alias for `value`
   values?: Partial<Record<EnvName, ConfigScalar | TemplateString>>;
+  movedFrom?: string | string[];                     // rename hints for `keyshelf up`
 })
 ```
 
@@ -153,6 +154,7 @@ secret({
   value?: ProviderRef;                               // envless binding
   default?: ProviderRef;                             // alias for `value`
   values?: Partial<Record<EnvName, ProviderRef>>;
+  movedFrom?: string | string[];                     // rename hints for `keyshelf up`
 })
 ```
 
@@ -262,6 +264,21 @@ Templates are only valid inside `config(...)` bindings, not inside
 
 ---
 
+## `movedFrom`
+
+Both `config(...)` and `secret(...)` accept an optional `movedFrom: string | string[]`.
+It is a hint to `keyshelf up` that this key used to live at a different path. The
+planner uses it to disambiguate renames when multiple orphan storage entries
+plausibly match a new key. The string (or array of strings) is the previous
+key path(s); array form covers a key that has been renamed multiple times
+before the user got around to running `up`.
+
+The validator rejects a `movedFrom` entry that collides with any declared key
+path in the same config — the old path must be retired in the schema for the
+hint to make sense.
+
+---
+
 ## Validation rules (for Phase 2)
 
 The Phase 2 validator must enforce, in addition to the type-level constraints:
@@ -284,6 +301,8 @@ The Phase 2 validator must enforce, in addition to the type-level constraints:
    paths and must not form cycles.
 9. `.env.keyshelf` references must point to declared key paths
    (loader-time validation against the flattened key set).
+10. `movedFrom` entries must NOT collide with a declared key path in the
+    same config (the old path must be retired in the schema).
 
 ---
 

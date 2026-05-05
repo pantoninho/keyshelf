@@ -259,6 +259,56 @@ describe("config factories and validation", () => {
     expect(normalized.keys.map((key) => key.path)).toEqual(["token", "url"]);
   });
 
+  it("normalizes movedFrom into a string array on config and secret records", () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev"],
+        keys: {
+          host: config({ value: "localhost", movedFrom: "old/host" }),
+          token: secret({
+            value: gcp({ project: "my-project" }),
+            movedFrom: ["very-old/token", "old/token"]
+          })
+        }
+      })
+    );
+
+    const host = normalized.keys.find((k) => k.path === "host");
+    const token = normalized.keys.find((k) => k.path === "token");
+    expect(host?.movedFrom).toEqual(["old/host"]);
+    expect(token?.movedFrom).toEqual(["very-old/token", "old/token"]);
+  });
+
+  it("rejects movedFrom that collides with a declared key path", () => {
+    expect(() =>
+      normalizeConfig(
+        defineConfig({
+          name: "test",
+          envs: ["dev"],
+          keys: {
+            "old/host": "localhost",
+            host: config({ value: "localhost", movedFrom: "old/host" })
+          }
+        })
+      )
+    ).toThrow('movedFrom "old/host" collides with a declared key path');
+  });
+
+  it("rejects movedFrom that references the record's own path", () => {
+    expect(() =>
+      normalizeConfig(
+        defineConfig({
+          name: "test",
+          envs: ["dev"],
+          keys: {
+            host: config({ value: "localhost", movedFrom: "host" })
+          }
+        })
+      )
+    ).toThrow("movedFrom cannot reference itself");
+  });
+
   it("validates app mapping references against flattened keys", () => {
     const normalized = normalizeConfig(
       defineConfig({
