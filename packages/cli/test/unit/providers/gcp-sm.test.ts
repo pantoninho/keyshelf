@@ -7,7 +7,8 @@ function mockClient() {
     accessSecretVersion: vi.fn(),
     getSecret: vi.fn(),
     createSecret: vi.fn(),
-    addSecretVersion: vi.fn()
+    addSecretVersion: vi.fn(),
+    listSecrets: vi.fn()
   };
 }
 
@@ -247,6 +248,78 @@ describe("GcpSmProvider", () => {
 
       await expect(provider.resolve(ctx("db/password"))).rejects.toThrow("NOT_FOUND");
       await expect(provider.resolve(ctx("db/password"))).rejects.not.toThrow(GcpAuthError);
+    });
+  });
+
+  describe("list", () => {
+    function listCtx(overrides: Record<string, unknown> = {}) {
+      return {
+        rootDir: "/tmp",
+        config: { project: "my-proj" },
+        keyshelfName: "myapp",
+        envs: ["dev", "staging", "prod"],
+        ...overrides
+      };
+    }
+
+    function mockSecrets(ids: string[]) {
+      client.listSecrets.mockResolvedValue([
+        ids.map((id) => ({ name: `projects/my-proj/secrets/${id}` })),
+        null,
+        {}
+      ]);
+    }
+
+    it("returns empty array when no secrets match prefix", async () => {
+      mockSecrets(["unrelated-secret", "other__thing"]);
+      expect(await provider.list(listCtx())).toEqual([]);
+    });
+
+    it("filters by keyshelfName prefix and parses env-scoped ids", async () => {
+      mockSecrets([
+        "keyshelf__myapp__staging__db__password",
+        "keyshelf__myapp__prod__api__token",
+        "keyshelf__otherapp__staging__db__password"
+      ]);
+
+      const result = await provider.list(listCtx());
+      expect(result).toEqual(
+        expect.arrayContaining([
+          { keyPath: "db/password", envName: "staging" },
+          { keyPath: "api/token", envName: "prod" }
+        ])
+      );
+      expect(result).toHaveLength(2);
+    });
+
+    it("treats segments not in envs as part of key path (envless secrets)", async () => {
+      mockSecrets(["keyshelf__myapp__github__token"]);
+      const result = await provider.list(listCtx());
+      expect(result).toEqual([{ keyPath: "github/token", envName: undefined }]);
+    });
+
+    it("handles missing keyshelfName (v4 callers)", async () => {
+      mockSecrets(["keyshelf__staging__db__password", "keyshelf__github__token"]);
+      const result = await provider.list(listCtx({ keyshelfName: undefined }));
+      expect(result).toEqual(
+        expect.arrayContaining([
+          { keyPath: "db/password", envName: "staging" },
+          { keyPath: "github/token", envName: undefined }
+        ])
+      );
+    });
+
+    it("requires project config", async () => {
+      await expect(provider.list({ rootDir: "/tmp", config: {} })).rejects.toThrow(
+        'gcp provider requires "project"'
+      );
+    });
+
+    it("wraps auth errors as GcpAuthError", async () => {
+      client.listSecrets.mockRejectedValue(
+        Object.assign(new Error("UNAUTHENTICATED"), { code: 16 })
+      );
+      await expect(provider.list(listCtx())).rejects.toThrow(GcpAuthError);
     });
   });
 });
