@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { randomBytes, createCipheriv, createDecipheriv, createHmac } from "node:crypto";
 import { dirname } from "node:path";
 import { Encrypter, Decrypter } from "age-encryption";
-import type { Provider, ProviderContext } from "./types.js";
+import type { Provider, ProviderContext, StoredKey } from "./types.js";
 import {
   readIdentity,
   readIdentityWithRecipient,
@@ -162,5 +162,9 @@ export class SopsProvider implements Provider {
     file.sops.mac = computeMac(dataKey, file.entries);
 
     await writeSecretsFile(opts.secretsFile, file);
+  }
+
+  async list(): Promise<StoredKey[]> {
+    return [];
   }
 }

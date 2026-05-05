@@ -1,5 +1,5 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
-import type { Provider, ProviderContext } from "./types.js";
+import type { Provider, ProviderContext, StoredKey } from "./types.js";
 
 export interface GcpSmProviderOptions {
   project: string;
@@ -133,5 +133,9 @@ export class GcpSmProvider implements Provider {
       if (isAuthError(err)) throw new GcpAuthError(err as Error);
       throw err;
     }
+  }
+
+  async list(): Promise<StoredKey[]> {
+    return [];
   }
 }

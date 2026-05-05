@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
-import type { Provider, ProviderContext } from "./types.js";
+import type { Provider, ProviderContext, StoredKey } from "./types.js";
 import {
   readIdentity,
   readIdentityWithRecipient,
@@ -65,6 +65,10 @@ export class AgeProvider implements Provider {
     const filePath = secretFilePath(opts.secretsDir, ctx.keyPath);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, ciphertext);
+  }
+
+  async list(): Promise<StoredKey[]> {
+    return [];
   }
 }
 

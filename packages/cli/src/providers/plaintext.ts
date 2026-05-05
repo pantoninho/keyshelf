@@ -1,4 +1,4 @@
-import type { Provider, ProviderContext } from "./types.js";
+import type { Provider, ProviderContext, StoredKey } from "./types.js";
 
 export class PlaintextProvider implements Provider {
   name = "plaintext";
@@ -17,5 +17,9 @@ export class PlaintextProvider implements Provider {
 
   async set(): Promise<void> {
     // No-op: plaintext values are stored directly in env files
+  }
+
+  async list(): Promise<StoredKey[]> {
+    return [];
   }
 }
