@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { randomBytes, createCipheriv, createDecipheriv, createHmac } from "node:crypto";
 import { dirname } from "node:path";
 import { Encrypter, Decrypter } from "age-encryption";
-import type { Provider, ProviderContext, StoredKey } from "./types.js";
+import type { Provider, ProviderContext, ProviderListContext, StoredKey } from "./types.js";
 import {
   readIdentity,
   readIdentityWithRecipient,
@@ -164,7 +164,22 @@ export class SopsProvider implements Provider {
     await writeSecretsFile(opts.secretsFile, file);
   }
 
-  async list(): Promise<StoredKey[]> {
-    return [];
+  async list(ctx: ProviderListContext): Promise<StoredKey[]> {
+    const identityFile = resolvePath(requireStringConfig("sops", ctx, "identityFile"), ctx.rootDir);
+    const secretsFile = resolvePath(requireStringConfig("sops", ctx, "secretsFile"), ctx.rootDir);
+
+    let file: SecretsFile;
+    try {
+      file = await readSecretsFile(secretsFile);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw err;
+    }
+
+    const identity = await readIdentity(identityFile);
+    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
+    verifyMac(dataKey, file);
+
+    return Object.keys(file.entries).map((keyPath) => ({ keyPath, envName: undefined }));
   }
 }

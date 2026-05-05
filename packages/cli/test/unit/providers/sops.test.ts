@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SopsProvider } from "../../../src/providers/sops.js";
+import type { ProviderListContext } from "../../../src/providers/types.js";
 import { shareCommonProviderTests, testRequiredConfigKey } from "./_shared.js";
 
 describe("SopsProvider", () => {
@@ -82,5 +83,54 @@ describe("SopsProvider", () => {
     await expect(state.provider.resolve(state.ctx("db/password"))).rejects.toThrow(
       "MAC verification failed"
     );
+  });
+
+  describe("list", () => {
+    function listCtx(): ProviderListContext {
+      return {
+        rootDir: state.tmpDir,
+        config: { identityFile: state.identityFile, secretsFile: secretsFilePath() }
+      };
+    }
+
+    it("returns empty array when secretsFile does not exist", async () => {
+      expect(await state.provider.list(listCtx())).toEqual([]);
+    });
+
+    it("returns all stored keys with envName undefined", async () => {
+      await state.provider.set(state.ctx("db/password"), "v1");
+      await state.provider.set(state.ctx("api/key"), "v2");
+
+      const result = await state.provider.list(listCtx());
+      expect(result).toEqual(
+        expect.arrayContaining([
+          { keyPath: "db/password", envName: undefined },
+          { keyPath: "api/key", envName: undefined }
+        ])
+      );
+      expect(result).toHaveLength(2);
+    });
+
+    it("rejects tampered files via MAC verification", async () => {
+      await state.provider.set(state.ctx("db/password"), "v1");
+      const content = JSON.parse(await readFile(secretsFilePath(), "utf-8"));
+      content.entries["injected"] = {
+        data: "ZmFrZQ==",
+        iv: "AAAAAAAAAAAAAAAA",
+        tag: "AAAAAAAAAAAAAAAAAAAAAA=="
+      };
+      await writeFile(secretsFilePath(), JSON.stringify(content));
+
+      await expect(state.provider.list(listCtx())).rejects.toThrow("MAC verification failed");
+    });
+
+    it("requires identityFile config", async () => {
+      await expect(
+        state.provider.list({
+          rootDir: state.tmpDir,
+          config: { secretsFile: secretsFilePath() }
+        })
+      ).rejects.toThrow('sops provider requires "identityFile" config for list');
+    });
   });
 });
