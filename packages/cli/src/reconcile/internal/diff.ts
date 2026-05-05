@@ -8,32 +8,44 @@ export interface InstanceDiff {
 }
 
 export function diffInstance(state: InstanceState): InstanceDiff {
-  const diff: InstanceDiff = {
-    matched: new Map(),
-    unmetByPath: new Map(),
-    orphansByPath: new Map()
-  };
-  partitionDesired(state, diff);
-  partitionActual(state, diff);
-  return diff;
+  const partitioner = new DiffPartitioner(state);
+  return partitioner.partition();
 }
 
-function partitionDesired(state: InstanceState, diff: InstanceDiff): void {
-  for (const [path, desiredEnvs] of state.desired) {
-    const actualEnvs = state.actual.get(path) ?? newEnvSet();
-    for (const env of desiredEnvs) {
-      const bucket = actualEnvs.has(env) ? diff.matched : diff.unmetByPath;
-      upsertEnvSet(bucket, path).add(env);
+class DiffPartitioner {
+  readonly matched = new Map<string, EnvSet>();
+  readonly unmetByPath = new Map<string, EnvSet>();
+  readonly orphansByPath = new Map<string, EnvSet>();
+
+  constructor(readonly state: InstanceState) {}
+
+  partition(): InstanceDiff {
+    this.partitionDesired();
+    this.partitionActual();
+    return {
+      matched: this.matched,
+      unmetByPath: this.unmetByPath,
+      orphansByPath: this.orphansByPath
+    };
+  }
+
+  private partitionDesired(): void {
+    for (const [path, desiredEnvs] of this.state.desired) {
+      const actualEnvs = this.state.actual.get(path) ?? newEnvSet();
+      for (const env of desiredEnvs) {
+        const bucket = actualEnvs.has(env) ? this.matched : this.unmetByPath;
+        upsertEnvSet(bucket, path).add(env);
+      }
     }
   }
-}
 
-function partitionActual(state: InstanceState, diff: InstanceDiff): void {
-  for (const [path, actualEnvs] of state.actual) {
-    const desiredEnvs = state.desired.get(path) ?? newEnvSet();
-    for (const env of actualEnvs) {
-      if (!desiredEnvs.has(env)) {
-        upsertEnvSet(diff.orphansByPath, path).add(env);
+  private partitionActual(): void {
+    for (const [path, actualEnvs] of this.state.actual) {
+      const desiredEnvs = this.state.desired.get(path) ?? newEnvSet();
+      for (const env of actualEnvs) {
+        if (!desiredEnvs.has(env)) {
+          upsertEnvSet(this.orphansByPath, path).add(env);
+        }
       }
     }
   }
