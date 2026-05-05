@@ -4,7 +4,7 @@ import { loadConfig } from "../config/index.js";
 import { isTemplateMapping, iterDotEnvEntries } from "../config/app-mapping.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { splitList } from "./options.js";
-import { pickProviderRef, writeSecret } from "./secret-binding.js";
+import { findStaleRenameSource, pickProviderRef, writeSecret } from "./secret-binding.js";
 
 interface ImportOptions {
   env?: string;
@@ -49,6 +49,7 @@ export const importCommand = new Command("import")
     const registry = createDefaultRegistry();
     let imported = 0;
     let skipped = 0;
+    const staleRenames: string[] = [];
 
     for (const [envVar, value] of Object.entries(dotEnvVars)) {
       const keyPath = reverseMap.get(envVar);
@@ -91,7 +92,17 @@ export const importCommand = new Command("import")
       await writeSecret(registry, loaded, providerRef, keyPath, opts.env, value);
       console.log(`  secret: ${envVar} -> ${keyPath} (via ${providerRef.name})`);
       imported++;
+
+      const stale = await findStaleRenameSource(registry, loaded, record, providerRef, opts.env);
+      if (stale !== undefined) staleRenames.push(stale);
     }
 
     console.log(`\nImported ${imported} values, skipped ${skipped}`);
+
+    if (staleRenames.length > 0) {
+      const list = staleRenames.map((p) => `"${p}"`).join(", ");
+      console.log(
+        `hint: storage still holds old path${staleRenames.length === 1 ? "" : "s"} ${list}. Run \`keyshelf up\` to clean up.`
+      );
+    }
   });

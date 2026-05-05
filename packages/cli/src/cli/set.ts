@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { createInterface } from "node:readline";
 import { loadConfig } from "../config/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
-import { pickProviderRef, writeSecret } from "./secret-binding.js";
+import { findStaleRenameSource, pickProviderRef, writeSecret } from "./secret-binding.js";
 
 interface SetOptions {
   env?: string;
@@ -52,6 +52,13 @@ export const setCommand = new Command("set")
 
     const where = opts.env ? ` for ${opts.env}` : "";
     console.log(`Stored "${keyPath}" via ${providerRef.name} provider${where}`);
+
+    const stale = await findStaleRenameSource(registry, loaded, record, providerRef, opts.env);
+    if (stale !== undefined) {
+      console.log(
+        `hint: storage still holds old path "${stale}". Run \`keyshelf up\` to clean it up.`
+      );
+    }
   });
 
 async function readValue(keyPath: string, explicit: string | undefined): Promise<string> {

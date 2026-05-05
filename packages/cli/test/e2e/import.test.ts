@@ -84,6 +84,45 @@ describe("keyshelf-next import", () => {
     expect(out).toContain("Imported 1 values, skipped 1");
   });
 
+  it("hints at `keyshelf up` when imported keys have stale movedFrom predecessors in storage", async () => {
+    const driftRoot = await mkdtemp(join(tmpdir(), "keyshelf-import-drift-"));
+    const { identityFile, secretsDir } = await setupAgeFixtureDir(driftRoot);
+    await writeKeyshelfConfig(driftRoot, [
+      `name: "demo",`,
+      `envs: ["dev"],`,
+      `keys: {`,
+      `  db: {`,
+      `    password: secret({`,
+      `      value: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }),`,
+      `      movedFrom: "db/old-password",`,
+      `    }),`,
+      `  },`,
+      `},`
+    ]);
+    await writeEnvKeyshelf(driftRoot, ["DB_PASSWORD=db/password"]);
+
+    // Pre-seed storage at the OLD path by setting under the current path then
+    // renaming the file. age stores `<path-with-_-instead-of-/>.age`.
+    execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "old-pw", "db/password"], {
+      cwd: driftRoot,
+      encoding: "utf-8"
+    });
+    const { rename } = await import("node:fs/promises");
+    await rename(`${secretsDir}/db_password.age`, `${secretsDir}/db_old-password.age`);
+
+    const envFile = join(driftRoot, ".env.values");
+    writeFileSync(envFile, ["DB_PASSWORD=new-pw"]);
+
+    const out = execFileSync(TSX, [CLI, "import", "--env", "dev", "--file", envFile], {
+      cwd: driftRoot,
+      encoding: "utf-8",
+      stdio: ["inherit", "pipe", "pipe"]
+    });
+
+    expect(out).toContain('hint: storage still holds old path "db/old-password"');
+    expect(out).toContain("keyshelf up");
+  });
+
   it("skips keys outside the --group filter", async () => {
     const groupedRoot = await mkdtemp(join(tmpdir(), "keyshelf-import-group-"));
     const { identityFile, secretsDir } = await setupAgeFixtureDir(groupedRoot);
