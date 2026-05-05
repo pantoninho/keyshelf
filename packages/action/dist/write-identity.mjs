@@ -51,6 +51,14 @@ var ageProviderSchema = z.object({
     secretsDir: z.string().min(1)
   }).strict()
 }).strict();
+var awsProviderSchema = z.object({
+  __kind: z.literal("provider:aws"),
+  name: z.literal("aws"),
+  options: z.object({
+    region: z.string().min(1).optional(),
+    kmsKeyId: z.string().min(1).optional()
+  }).strict()
+}).strict();
 var gcpProviderSchema = z.object({
   __kind: z.literal("provider:gcp"),
   name: z.literal("gcp"),
@@ -68,6 +76,7 @@ var sopsProviderSchema = z.object({
 }).strict();
 var providerRefSchema = z.discriminatedUnion("__kind", [
   ageProviderSchema,
+  awsProviderSchema,
   gcpProviderSchema,
   sopsProviderSchema
 ]);
@@ -2331,6 +2340,9 @@ function secret(input) {
 function age(options) {
   return { __kind: "provider:age", name: "age", options };
 }
+function aws(options = {}) {
+  return { __kind: "provider:aws", name: "aws", options };
+}
 function gcp(options) {
   return { __kind: "provider:gcp", name: "gcp", options };
 }
@@ -2340,7 +2352,7 @@ function sops(options) {
 
 // ../cli/dist/src/config/yaml-loader.js
 var ENV_DIR = ".keyshelf";
-var PROVIDER_TAGS = ["age", "gcp", "sops"];
+var PROVIDER_TAGS = ["age", "aws", "gcp", "sops"];
 var ALL_TAGS = ["secret", ...PROVIDER_TAGS];
 function makeMappingTag(name) {
   return new Type(`!${name}`, {
@@ -2568,6 +2580,8 @@ function providerRef(name, options, label) {
       return age(
         requireOptions(options, ["identityFile", "secretsDir"], label, "age")
       );
+    case "aws":
+      return aws(requireOptions(options, [], label, "aws"));
     case "gcp":
       return gcp(requireOptions(options, ["project"], label, "gcp"));
     case "sops":

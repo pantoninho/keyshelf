@@ -9,6 +9,7 @@ import {
   ResourceNotFoundException,
   SecretsManagerClient
 } from "@aws-sdk/client-secrets-manager";
+import { parseStoredSecretSegments } from "./_paths.js";
 import type {
   Provider,
   ProviderContext,
@@ -260,14 +261,7 @@ function parseSecretId(
   envs: Set<string>
 ): StoredKey | null {
   if (!secretName?.startsWith(prefix)) return null;
-
   const remainder = secretName.slice(prefix.length);
   if (remainder.length === 0) return null;
-
-  const segs = remainder.split("/");
-  const envName = envs.has(segs[0]) ? segs[0] : undefined;
-  const pathSegs = envName === undefined ? segs : segs.slice(1);
-  if (pathSegs.length === 0) return null;
-
-  return { keyPath: pathSegs.join("/"), envName };
+  return parseStoredSecretSegments(remainder.split("/"), envs);
 }

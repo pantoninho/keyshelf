@@ -1,4 +1,5 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
+import { parseStoredSecretSegments } from "./_paths.js";
 import type {
   Provider,
   ProviderContext,
@@ -221,14 +222,7 @@ function parseSecretId(
 ): StoredKey | null {
   const id = secretName?.split("/").pop();
   if (!id?.startsWith(prefix)) return null;
-
   const remainder = id.slice(prefix.length);
   if (remainder.length === 0) return null;
-
-  const segs = remainder.split("__");
-  const envName = envs.has(segs[0]) ? segs[0] : undefined;
-  const pathSegs = envName === undefined ? segs : segs.slice(1);
-  if (pathSegs.length === 0) return null;
-
-  return { keyPath: pathSegs.join("/"), envName };
+  return parseStoredSecretSegments(remainder.split("__"), envs);
 }
