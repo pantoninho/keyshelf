@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { identityToRecipient } from "age-encryption";
-import type { ProviderContext } from "./types.js";
+import type { ProviderContext, ProviderListContext } from "./types.js";
 
 export function resolvePath(filePath: string, rootDir: string): string {
   if (filePath.startsWith("~/") || filePath === "~") {
@@ -29,12 +29,13 @@ export async function readIdentityWithRecipient(
 
 export function requireStringConfig(
   providerName: string,
-  ctx: ProviderContext,
+  ctx: ProviderContext | ProviderListContext,
   key: string
 ): string {
   const value = ctx.config[key];
   if (typeof value !== "string") {
-    throw new Error(`${providerName} provider requires "${key}" config for "${ctx.keyPath}"`);
+    const where = "keyPath" in ctx ? `for "${ctx.keyPath}"` : "for list";
+    throw new Error(`${providerName} provider requires "${key}" config ${where}`);
   }
   return value;
 }

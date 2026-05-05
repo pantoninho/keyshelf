@@ -1,5 +1,5 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
-import type { Provider, ProviderContext } from "./types.js";
+import type { Provider, ProviderContext, ProviderListContext, StoredKey } from "./types.js";
 
 export interface GcpSmProviderOptions {
   project: string;
@@ -134,4 +134,46 @@ export class GcpSmProvider implements Provider {
       throw err;
     }
   }
+
+  async list(ctx: ProviderListContext): Promise<StoredKey[]> {
+    const project = ctx.config.project;
+    if (typeof project !== "string") {
+      throw new Error('gcp provider requires "project" config for list');
+    }
+
+    const prefix = ctx.keyshelfName ? `keyshelf__${ctx.keyshelfName}__` : "keyshelf__";
+    const envs = new Set(ctx.envs ?? []);
+
+    const secrets = await this.callListSecrets(project);
+    return secrets.flatMap((secret) => parseSecretId(secret.name, prefix, envs) ?? []);
+  }
+
+  private async callListSecrets(project: string) {
+    try {
+      const [secrets] = await this.client.listSecrets({ parent: `projects/${project}` });
+      return secrets;
+    } catch (err) {
+      if (isAuthError(err)) throw new GcpAuthError(err as Error);
+      throw err;
+    }
+  }
+}
+
+function parseSecretId(
+  secretName: string | null | undefined,
+  prefix: string,
+  envs: Set<string>
+): StoredKey | null {
+  const id = secretName?.split("/").pop();
+  if (!id?.startsWith(prefix)) return null;
+
+  const remainder = id.slice(prefix.length);
+  if (remainder.length === 0) return null;
+
+  const segs = remainder.split("__");
+  const envName = envs.has(segs[0]) ? segs[0] : undefined;
+  const pathSegs = envName === undefined ? segs : segs.slice(1);
+  if (pathSegs.length === 0) return null;
+
+  return { keyPath: pathSegs.join("/"), envName };
 }
