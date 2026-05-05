@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, copyFile, rm } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
@@ -73,6 +73,22 @@ export class AgeProvider implements Provider {
     const filePath = secretFilePath(opts.secretsDir, ctx.keyPath);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, ciphertext);
+  }
+
+  async copy(from: ProviderContext, to: ProviderContext): Promise<void> {
+    // Recipient is fixed in v5, so a byte-level copy is sufficient — no
+    // need to decrypt and re-encrypt.
+    const opts = this.resolveOptions(from);
+    const fromPath = secretFilePath(opts.secretsDir, from.keyPath);
+    const toPath = secretFilePath(opts.secretsDir, to.keyPath);
+    await mkdir(dirname(toPath), { recursive: true });
+    await copyFile(fromPath, toPath);
+  }
+
+  async delete(ctx: ProviderContext): Promise<void> {
+    const opts = this.resolveOptions(ctx);
+    const filePath = secretFilePath(opts.secretsDir, ctx.keyPath);
+    await rm(filePath, { force: true });
   }
 
   async list(ctx: ProviderListContext): Promise<StoredKey[]> {

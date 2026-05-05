@@ -133,4 +133,55 @@ describe("SopsProvider", () => {
       ).rejects.toThrow('sops provider requires "identityFile" config for list');
     });
   });
+
+  describe("copy", () => {
+    it("copies the encrypted entry under a new key, preserving the source", async () => {
+      await state.provider.set(state.ctx("old/path"), "value-x");
+      await state.provider.copy(state.ctx("old/path"), state.ctx("new/path"));
+
+      expect(await state.provider.resolve(state.ctx("new/path"))).toBe("value-x");
+      expect(await state.provider.resolve(state.ctx("old/path"))).toBe("value-x");
+    });
+
+    it("re-MACs after copy so list/resolve still validate", async () => {
+      await state.provider.set(state.ctx("a"), "v1");
+      await state.provider.copy(state.ctx("a"), state.ctx("b"));
+      // resolve verifies the MAC; if it weren't recomputed this would throw.
+      expect(await state.provider.resolve(state.ctx("b"))).toBe("v1");
+    });
+
+    it("throws when source key is absent", async () => {
+      await state.provider.set(state.ctx("only"), "v");
+      await expect(
+        state.provider.copy(state.ctx("missing"), state.ctx("destination"))
+      ).rejects.toThrow('source key "missing" not found');
+    });
+  });
+
+  describe("delete", () => {
+    it("removes the entry and re-MACs", async () => {
+      await state.provider.set(state.ctx("a"), "v1");
+      await state.provider.set(state.ctx("b"), "v2");
+      await state.provider.delete(state.ctx("a"));
+
+      expect(await state.provider.validate(state.ctx("a"))).toBe(false);
+      // MAC must remain valid for the surviving entry.
+      expect(await state.provider.resolve(state.ctx("b"))).toBe("v2");
+    });
+
+    it("is idempotent on missing entry", async () => {
+      await state.provider.set(state.ctx("a"), "v1");
+      await expect(state.provider.delete(state.ctx("never"))).resolves.toBeUndefined();
+    });
+
+    it("is idempotent on missing file", async () => {
+      const ctx = {
+        keyPath: "k",
+        envName: "test",
+        rootDir: state.tmpDir,
+        config: { identityFile: state.identityFile, secretsFile: join(state.tmpDir, "nope.json") }
+      };
+      await expect(state.provider.delete(ctx)).resolves.toBeUndefined();
+    });
+  });
 });

@@ -69,4 +69,35 @@ describe("AgeProvider", () => {
       ).rejects.toThrow('age provider requires "secretsDir" config for list');
     });
   });
+
+  describe("copy", () => {
+    it("copies bytes from source to destination, leaving source intact", async () => {
+      await state.provider.set(state.ctx("old/path"), "value-x");
+      await state.provider.copy(state.ctx("old/path"), state.ctx("new/path"));
+
+      expect(await state.provider.resolve(state.ctx("new/path"))).toBe("value-x");
+      // Source still present until delete is called separately.
+      expect(await state.provider.resolve(state.ctx("old/path"))).toBe("value-x");
+    });
+
+    it("throws when source does not exist", async () => {
+      await expect(
+        state.provider.copy(state.ctx("missing"), state.ctx("destination"))
+      ).rejects.toThrow();
+    });
+  });
+
+  describe("delete", () => {
+    it("removes the storage entry", async () => {
+      await state.provider.set(state.ctx("victim"), "v");
+      expect(await state.provider.validate(state.ctx("victim"))).toBe(true);
+
+      await state.provider.delete(state.ctx("victim"));
+      expect(await state.provider.validate(state.ctx("victim"))).toBe(false);
+    });
+
+    it("is idempotent — succeeds when entry is already absent", async () => {
+      await expect(state.provider.delete(state.ctx("never-existed"))).resolves.toBeUndefined();
+    });
+  });
 });

@@ -171,6 +171,42 @@ export class SopsProvider implements Provider {
     await writeSecretsFile(opts.secretsFile, file);
   }
 
+  async copy(from: ProviderContext, to: ProviderContext): Promise<void> {
+    const opts = this.resolveOptions(from);
+    const file = await readSecretsFile(opts.secretsFile);
+    const identity = await readIdentity(opts.identityFile);
+    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
+    verifyMac(dataKey, file);
+
+    const entry = file.entries[from.keyPath];
+    if (!entry) {
+      throw new Error(`sops: source key "${from.keyPath}" not found in ${opts.secretsFile}`);
+    }
+    file.entries[to.keyPath] = entry;
+    file.sops.mac = computeMac(dataKey, file.entries);
+    await writeSecretsFile(opts.secretsFile, file);
+  }
+
+  async delete(ctx: ProviderContext): Promise<void> {
+    const opts = this.resolveOptions(ctx);
+    let file: SecretsFile;
+    try {
+      file = await readSecretsFile(opts.secretsFile);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw err;
+    }
+    if (!(ctx.keyPath in file.entries)) return;
+
+    const identity = await readIdentity(opts.identityFile);
+    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
+    verifyMac(dataKey, file);
+
+    delete file.entries[ctx.keyPath];
+    file.sops.mac = computeMac(dataKey, file.entries);
+    await writeSecretsFile(opts.secretsFile, file);
+  }
+
   async list(ctx: ProviderListContext): Promise<StoredKey[]> {
     const identityFile = resolvePath(requireStringConfig("sops", ctx, "identityFile"), ctx.rootDir);
     const secretsFile = resolvePath(requireStringConfig("sops", ctx, "secretsFile"), ctx.rootDir);

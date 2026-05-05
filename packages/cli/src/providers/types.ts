@@ -36,4 +36,12 @@ export interface Provider {
   validate(ctx: ProviderContext): Promise<boolean>;
   set(ctx: ProviderContext, value: string): Promise<void>;
   list(ctx: ProviderListContext): Promise<StoredKey[]>;
+  // Move bytes from one storage location to another within this provider
+  // instance. Both contexts share rootDir/config/keyshelfName; only the
+  // keyPath/envName differ. Implementations should NOT delete `from` —
+  // the apply pipeline calls `delete` separately after validating `to`.
+  copy(from: ProviderContext, to: ProviderContext): Promise<void>;
+  // Remove a single storage entry. Idempotent: succeeds if the entry is
+  // already absent.
+  delete(ctx: ProviderContext): Promise<void>;
 }

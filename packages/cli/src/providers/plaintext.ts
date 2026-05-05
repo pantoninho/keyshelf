@@ -25,4 +25,12 @@ export class PlaintextProvider implements Provider {
   async list(): Promise<StoredKey[]> {
     return [];
   }
+
+  async copy(): Promise<void> {
+    // No-op: plaintext has no storage to move bytes between.
+  }
+
+  async delete(): Promise<void> {
+    // No-op: plaintext has no storage to remove.
+  }
 }
