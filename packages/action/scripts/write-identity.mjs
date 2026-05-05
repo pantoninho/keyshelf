@@ -3,7 +3,7 @@ import { writeFile, mkdir, chmod } from "node:fs/promises";
 import { dirname } from "node:path";
 import { loadConfig } from "keyshelf";
 import {
-  collectAgeIdentityFiles,
+  collectIdentityFiles,
   ensureTrailingNewline,
   resolveIdentityPath
 } from "./identity-paths.mjs";
@@ -17,11 +17,11 @@ if (!identity) {
 }
 
 const loaded = await loadConfig(cwd);
-const identityFiles = collectAgeIdentityFiles(loaded.config);
+const identityFiles = collectIdentityFiles(loaded.config);
 
 if (identityFiles.length === 0) {
   process.stdout.write(
-    `::warning::'identity' input was provided but config "${loaded.config.name}" declares no age providers. Ignoring.\n`
+    `::warning::'identity' input was provided but config "${loaded.config.name}" declares no providers that consume an identity file. Ignoring.\n`
   );
   process.exit(0);
 }

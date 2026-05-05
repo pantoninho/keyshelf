@@ -2664,22 +2664,24 @@ async function loadAppMapping(mappingPath, required) {
     throw err;
   }
 }
-function ageIdentityFile(binding) {
-  if (binding?.__kind !== "provider:age") return void 0;
+var IDENTITY_PROVIDER_KINDS = /* @__PURE__ */ new Set(["provider:age", "provider:sops"]);
+function identityFile(binding) {
+  if (typeof binding !== "object" || binding === null) return void 0;
+  if (!IDENTITY_PROVIDER_KINDS.has(binding.__kind)) return void 0;
   const file = binding.options?.identityFile;
   return typeof file === "string" && file.length > 0 ? file : void 0;
 }
-function collectAgeIdentityFiles(config2) {
+function collectIdentityFiles(config2) {
   const seen = /* @__PURE__ */ new Set();
   for (const record of config2.keys) {
     if (record.kind !== "secret") continue;
-    addIfAge(seen, record.value);
-    for (const v of Object.values(record.values ?? {})) addIfAge(seen, v);
+    addIfIdentity(seen, record.value);
+    for (const v of Object.values(record.values ?? {})) addIfIdentity(seen, v);
   }
   return [...seen];
 }
-function addIfAge(seen, binding) {
-  const file = ageIdentityFile(binding);
+function addIfIdentity(seen, binding) {
+  const file = identityFile(binding);
   if (file !== void 0) seen.add(file);
 }
 function resolveIdentityPath(filePath, rootDir) {
@@ -2701,10 +2703,10 @@ if (!identity) {
   process.exit(0);
 }
 var loaded = await loadConfig(cwd);
-var identityFiles = collectAgeIdentityFiles(loaded.config);
+var identityFiles = collectIdentityFiles(loaded.config);
 if (identityFiles.length === 0) {
   process.stdout.write(
-    `::warning::'identity' input was provided but config "${loaded.config.name}" declares no age providers. Ignoring.
+    `::warning::'identity' input was provided but config "${loaded.config.name}" declares no providers that consume an identity file. Ignoring.
 `
   );
   process.exit(0);
