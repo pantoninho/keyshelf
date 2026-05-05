@@ -11779,15 +11779,22 @@ var SopsProvider = class {
   }
   async resolve(ctx) {
     const opts2 = this.resolveOptions(ctx);
-    const file = await readSecretsFile(opts2.secretsFile);
-    const identity = await readIdentity(opts2.identityFile);
-    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
-    verifyMac(dataKey, file);
+    const { file, dataKey } = await this.openVerified(opts2);
     const entry = file.entries[ctx.keyPath];
     if (!entry) {
       throw new Error(`sops: secret "${ctx.keyPath}" not found in ${opts2.secretsFile}`);
     }
     return decryptValue(dataKey, entry);
+  }
+  // Read the secrets file, decrypt the data key with the provider identity,
+  // and verify the MAC. Shared between read paths (resolve, copy) so the
+  // tamper-detection sequence stays in one place.
+  async openVerified(opts2) {
+    const file = await readSecretsFile(opts2.secretsFile);
+    const identity = await readIdentity(opts2.identityFile);
+    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
+    verifyMac(dataKey, file);
+    return { file, dataKey };
   }
   async validate(ctx) {
     try {
@@ -11825,10 +11832,7 @@ var SopsProvider = class {
   }
   async copy(from, to) {
     const opts2 = this.resolveOptions(from);
-    const file = await readSecretsFile(opts2.secretsFile);
-    const identity = await readIdentity(opts2.identityFile);
-    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
-    verifyMac(dataKey, file);
+    const { file, dataKey } = await this.openVerified(opts2);
     const entry = file.entries[from.keyPath];
     if (!entry) {
       throw new Error(`sops: source key "${from.keyPath}" not found in ${opts2.secretsFile}`);
@@ -11839,17 +11843,15 @@ var SopsProvider = class {
   }
   async delete(ctx) {
     const opts2 = this.resolveOptions(ctx);
-    let file;
+    let probe;
     try {
-      file = await readSecretsFile(opts2.secretsFile);
+      probe = await readSecretsFile(opts2.secretsFile);
     } catch (err) {
       if (err.code === "ENOENT") return;
       throw err;
     }
-    if (!(ctx.keyPath in file.entries)) return;
-    const identity = await readIdentity(opts2.identityFile);
-    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
-    verifyMac(dataKey, file);
+    if (!(ctx.keyPath in probe.entries)) return;
+    const { file, dataKey } = await this.openVerified(opts2);
     delete file.entries[ctx.keyPath];
     file.sops.mac = computeMac(dataKey, file.entries);
     await writeSecretsFile(opts2.secretsFile, file);
