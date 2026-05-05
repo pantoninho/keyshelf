@@ -1,7 +1,7 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
-import type { Provider, ProviderContext, StoredKey } from "./types.js";
+import type { Provider, ProviderContext, ProviderListContext, StoredKey } from "./types.js";
 import {
   readIdentity,
   readIdentityWithRecipient,
@@ -67,8 +67,26 @@ export class AgeProvider implements Provider {
     await writeFile(filePath, ciphertext);
   }
 
-  async list(): Promise<StoredKey[]> {
-    return [];
+  async list(ctx: ProviderListContext): Promise<StoredKey[]> {
+    const secretsDir = resolvePath(requireStringConfig("age", ctx, "secretsDir"), ctx.rootDir);
+
+    let entries;
+    try {
+      entries = await readdir(secretsDir, { withFileTypes: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw err;
+    }
+
+    return entries
+      .filter((e) => e.isFile() && e.name.endsWith(".age"))
+      .map((e) => {
+        const stem = e.name.slice(0, -".age".length);
+        // Reverse keyPathToFileName: '_' encodes '/'. Path segments containing
+        // literal '_' are misparsed here — Phase 5 of the `up` plan tightens
+        // schema validation to forbid '_' in segments.
+        return { keyPath: stem.replace(/_/g, "/"), envName: undefined };
+      });
   }
 }
 
