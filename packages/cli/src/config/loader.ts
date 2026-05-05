@@ -7,26 +7,11 @@ import { createJiti, type Jiti } from "jiti";
 import { parseAppMapping, type AppMapping } from "./app-mapping.js";
 import { normalizeConfig, validateAppMappingReferences } from "./schema.js";
 import type { KeyshelfConfig, NormalizedConfig } from "./types.js";
+import { loadYamlConfig } from "./yaml-loader.js";
 
-const CONFIG_FILE = "keyshelf.config.ts";
-const V4_SCHEMA_FILE = "keyshelf.yaml";
+const TS_CONFIG_FILE = "keyshelf.config.ts";
+const YAML_CONFIG_FILE = "keyshelf.yaml";
 const APP_MAPPING_FILE = ".env.keyshelf";
-
-export class V4ConfigDetectedError extends Error {
-  readonly v4SchemaPath: string;
-  readonly v4RootDir: string;
-
-  constructor(v4RootDir: string) {
-    const v4SchemaPath = join(v4RootDir, V4_SCHEMA_FILE);
-    super(
-      `Detected v4 keyshelf.yaml at ${v4SchemaPath} but no ${CONFIG_FILE} in any parent directory. ` +
-        `Run \`npx @keyshelf/migrate\` from ${v4RootDir} to migrate to v5.`
-    );
-    this.name = "V4ConfigDetectedError";
-    this.v4SchemaPath = v4SchemaPath;
-    this.v4RootDir = v4RootDir;
-  }
-}
 
 let cachedJiti: Jiti | undefined;
 
@@ -74,21 +59,16 @@ export interface LoadConfigOptions {
 
 export function findRootDir(from: string): string {
   let dir = resolve(from);
-  let v4RootDir: string | undefined;
 
   while (true) {
-    if (existsSync(join(dir, CONFIG_FILE))) {
+    if (existsSync(join(dir, TS_CONFIG_FILE)) || existsSync(join(dir, YAML_CONFIG_FILE))) {
       return dir;
-    }
-    if (v4RootDir === undefined && existsSync(join(dir, V4_SCHEMA_FILE))) {
-      v4RootDir = dir;
     }
     const parent = dirname(dir);
     if (parent === dir) {
-      if (v4RootDir !== undefined) {
-        throw new V4ConfigDetectedError(v4RootDir);
-      }
-      throw new Error(`Could not find ${CONFIG_FILE} in ${from} or any parent directory`);
+      throw new Error(
+        `Could not find ${TS_CONFIG_FILE} or ${YAML_CONFIG_FILE} in ${from} or any parent directory`
+      );
     }
     dir = parent;
   }
@@ -102,10 +82,10 @@ export async function loadConfig(
     options.configPath === undefined ? undefined : resolve(options.configPath);
   const rootDir =
     explicitConfigPath === undefined ? findRootDir(appDir) : dirname(explicitConfigPath);
-  const configPath = explicitConfigPath ?? join(rootDir, CONFIG_FILE);
+  const configPath = explicitConfigPath ?? resolveConfigPath(rootDir);
 
   const started = performance.now();
-  const rawConfig = await importConfig(configPath);
+  const rawConfig = await loadRawConfig(configPath);
   const config = normalizeConfig(rawConfig);
   const loadTimeMs = performance.now() - started;
 
@@ -124,7 +104,16 @@ export async function loadConfig(
   };
 }
 
-async function importConfig(configPath: string): Promise<KeyshelfConfig> {
+function resolveConfigPath(rootDir: string): string {
+  const tsPath = join(rootDir, TS_CONFIG_FILE);
+  if (existsSync(tsPath)) return tsPath;
+  return join(rootDir, YAML_CONFIG_FILE);
+}
+
+async function loadRawConfig(configPath: string): Promise<KeyshelfConfig> {
+  if (configPath.endsWith(".yaml") || configPath.endsWith(".yml")) {
+    return await loadYamlConfig(configPath);
+  }
   return await getJiti().import<KeyshelfConfig>(configPath, { default: true });
 }
 
