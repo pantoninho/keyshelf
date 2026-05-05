@@ -282,6 +282,56 @@ hint to make sense.
 
 ---
 
+## Commands
+
+`keyshelf up` is the canonical verb for reconciling provider storage with
+the config. The other commands are helpers around it:
+
+| Command                  | Mutates config? | Mutates storage?         | Role                                                     |
+| ------------------------ | --------------- | ------------------------ | -------------------------------------------------------- |
+| `keyshelf up`            | no              | yes (renames + deletes)  | reconcile storage with config                            |
+| `keyshelf up --plan`     | no              | no                       | preview the reconciliation plan; exits non-zero on drift |
+| `keyshelf set <key>`     | no              | yes (writes one value)   | write a single secret value                              |
+| `keyshelf import --file` | no              | yes (writes many values) | bulk-write secrets from a `.env` file                    |
+| `keyshelf run -- ...`    | no              | no                       | resolve and inject env, then exec                        |
+| `keyshelf ls`            | no              | no                       | list resolved values                                     |
+
+`set` and `import` only write values — they never edit the config. The
+config is hand-edited; `up` is what propagates structural changes (renames,
+deletions) into storage.
+
+### Renaming a key
+
+The intended flow for renaming a stored key is:
+
+1. Edit `keyshelf.config.ts`: rename the key and add `movedFrom: "<old-path>"`
+   so the planner knows where to look for the existing value.
+2. Run `keyshelf up --plan` to preview the rename.
+3. Run `keyshelf up` to apply: the value is copied to the new path, validated,
+   and the old entry is deleted.
+
+`movedFrom` is the disambiguation knob: without it, multiple orphan entries
+in storage may plausibly match a new key, and `up` will refuse to guess.
+With it, the planner emits a deterministic `Rename` action.
+
+If the user runs `set` (or `import`) on a key whose `movedFrom` predecessor
+still exists in storage, the command prints a hint suggesting `keyshelf up`
+to clean up the old entry. The hint is best-effort and only checks the
+single key being written.
+
+### Permissions
+
+`keyshelf up` requires `list` access on every provider configured in
+the project: it must enumerate stored entries to detect orphans and
+plan renames. For GCP Secret Manager this means
+`roles/secretmanager.viewer` on the project (in addition to
+`roles/secretmanager.secretAccessor` which `run` already needs). For
+file-based providers (age, sops) read access on the secrets directory or
+file is enough. `set` and `import` only need write access; they do not
+list.
+
+---
+
 ## Validation rules (for Phase 2)
 
 The Phase 2 validator must enforce, in addition to the type-level constraints:
