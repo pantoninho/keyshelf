@@ -6,7 +6,6 @@
 export {
   findRootDir,
   loadConfig,
-  V4ConfigDetectedError,
   type LoadedConfig,
   type LoadConfigOptions
 } from "./config/loader.js";

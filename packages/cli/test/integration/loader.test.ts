@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { findRootDir, loadConfig, V4ConfigDetectedError } from "../../src/config/index.js";
+import { findRootDir, loadConfig } from "../../src/config/index.js";
 
 async function createFixture() {
   const root = await mkdtemp(join(tmpdir(), "keyshelf-loader-"));
@@ -109,32 +109,84 @@ describe("config loader", () => {
     });
   });
 
-  describe("v4 detection", () => {
-    it("throws V4ConfigDetectedError when only keyshelf.yaml is present in a parent dir", async () => {
-      const root = await mkdtemp(join(tmpdir(), "keyshelf-v4-detect-"));
-      await writeFile(join(root, "keyshelf.yaml"), "name: legacy\nkeys: {}\n");
+  describe("yaml config", () => {
+    it("loads keyshelf.yaml when no .config.ts is present", async () => {
+      const root = await mkdtemp(join(tmpdir(), "keyshelf-yaml-load-"));
+      await writeFile(
+        join(root, "keyshelf.yaml"),
+        [
+          "name: yaml-app",
+          "keys:",
+          "  log:",
+          "    level: info",
+          "  db:",
+          "    host: localhost"
+        ].join("\n")
+      );
+      await mkdir(join(root, ".keyshelf"), { recursive: true });
+      await writeFile(
+        join(root, ".keyshelf", "dev.yaml"),
+        ["keys:", "  db:", "    host: dev-db"].join("\n")
+      );
+      await writeFile(
+        join(root, ".keyshelf", "production.yaml"),
+        ["keys:", "  db:", "    host: prod-db"].join("\n")
+      );
+
       const appDir = join(root, "apps", "api");
       await mkdir(appDir, { recursive: true });
+      await writeFile(join(appDir, ".env.keyshelf"), "DB_HOST=db/host\nLOG_LEVEL=log/level\n");
 
-      let caught: unknown;
-      try {
-        findRootDir(appDir);
-      } catch (err) {
-        caught = err;
-      }
-
-      expect(caught).toBeInstanceOf(V4ConfigDetectedError);
-      const v4Err = caught as V4ConfigDetectedError;
-      expect(v4Err.v4RootDir).toBe(root);
-      expect(v4Err.v4SchemaPath).toBe(join(root, "keyshelf.yaml"));
-      expect(v4Err.message).toContain("@keyshelf/migrate");
+      const loaded = await loadConfig(appDir);
+      expect(loaded.rootDir).toBe(root);
+      expect(loaded.configPath).toBe(join(root, "keyshelf.yaml"));
+      expect(loaded.config.name).toBe("yaml-app");
+      expect(loaded.config.envs).toEqual(["dev", "production"]);
+      const dbHost = loaded.config.keys.find((k) => k.path === "db/host");
+      expect(dbHost).toMatchObject({
+        kind: "config",
+        values: { dev: "dev-db", production: "prod-db" }
+      });
     });
 
-    it("prefers a keyshelf.config.ts even when a keyshelf.yaml is also present", async () => {
+    it("prefers keyshelf.config.ts when both files exist", async () => {
       const { root, appDir } = await createFixture();
       await writeFile(join(root, "keyshelf.yaml"), "name: legacy\nkeys: {}\n");
 
-      expect(findRootDir(appDir)).toBe(root);
+      const loaded = await loadConfig(appDir);
+      expect(loaded.configPath).toBe(join(root, "keyshelf.config.ts"));
+    });
+
+    it("resolves !secret tags through env-level default-provider", async () => {
+      const root = await mkdtemp(join(tmpdir(), "keyshelf-yaml-secret-"));
+      await writeFile(
+        join(root, "keyshelf.yaml"),
+        ["name: secrets-app", "keys:", "  github:", "    token: !secret"].join("\n")
+      );
+      await mkdir(join(root, ".keyshelf"), { recursive: true });
+      await writeFile(
+        join(root, ".keyshelf", "dev.yaml"),
+        [
+          "default-provider:",
+          "  name: age",
+          "  identityFile: ./dev.txt",
+          "  secretsDir: ./dev-secrets"
+        ].join("\n")
+      );
+
+      await writeFile(join(root, ".env.keyshelf"), "GH=github/token\n");
+      const loaded = await loadConfig(root);
+      const tokenKey = loaded.config.keys.find((k) => k.path === "github/token");
+      expect(tokenKey).toMatchObject({
+        kind: "secret",
+        values: {
+          dev: {
+            __kind: "provider:age",
+            name: "age",
+            options: { identityFile: "./dev.txt", secretsDir: "./dev-secrets" }
+          }
+        }
+      });
     });
   });
 
