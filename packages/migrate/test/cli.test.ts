@@ -21,9 +21,12 @@ describe("keyshelf-migrate CLI", () => {
     roots = [];
   });
 
-  it("writes generated config from the compiled CLI", async () => {
+  it("yaml-to-typescript writes generated config to disk", async () => {
     const root = await copyFixture("basic");
-    const result = spawnSync(process.execPath, [CLI], { cwd: root, encoding: "utf-8" });
+    const result = spawnSync(process.execPath, [CLI, "yaml-to-typescript"], {
+      cwd: root,
+      encoding: "utf-8"
+    });
 
     expect(result.status).toBe(0);
     expect(result.stderr).toContain("Wrote");
@@ -32,9 +35,9 @@ describe("keyshelf-migrate CLI", () => {
     );
   });
 
-  it("writes dry-run output to stdout", async () => {
+  it("yaml-to-typescript writes dry-run output to stdout", async () => {
     const root = await copyFixture("nested");
-    const result = spawnSync(process.execPath, [CLI, "--dry-run"], {
+    const result = spawnSync(process.execPath, [CLI, "yaml-to-typescript", "--dry-run"], {
       cwd: root,
       encoding: "utf-8"
     });
@@ -44,23 +47,40 @@ describe("keyshelf-migrate CLI", () => {
     expect(existsSync(join(root, "keyshelf.config.ts"))).toBe(false);
   });
 
-  it("refuses to overwrite without --force", async () => {
+  it("yaml-to-typescript refuses to overwrite without --force", async () => {
     const root = await copyFixture("basic");
     const out = join(root, "keyshelf.config.ts");
     await writeFile(out, "existing", "utf-8");
 
-    const result = spawnSync(process.execPath, [CLI], { cwd: root, encoding: "utf-8" });
+    const result = spawnSync(process.execPath, [CLI, "yaml-to-typescript"], {
+      cwd: root,
+      encoding: "utf-8"
+    });
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("already exists");
     await expect(readFile(out, "utf-8")).resolves.toBe("existing");
   });
 
+  it("project-name reports no-op for age-only fixtures under --dry-run", async () => {
+    const root = await copyFixture("basic");
+    const result = spawnSync(process.execPath, [CLI, "project-name", "--dry-run"], {
+      cwd: root,
+      encoding: "utf-8"
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("age: no-op");
+  });
+
   it("fails clearly when keyshelf.yaml is absent", async () => {
     const root = await mkdtemp(join(tmpdir(), "keyshelf-migrate-empty-"));
     roots.push(root);
 
-    const result = spawnSync(process.execPath, [CLI], { cwd: root, encoding: "utf-8" });
+    const result = spawnSync(process.execPath, [CLI, "yaml-to-typescript"], {
+      cwd: root,
+      encoding: "utf-8"
+    });
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Could not find keyshelf.yaml");

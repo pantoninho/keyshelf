@@ -41,7 +41,7 @@ function parseAppMapping(content) {
 }
 var PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 var TEMPLATE_RE2 = /(?<!\$)\$\{([^}]+)\}/g;
-var CONFIG_NAME_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+var CONFIG_NAME_RE = /^[A-Za-z0-9_-]+$/;
 var configScalarSchema = z.union([z.string(), z.number(), z.boolean()]);
 var ageProviderSchema = z.object({
   __kind: z.literal("provider:age"),
@@ -107,7 +107,7 @@ var keyNodeSchema = z.lazy(
 var keyshelfConfigSchema = z.object({
   __kind: z.literal("keyshelf:config"),
   name: z.string().min(1).refine((value) => CONFIG_NAME_RE.test(value), {
-    message: "name must match /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/ (lowercase, digits, dashes; no leading or trailing dash)"
+    message: "name must contain only letters, digits, hyphens, and underscores"
   }),
   envs: z.array(z.string().min(1)).nonempty(),
   groups: z.array(z.string().min(1)).optional(),

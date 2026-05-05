@@ -1,24 +1,33 @@
 # @keyshelf/migrate
 
-One-shot migrator from keyshelf v4 YAML files to the v5 `keyshelf.config.ts` format.
+Helpers for moving keyshelf v4 projects to v5. v4 YAML configs are now valid v5 configs at runtime, so most projects do not need to migrate at all — these subcommands cover the two cases that are not automatic.
 
-## Run
+## Subcommands
 
-From the repository root that contains `keyshelf.yaml`:
+### `yaml-to-typescript`
 
-```bash
-npx @keyshelf/migrate
-```
-
-By default the migrator writes `keyshelf.config.ts` and refuses to overwrite an existing file.
+Converts `keyshelf.yaml` + `.keyshelf/*.yaml` into a single `keyshelf.config.ts`. Useful if you prefer the TypeScript authoring surface or want IDE autocomplete on key paths.
 
 ```bash
-npx @keyshelf/migrate --dry-run
-npx @keyshelf/migrate --out ./keyshelf.config.ts --force
-npx @keyshelf/migrate --accept-renamed-name
+npx @keyshelf/migrate yaml-to-typescript
+npx @keyshelf/migrate yaml-to-typescript --dry-run
+npx @keyshelf/migrate yaml-to-typescript --out ./keyshelf.config.ts --force
 ```
 
-Use `--accept-renamed-name` when a v4 `name` contains underscores. v5 names are lowercase kebab-case, so `my_app` becomes `my-app`.
+### `project-name`
+
+Re-namespaces remote secret stores under the v5 project name. The migration is dispatched per provider:
+
+- `age`, `sops` — no-op (secrets are co-located with the project; there is no remote namespace to migrate).
+- `gcp` — copies legacy un-namespaced GCP secret ids (e.g. `keyshelf__production__db__password`) to project-namespaced ids (`keyshelf__<name>__production__db__password`).
+
+```bash
+npx @keyshelf/migrate project-name --dry-run
+npx @keyshelf/migrate project-name
+npx @keyshelf/migrate project-name --delete-legacy
+```
+
+`--delete-legacy` deletes the un-namespaced secrets after copying — only run it once you have confirmed the new ids resolve correctly.
 
 ## What It Reads
 
@@ -26,12 +35,11 @@ Use `--accept-renamed-name` when a v4 `name` contains underscores. v5 names are 
 - `.keyshelf/*.yaml`
 - `.env.keyshelf`, when present at the repository root
 
-The generated config keeps `.env.keyshelf` as a separate file. v5 still reads app mappings from `.env.keyshelf`.
+`.env.keyshelf` is preserved as a separate file by both subcommands.
 
-## Review After Migration
+## Review After `yaml-to-typescript`
 
 - Confirm the generated `name` is the intended v5 project name.
 - Fill in `groups: []` if you want to use v5 group filters.
-- Rebind or copy secret values as needed. The report prints `keyshelf set` commands for each migrated secret binding.
 - Review provider paths such as `identityFile`, `secretsDir`, and `secretsFile`.
 - Run the v5 CLI against the generated config before deleting v4 YAML files.

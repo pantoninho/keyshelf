@@ -9,9 +9,6 @@ export function fixturePath(name: string): string {
   return join(here, "fixtures", name);
 }
 
-export async function loadFixture(
-  name: string,
-  options: { acceptRenamedName?: boolean } = {}
-): Promise<NormalizedMigration> {
-  return normalizeProject(await loadV4Project(fixturePath(name)), options);
+export async function loadFixture(name: string): Promise<NormalizedMigration> {
+  return normalizeProject(await loadV4Project(fixturePath(name)));
 }

@@ -4,39 +4,55 @@ import { resolve } from "node:path";
 import { Command } from "commander";
 import { emitConfig } from "./emit.js";
 import { loadV4Project } from "./load-v4.js";
-import { normalizeProject, type NormalizedMigration } from "./normalize.js";
+import {
+  normalizeProject,
+  type NormalizedMigration,
+  type NormalizedRecord,
+  type ProviderRef
+} from "./normalize.js";
 import { buildReport } from "./report.js";
 import { formatGcpRows, hasGcpBindings, migrateGcpSecrets } from "./migrate-gcp.js";
 
-interface CliOptions {
+interface YamlToTsOptions {
   out: string;
   dryRun?: boolean;
   force?: boolean;
-  acceptRenamedName?: boolean;
-  skipGcp?: boolean;
-  deleteLegacyGcp?: boolean;
+}
+
+interface ProjectNameOptions {
+  dryRun?: boolean;
+  deleteLegacy?: boolean;
 }
 
 const program = new Command();
 
+program.name("keyshelf-migrate").description("Migrate keyshelf v4 projects to v5");
+
 program
-  .name("keyshelf-migrate")
-  .description("Migrate keyshelf v4 YAML files to keyshelf.config.ts")
+  .command("yaml-to-typescript")
+  .description("Convert keyshelf.yaml + .keyshelf/*.yaml into a single keyshelf.config.ts")
   .option("--out <path>", "Output path", "keyshelf.config.ts")
-  .option("--dry-run", "Write generated config to stdout (also dry-runs GCP secret-id migration)")
+  .option("--dry-run", "Write generated config to stdout instead of disk")
   .option("--force", "Overwrite the output file if it already exists")
-  .option("--accept-renamed-name", "Accept converting v4 names with underscores to v5 kebab-case")
-  .option(
-    "--skip-gcp",
-    "Skip the GCP secret-id namespacing step (use only if you have already migrated or are not using gcp)"
-  )
-  .option(
-    "--delete-legacy-gcp",
-    "Delete legacy un-namespaced GCP secrets after copying (use with care)"
-  )
-  .action(async (options: CliOptions) => {
+  .action(async (options: YamlToTsOptions) => {
     try {
-      await run(options);
+      await runYamlToTypescript(options);
+    } catch (err) {
+      console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command("project-name")
+  .description(
+    "Re-namespace remote secret stores under the project name (no-op for age/sops; rewrites GCP secret ids)"
+  )
+  .option("--dry-run", "Report planned changes without writing to remote stores")
+  .option("--delete-legacy", "Delete legacy un-namespaced secrets after copying (use with care)")
+  .action(async (options: ProjectNameOptions) => {
+    try {
+      await runProjectName(options);
     } catch (err) {
       console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
       process.exitCode = 1;
@@ -45,74 +61,104 @@ program
 
 await program.parseAsync(process.argv);
 
-async function run(options: CliOptions): Promise<void> {
-  const project = await loadV4Project(process.cwd());
-  const migration = normalizeProject(project, {
-    acceptRenamedName: options.acceptRenamedName
-  });
-
+async function runYamlToTypescript(options: YamlToTsOptions): Promise<void> {
+  const migration = await loadMigration();
   const outPath = resolve(process.cwd(), options.out);
-  if (!options.dryRun) {
-    assertOutputWritable(outPath, options.force);
-  }
-
-  await runGcpStep(migration, options);
-
   const source = emitConfig(migration);
   const report = buildReport(migration);
 
-  await writeOutput(source, report, outPath, options.dryRun);
-}
-
-function assertOutputWritable(outPath: string, force: boolean | undefined): void {
-  if (existsSync(outPath) && !force) {
-    throw new Error(`${outPath} already exists. Re-run with --force to overwrite it.`);
-  }
-}
-
-async function writeOutput(
-  source: string,
-  report: string,
-  outPath: string,
-  dryRun: boolean | undefined
-): Promise<void> {
-  if (dryRun) {
+  if (options.dryRun) {
     process.stdout.write(source);
     process.stderr.write(report);
     return;
   }
 
+  assertWritable(outPath, options.force === true);
   await writeFile(outPath, source, "utf-8");
   process.stderr.write(report);
   process.stderr.write(`Wrote ${outPath}\n`);
 }
 
-async function runGcpStep(migration: NormalizedMigration, options: CliOptions): Promise<void> {
-  if (options.skipGcp) return;
+function assertWritable(outPath: string, force: boolean): void {
+  if (!force && existsSync(outPath)) {
+    throw new Error(`${outPath} already exists. Re-run with --force to overwrite it.`);
+  }
+}
+
+async function runProjectName(options: ProjectNameOptions): Promise<void> {
+  const migration = await loadMigration();
+  const providers = collectProviders(migration);
+
+  if (providers.size === 0) {
+    process.stderr.write("No secret bindings found; nothing to migrate.\n");
+    return;
+  }
+
+  for (const provider of providers) {
+    await migrateProvider(provider, migration, options);
+  }
+}
+
+async function migrateProvider(
+  provider: ProviderRef["name"],
+  migration: NormalizedMigration,
+  options: ProjectNameOptions
+): Promise<void> {
+  switch (provider) {
+    case "age":
+    case "sops":
+      process.stderr.write(
+        `${provider}: no-op (secrets stay co-located with the project; no remote namespacing required).\n`
+      );
+      return;
+    case "gcp":
+      await runGcpMigration(migration, options);
+      return;
+    default: {
+      const exhaustive: never = provider;
+      throw new Error(`Unsupported provider for project-name migration: ${String(exhaustive)}`);
+    }
+  }
+}
+
+async function runGcpMigration(
+  migration: NormalizedMigration,
+  options: ProjectNameOptions
+): Promise<void> {
   if (!hasGcpBindings(migration)) return;
 
   process.stderr.write(
-    "Migrating GCP secret ids to be namespaced by config name (this runs before keyshelf.config.ts is written so v4 stays usable on failure).\n"
+    "gcp: re-namespacing secret ids under the project name. v4 secrets are left in place unless --delete-legacy is set.\n"
   );
   const result = await migrateGcpSecrets(migration, {
     dryRun: options.dryRun,
-    deleteLegacy: options.deleteLegacyGcp
+    deleteLegacy: options.deleteLegacy
   });
 
-  reportGcpResult(result);
-}
-
-function reportGcpResult(result: {
-  rows: Parameters<typeof formatGcpRows>[0];
-  hadError: boolean;
-}): void {
   const formatted = formatGcpRows(result.rows);
   if (formatted.length > 0) {
     process.stderr.write(`${formatted}\n`);
   }
   if (result.hadError) {
     throw new Error(
-      "GCP secret-id migration finished with errors (see rows above). Resolve the conflicts or re-run with a different --out, then re-run keyshelf-migrate. v4 keyshelf.yaml was left untouched."
+      "GCP secret-id migration finished with errors (see rows above). Resolve the conflicts and re-run."
     );
   }
+}
+
+function collectProviders(migration: NormalizedMigration): Set<ProviderRef["name"]> {
+  return new Set(migration.keys.flatMap(providerNamesOf));
+}
+
+function providerNamesOf(record: NormalizedRecord): ProviderRef["name"][] {
+  if (record.kind !== "secret") return [];
+  const bindings = [record.default, ...Object.values(record.values ?? {})];
+  return bindings
+    .filter((binding): binding is ProviderRef => binding !== undefined)
+    .map((binding) => binding.name);
+}
+
+async function loadMigration(): Promise<NormalizedMigration> {
+  const project = await loadV4Project(process.cwd());
+  return normalizeProject(project);
 }

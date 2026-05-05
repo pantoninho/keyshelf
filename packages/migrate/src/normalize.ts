@@ -37,25 +37,15 @@ export interface NormalizedMigration {
   groups: string[];
   keys: NormalizedRecord[];
   appMapping: AppMapping[];
-  renamedName?: {
-    from: string;
-    to: string;
-  };
 }
 
-export interface NormalizeOptions {
-  acceptRenamedName?: boolean;
-}
-
-const V5_NAME_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const V5_PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const SUPPORTED_PROVIDERS = new Set(["age", "gcp", "sops"]);
 
-export function normalizeProject(
-  project: V4Project,
-  options: NormalizeOptions = {}
-): NormalizedMigration {
-  const name = normalizeName(project.name, options.acceptRenamedName === true);
+export function normalizeProject(project: V4Project): NormalizedMigration {
+  if (project.name === undefined) {
+    throw new Error('keyshelf.yaml must set top-level "name" before it can be migrated');
+  }
   const envs = project.envs.map((env) => env.name).sort((a, b) => a.localeCompare(b));
   const keys = [...project.schema]
     .sort((a, b) => a.path.localeCompare(b.path))
@@ -64,39 +54,11 @@ export function normalizeProject(
   validatePaths(keys);
 
   return {
-    name: name.value,
+    name: project.name,
     envs,
     groups: [],
     keys,
-    appMapping: project.appMapping,
-    renamedName: name.renamed
-  };
-}
-
-function normalizeName(
-  name: string | undefined,
-  acceptRenamedName: boolean
-): { value: string; renamed?: { from: string; to: string } } {
-  if (name === undefined) {
-    throw new Error('keyshelf.yaml must set top-level "name" before it can be migrated');
-  }
-
-  const lower = name.toLowerCase();
-  const kebab = lower.replaceAll("_", "-");
-  if (name.includes("_") && !acceptRenamedName) {
-    throw new Error(
-      `v4 name "${name}" must be renamed to "${kebab}" for v5. Re-run with --accept-renamed-name to accept this change.`
-    );
-  }
-  if (!V5_NAME_RE.test(kebab)) {
-    throw new Error(
-      `v4 name "${name}" cannot be migrated to a valid v5 name. v5 names must match ${V5_NAME_RE}.`
-    );
-  }
-
-  return {
-    value: kebab,
-    renamed: name === kebab ? undefined : { from: name, to: kebab }
+    appMapping: project.appMapping
   };
 }
 

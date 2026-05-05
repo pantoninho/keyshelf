@@ -6,7 +6,7 @@ describe("emitConfig", () => {
   it.each(["basic", "multi-env", "optional", "nested", "name-rename"])(
     "emits stable v5 config for %s",
     async (fixture) => {
-      const migration = await loadFixture(fixture, { acceptRenamedName: true });
+      const migration = await loadFixture(fixture);
       expect(emitConfig(migration)).toMatchSnapshot();
     }
   );

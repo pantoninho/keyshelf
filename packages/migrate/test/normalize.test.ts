@@ -83,12 +83,8 @@ describe("normalizeProject", () => {
     });
   });
 
-  it("requires an explicit acknowledgement for underscore name renames", async () => {
+  it("preserves v4 names with underscores and mixed case as-is", async () => {
     const project = await loadV4Project(fixturePath("name-rename"));
-    expect(() => normalizeProject(project)).toThrow("--accept-renamed-name");
-    expect(normalizeProject(project, { acceptRenamedName: true })).toMatchObject({
-      name: "my-project",
-      renamedName: { from: "My_Project", to: "my-project" }
-    });
+    expect(normalizeProject(project)).toMatchObject({ name: "My_Project" });
   });
 });

@@ -21,7 +21,7 @@ describe("round-trip through the keyshelf loader", () => {
   it.each(["basic", "multi-env", "optional", "nested", "name-rename"])(
     "loads emitted %s config",
     async (fixture) => {
-      const migration = await loadFixture(fixture, { acceptRenamedName: true });
+      const migration = await loadFixture(fixture);
       const root = await mkdtemp(join(tmpdir(), `keyshelf-migrate-roundtrip-${fixture}-`));
       roots.push(root);
       await writeFile(join(root, "keyshelf.config.ts"), emitConfig(migration), "utf-8");

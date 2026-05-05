@@ -5,16 +5,9 @@ export function buildReport(migration: NormalizedMigration): string {
   const configCount = migration.keys.filter((record) => record.kind === "config").length;
   const secretCount = migration.keys.filter((record) => record.kind === "secret").length;
   const lines: string[] = [
-    `Migrated ${migration.keys.length} keys (${configCount} config, ${secretCount} secret) across ${migration.envs.length} envs.`
+    `Migrated ${migration.keys.length} keys (${configCount} config, ${secretCount} secret) across ${migration.envs.length} envs.`,
+    ""
   ];
-
-  if (migration.renamedName !== undefined) {
-    lines.push(
-      `Renamed project name: ${migration.renamedName.from} -> ${migration.renamedName.to}`
-    );
-  }
-
-  lines.push("");
   lines.push("Secret rebind commands:");
   const commands = buildRebindCommands(migration.keys, migration.envs);
   if (commands.length === 0) {

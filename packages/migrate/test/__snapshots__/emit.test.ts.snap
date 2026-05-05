@@ -83,7 +83,7 @@ exports[`emitConfig > emits stable v5 config for name-rename 1`] = `
 import { defineConfig, gcp, secret } from "keyshelf/config";
 
 export default defineConfig({
-  name: "my-project",
+  name: "My_Project",
   envs: ["dev"],
   // TODO: Add v5 groups and assign group names to records as needed.
   groups: [],
