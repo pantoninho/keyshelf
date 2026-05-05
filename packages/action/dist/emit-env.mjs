@@ -3007,6 +3007,9 @@ var ProviderRegistry = class {
 // ../cli/dist/src/providers/plaintext.js
 var PlaintextProvider = class {
   name = "plaintext";
+  // Plaintext values live inline in the config tree, not in storage. No
+  // listing exists; scope is moot but envless matches the empty-list shape.
+  storageScope = "envless";
   async resolve(ctx) {
     const value = ctx.config.value;
     if (typeof value !== "string") {
@@ -11641,6 +11644,7 @@ function secretFilePath(secretsDir, keyPath) {
 }
 var AgeProvider = class {
   name = "age";
+  storageScope = "envless";
   resolveOptions(ctx) {
     return {
       identityFile: resolvePath(requireStringConfig("age", ctx, "identityFile"), ctx.rootDir),
@@ -11750,6 +11754,7 @@ async function writeSecretsFile(path, file) {
 }
 var SopsProvider = class {
   name = "sops";
+  storageScope = "envless";
   resolveOptions(ctx) {
     return {
       identityFile: resolvePath(requireStringConfig("sops", ctx, "identityFile"), ctx.rootDir),

@@ -1,5 +1,11 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
-import type { Provider, ProviderContext, ProviderListContext, StoredKey } from "./types.js";
+import type {
+  Provider,
+  ProviderContext,
+  ProviderListContext,
+  StorageScope,
+  StoredKey
+} from "./types.js";
 
 export interface GcpSmProviderOptions {
   project: string;
@@ -48,6 +54,7 @@ export function toSecretId(
 
 export class GcpSmProvider implements Provider {
   name = "gcp";
+  storageScope: StorageScope = "perEnv";
 
   private client: SecretManagerServiceClient;
 

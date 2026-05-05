@@ -2,7 +2,13 @@ import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
-import type { Provider, ProviderContext, ProviderListContext, StoredKey } from "./types.js";
+import type {
+  Provider,
+  ProviderContext,
+  ProviderListContext,
+  StorageScope,
+  StoredKey
+} from "./types.js";
 import {
   readIdentity,
   readIdentityWithRecipient,
@@ -25,6 +31,7 @@ function secretFilePath(secretsDir: string, keyPath: string): string {
 
 export class AgeProvider implements Provider {
   name = "age";
+  storageScope: StorageScope = "envless";
 
   private resolveOptions(ctx: ProviderContext): AgeProviderOptions {
     return {

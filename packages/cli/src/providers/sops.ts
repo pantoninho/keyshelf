@@ -2,7 +2,13 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { randomBytes, createCipheriv, createDecipheriv, createHmac } from "node:crypto";
 import { dirname } from "node:path";
 import { Encrypter, Decrypter } from "age-encryption";
-import type { Provider, ProviderContext, ProviderListContext, StoredKey } from "./types.js";
+import type {
+  Provider,
+  ProviderContext,
+  ProviderListContext,
+  StorageScope,
+  StoredKey
+} from "./types.js";
 import {
   readIdentity,
   readIdentityWithRecipient,
@@ -98,6 +104,7 @@ async function writeSecretsFile(path: string, file: SecretsFile): Promise<void> 
 
 export class SopsProvider implements Provider {
   name = "sops";
+  storageScope: StorageScope = "envless";
 
   private resolveOptions(ctx: ProviderContext): SopsProviderOptions {
     return {

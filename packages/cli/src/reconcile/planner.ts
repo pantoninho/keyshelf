@@ -1,12 +1,12 @@
 import type { NormalizedConfig } from "../config/types.js";
-import type { StoredKey } from "../providers/types.js";
+import type { StorageScope, StoredKey } from "../providers/types.js";
 import type { Action, Plan } from "./plan.js";
 import { diffInstance } from "./internal/diff.js";
 import { appendLeafActions, appendList } from "./internal/emit.js";
 import { buildInstances, type InstanceState } from "./internal/instance.js";
 import { resolveRenames } from "./internal/rename.js";
 
-export type StorageScope = "envless" | "perEnv";
+export type { StorageScope } from "../providers/types.js";
 
 export interface ProviderListing {
   providerName: string;
