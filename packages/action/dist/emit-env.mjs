@@ -3083,22 +3083,32 @@ function toSchemaKey(path, value) {
   };
 }
 function parseEnvFile(name, content) {
+  const doc = parseEnvDoc(name, content);
+  return {
+    name,
+    defaultProvider: parseProviderBlock(doc["default-provider"]),
+    overrides: parseEnvOverrides(name, doc.keys)
+  };
+}
+function parseEnvDoc(name, content) {
   const raw = jsYaml.load(content, { schema: KEYSHELF_SCHEMA });
-  if (raw != null && !isPlainObject(raw)) {
+  if (raw == null) return {};
+  if (!isPlainObject(raw)) {
     throw new Error(`${ENV_DIR}/${name}.yaml must be a mapping`);
   }
-  const doc = raw ?? {};
-  const defaultProvider = parseProviderBlock(doc["default-provider"]);
-  if (doc.keys != null && !isPlainObject(doc.keys)) {
+  return raw;
+}
+function parseEnvOverrides(name, keysBlock) {
+  if (keysBlock == null) return {};
+  if (!isPlainObject(keysBlock)) {
     throw new Error(`${ENV_DIR}/${name}.yaml: "keys" must be a mapping`);
   }
-  const flat = flattenKeys(isPlainObject(doc.keys) ? doc.keys : {});
   const overrides = {};
-  for (const [path, value] of Object.entries(flat)) {
-    if (value === void 0 || value === null) continue;
+  for (const [path, value] of Object.entries(flattenKeys(keysBlock))) {
+    if (value == null) continue;
     overrides[path] = isTaggedValue(value) ? value : toConfigScalar(value, `${name}:${path}`);
   }
-  return { name, defaultProvider, overrides };
+  return overrides;
 }
 function parseProviderBlock(raw) {
   if (!isPlainObject(raw)) return void 0;
