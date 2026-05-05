@@ -144,32 +144,36 @@ export class GcpSmProvider implements Provider {
     const prefix = ctx.keyshelfName ? `keyshelf__${ctx.keyshelfName}__` : "keyshelf__";
     const envs = new Set(ctx.envs ?? []);
 
-    let secrets;
+    const secrets = await this.callListSecrets(project);
+    return secrets.flatMap((secret) => parseSecretId(secret.name, prefix, envs) ?? []);
+  }
+
+  private async callListSecrets(project: string) {
     try {
-      [secrets] = await this.client.listSecrets({ parent: `projects/${project}` });
+      const [secrets] = await this.client.listSecrets({ parent: `projects/${project}` });
+      return secrets;
     } catch (err) {
       if (isAuthError(err)) throw new GcpAuthError(err as Error);
       throw err;
     }
-
-    const results: StoredKey[] = [];
-    for (const secret of secrets) {
-      const id = secret.name?.split("/").pop();
-      if (!id || !id.startsWith(prefix)) continue;
-
-      const remainder = id.slice(prefix.length);
-      if (remainder.length === 0) continue;
-
-      const segs = remainder.split("__");
-      let envName: string | undefined;
-      let pathSegs = segs;
-      if (envs.has(segs[0])) {
-        envName = segs[0];
-        pathSegs = segs.slice(1);
-      }
-      if (pathSegs.length === 0) continue;
-      results.push({ keyPath: pathSegs.join("/"), envName });
-    }
-    return results;
   }
+}
+
+function parseSecretId(
+  secretName: string | null | undefined,
+  prefix: string,
+  envs: Set<string>
+): StoredKey | null {
+  const id = secretName?.split("/").pop();
+  if (!id || !id.startsWith(prefix)) return null;
+
+  const remainder = id.slice(prefix.length);
+  if (remainder.length === 0) return null;
+
+  const segs = remainder.split("__");
+  const envName = envs.has(segs[0]) ? segs[0] : undefined;
+  const pathSegs = envName === undefined ? segs : segs.slice(1);
+  if (pathSegs.length === 0) return null;
+
+  return { keyPath: pathSegs.join("/"), envName };
 }
