@@ -151,26 +151,38 @@ function toSchemaKey(path: string, value: unknown): SchemaKey {
 }
 
 function parseEnvFile(name: string, content: string): EnvFile {
+  const doc = parseEnvDoc(name, content);
+  return {
+    name,
+    defaultProvider: parseProviderBlock(doc["default-provider"]),
+    overrides: parseEnvOverrides(name, doc.keys)
+  };
+}
+
+function parseEnvDoc(name: string, content: string): Record<string, unknown> {
   const raw = yaml.load(content, { schema: KEYSHELF_SCHEMA });
-  if (raw != null && !isPlainObject(raw)) {
+  if (raw == null) return {};
+  if (!isPlainObject(raw)) {
     throw new Error(`${ENV_DIR}/${name}.yaml must be a mapping`);
   }
+  return raw;
+}
 
-  const doc = (raw as Record<string, unknown> | null) ?? {};
-  const defaultProvider = parseProviderBlock(doc["default-provider"]);
-
-  if (doc.keys != null && !isPlainObject(doc.keys)) {
+function parseEnvOverrides(
+  name: string,
+  keysBlock: unknown
+): Record<string, ConfigBinding | TaggedValue> {
+  if (keysBlock == null) return {};
+  if (!isPlainObject(keysBlock)) {
     throw new Error(`${ENV_DIR}/${name}.yaml: "keys" must be a mapping`);
   }
 
-  const flat = flattenKeys(isPlainObject(doc.keys) ? doc.keys : {});
   const overrides: Record<string, ConfigBinding | TaggedValue> = {};
-  for (const [path, value] of Object.entries(flat)) {
-    if (value === undefined || value === null) continue;
+  for (const [path, value] of Object.entries(flattenKeys(keysBlock))) {
+    if (value == null) continue;
     overrides[path] = isTaggedValue(value) ? value : toConfigScalar(value, `${name}:${path}`);
   }
-
-  return { name, defaultProvider, overrides };
+  return overrides;
 }
 
 function parseProviderBlock(raw: unknown): ProviderConfig | undefined {
