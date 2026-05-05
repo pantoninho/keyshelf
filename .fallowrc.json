@@ -5,5 +5,8 @@
   "workspaces": {
     "packages": ["packages/*"]
   },
+  "duplicates": {
+    "ignore": ["**/test/**", "packages/migrate/**"]
+  },
   "rules": {}
 }

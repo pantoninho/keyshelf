@@ -14,16 +14,22 @@ var TEMPLATE_RE = /\$\{([^}]+)\}/g;
 function isTemplateMapping(m) {
   return "template" in m;
 }
-function parseAppMapping(content) {
-  const mappings = [];
+function* iterDotEnvEntries(content) {
   for (const raw of content.split("\n")) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
     const eqIndex = line.indexOf("=");
     if (eqIndex === -1) continue;
-    const envVar = line.slice(0, eqIndex).trim();
+    const key = line.slice(0, eqIndex).trim();
     const value = line.slice(eqIndex + 1).trim();
-    if (!envVar || !value) continue;
+    if (!key) continue;
+    yield { key, value };
+  }
+}
+function parseAppMapping(content) {
+  const mappings = [];
+  for (const { key: envVar, value } of iterDotEnvEntries(content)) {
+    if (!value) continue;
     if (TEMPLATE_RE.test(value)) {
       TEMPLATE_RE.lastIndex = 0;
       const keyPaths = [...value.matchAll(TEMPLATE_RE)].map((m) => m[1].trim());
@@ -9389,6 +9395,11 @@ async function readIdentity(identityFile) {
   const content = await readFile(identityFile, "utf-8");
   return content.trim();
 }
+async function readIdentityWithRecipient(identityFile) {
+  const identity = await readIdentity(identityFile);
+  const recipient = await identityToRecipient(identity);
+  return { identity, recipient };
+}
 function requireStringConfig(providerName, ctx, key) {
   const value = ctx.config[key];
   if (typeof value !== "string") {
@@ -9433,8 +9444,7 @@ var AgeProvider = class {
   }
   async set(ctx, value) {
     const opts2 = this.resolveOptions(ctx);
-    const identity = await readIdentity(opts2.identityFile);
-    const recipient = await identityToRecipient(identity);
+    const { recipient } = await readIdentityWithRecipient(opts2.identityFile);
     const encrypter = new Encrypter();
     encrypter.addRecipient(recipient);
     const ciphertext = await encrypter.encrypt(value);
@@ -9531,8 +9541,7 @@ var SopsProvider = class {
   }
   async set(ctx, value) {
     const opts2 = this.resolveOptions(ctx);
-    const identity = await readIdentity(opts2.identityFile);
-    const recipient = await identityToRecipient(identity);
+    const { identity, recipient } = await readIdentityWithRecipient(opts2.identityFile);
     let file;
     let dataKey;
     try {

@@ -41,7 +41,7 @@ const AUTH_ERROR_PATTERNS = [
   "Could not automatically determine credentials"
 ];
 
-export class GcpAuthError extends Error {
+class GcpAuthError extends Error {
   constructor(cause?: Error) {
     super(
       "GCP authentication failed. Run `gcloud auth application-default login` to re-authenticate."

@@ -51,11 +51,9 @@ async function run(options: CliOptions): Promise<void> {
     acceptRenamedName: options.acceptRenamedName
   });
 
+  const outPath = resolve(process.cwd(), options.out);
   if (!options.dryRun) {
-    const outPath = resolve(process.cwd(), options.out);
-    if (existsSync(outPath) && !options.force) {
-      throw new Error(`${outPath} already exists. Re-run with --force to overwrite it.`);
-    }
+    assertOutputWritable(outPath, options.force);
   }
 
   await runGcpStep(migration, options);
@@ -63,13 +61,27 @@ async function run(options: CliOptions): Promise<void> {
   const source = emitConfig(migration);
   const report = buildReport(migration);
 
-  if (options.dryRun) {
+  await writeOutput(source, report, outPath, options.dryRun);
+}
+
+function assertOutputWritable(outPath: string, force: boolean | undefined): void {
+  if (existsSync(outPath) && !force) {
+    throw new Error(`${outPath} already exists. Re-run with --force to overwrite it.`);
+  }
+}
+
+async function writeOutput(
+  source: string,
+  report: string,
+  outPath: string,
+  dryRun: boolean | undefined
+): Promise<void> {
+  if (dryRun) {
     process.stdout.write(source);
     process.stderr.write(report);
     return;
   }
 
-  const outPath = resolve(process.cwd(), options.out);
   await writeFile(outPath, source, "utf-8");
   process.stderr.write(report);
   process.stderr.write(`Wrote ${outPath}\n`);
@@ -87,6 +99,13 @@ async function runGcpStep(migration: NormalizedMigration, options: CliOptions): 
     deleteLegacy: options.deleteLegacyGcp
   });
 
+  reportGcpResult(result);
+}
+
+function reportGcpResult(result: {
+  rows: Parameters<typeof formatGcpRows>[0];
+  hadError: boolean;
+}): void {
   const formatted = formatGcpRows(result.rows);
   if (formatted.length > 0) {
     process.stderr.write(`${formatted}\n`);

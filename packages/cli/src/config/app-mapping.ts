@@ -34,9 +34,7 @@ export function resolveTemplate(
   return { value, missing };
 }
 
-export function parseAppMapping(content: string): AppMapping[] {
-  const mappings: AppMapping[] = [];
-
+export function* iterDotEnvEntries(content: string): Generator<{ key: string; value: string }> {
   for (const raw of content.split("\n")) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
@@ -44,10 +42,19 @@ export function parseAppMapping(content: string): AppMapping[] {
     const eqIndex = line.indexOf("=");
     if (eqIndex === -1) continue;
 
-    const envVar = line.slice(0, eqIndex).trim();
+    const key = line.slice(0, eqIndex).trim();
     const value = line.slice(eqIndex + 1).trim();
+    if (!key) continue;
 
-    if (!envVar || !value) continue;
+    yield { key, value };
+  }
+}
+
+export function parseAppMapping(content: string): AppMapping[] {
+  const mappings: AppMapping[] = [];
+
+  for (const { key: envVar, value } of iterDotEnvEntries(content)) {
+    if (!value) continue;
 
     if (TEMPLATE_RE.test(value)) {
       TEMPLATE_RE.lastIndex = 0;

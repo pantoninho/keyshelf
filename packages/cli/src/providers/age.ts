@@ -2,7 +2,12 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
 import type { Provider, ProviderContext } from "./types.js";
-import { readIdentity, requireStringConfig, resolvePath } from "./_paths.js";
+import {
+  readIdentity,
+  readIdentityWithRecipient,
+  requireStringConfig,
+  resolvePath
+} from "./_paths.js";
 
 export interface AgeProviderOptions {
   identityFile: string;
@@ -51,8 +56,7 @@ export class AgeProvider implements Provider {
 
   async set(ctx: ProviderContext, value: string): Promise<void> {
     const opts = this.resolveOptions(ctx);
-    const identity = await readIdentity(opts.identityFile);
-    const recipient = await identityToRecipient(identity);
+    const { recipient } = await readIdentityWithRecipient(opts.identityFile);
 
     const encrypter = new Encrypter();
     encrypter.addRecipient(recipient);
