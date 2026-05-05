@@ -3023,6 +3023,9 @@ var KEYSHELF_SCHEMA = jsYaml.DEFAULT_SCHEMA.extend([
   ...ALL_TAGS.map(makeBareTag),
   ...ALL_TAGS.map(makeMappingTag)
 ]);
+function safeYamlLoad(content) {
+  return jsYaml.load(content, { schema: KEYSHELF_SCHEMA });
+}
 function isTaggedValue(value) {
   return typeof value === "object" && value !== null && "tag" in value && "options" in value && typeof value.tag === "string";
 }
@@ -3041,7 +3044,7 @@ async function loadYamlConfig(schemaPath) {
   return buildConfig(schema2, envs);
 }
 function parseSchema(content) {
-  const raw = jsYaml.load(content, { schema: KEYSHELF_SCHEMA });
+  const raw = safeYamlLoad(content);
   if (!isPlainObject(raw)) {
     throw new Error('keyshelf.yaml must contain a "keys:" block defining your keys');
   }
@@ -3091,7 +3094,7 @@ function parseEnvFile(name, content) {
   };
 }
 function parseEnvDoc(name, content) {
-  const raw = jsYaml.load(content, { schema: KEYSHELF_SCHEMA });
+  const raw = safeYamlLoad(content);
   if (raw == null) return {};
   if (!isPlainObject(raw)) {
     throw new Error(`${ENV_DIR}/${name}.yaml must be a mapping`);

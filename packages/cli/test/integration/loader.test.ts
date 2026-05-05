@@ -135,7 +135,7 @@ describe("config loader", () => {
 
       const appDir = join(root, "apps", "api");
       await mkdir(appDir, { recursive: true });
-      await writeFile(appDir + "/.env.keyshelf", "DB_HOST=db/host\nLOG_LEVEL=log/level\n");
+      await writeFile(join(appDir, ".env.keyshelf"), "DB_HOST=db/host\nLOG_LEVEL=log/level\n");
 
       const loaded = await loadConfig(appDir);
       expect(loaded.rootDir).toBe(root);

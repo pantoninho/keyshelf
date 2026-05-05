@@ -69,10 +69,17 @@ function makeBareTag(name: string): yaml.Type {
   });
 }
 
+// js-yaml v4: `load` IS the safe loader (the unsafe path was removed). We
+// extend DEFAULT_SCHEMA only with our own keyshelf tags, so no `!!js/*`
+// constructors are reachable from user content.
 const KEYSHELF_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
   ...ALL_TAGS.map(makeBareTag),
   ...ALL_TAGS.map(makeMappingTag)
 ]);
+
+function safeYamlLoad(content: string): unknown {
+  return yaml.load(content, { schema: KEYSHELF_SCHEMA });
+}
 
 function isTaggedValue(value: unknown): value is TaggedValue {
   return (
@@ -103,7 +110,7 @@ export async function loadYamlConfig(schemaPath: string): Promise<KeyshelfConfig
 }
 
 function parseSchema(content: string): ParsedSchema {
-  const raw = yaml.load(content, { schema: KEYSHELF_SCHEMA });
+  const raw = safeYamlLoad(content);
   if (!isPlainObject(raw)) {
     throw new Error('keyshelf.yaml must contain a "keys:" block defining your keys');
   }
@@ -160,7 +167,7 @@ function parseEnvFile(name: string, content: string): EnvFile {
 }
 
 function parseEnvDoc(name: string, content: string): Record<string, unknown> {
-  const raw = yaml.load(content, { schema: KEYSHELF_SCHEMA });
+  const raw = safeYamlLoad(content);
   if (raw == null) return {};
   if (!isPlainObject(raw)) {
     throw new Error(`${ENV_DIR}/${name}.yaml must be a mapping`);
