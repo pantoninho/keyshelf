@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { appendFileSync, existsSync } from 'fs';
 import { randomBytes as randomBytes$1, createDecipheriv, createCipheriv, createHmac } from 'crypto';
-import { readFile, mkdir, writeFile } from 'fs/promises';
+import { readFile, mkdir, writeFile, readdir } from 'fs/promises';
 import { dirname, resolve, join, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 import { performance } from 'perf_hooks';
@@ -798,6 +798,9 @@ var PlaintextProvider = class {
     return typeof ctx.config.value === "string";
   }
   async set() {
+  }
+  async list() {
+    return [];
   }
 };
 
@@ -9403,7 +9406,8 @@ async function readIdentityWithRecipient(identityFile) {
 function requireStringConfig(providerName, ctx, key) {
   const value = ctx.config[key];
   if (typeof value !== "string") {
-    throw new Error(`${providerName} provider requires "${key}" config for "${ctx.keyPath}"`);
+    const where = "keyPath" in ctx ? `for "${ctx.keyPath}"` : "for list";
+    throw new Error(`${providerName} provider requires "${key}" config ${where}`);
   }
   return value;
 }
@@ -9451,6 +9455,20 @@ var AgeProvider = class {
     const filePath = secretFilePath(opts2.secretsDir, ctx.keyPath);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, ciphertext);
+  }
+  async list(ctx) {
+    const secretsDir = resolvePath(requireStringConfig("age", ctx, "secretsDir"), ctx.rootDir);
+    let entries;
+    try {
+      entries = await readdir(secretsDir, { withFileTypes: true });
+    } catch (err) {
+      if (err.code === "ENOENT") return [];
+      throw err;
+    }
+    return entries.filter((e) => e.isFile() && e.name.endsWith(".age")).map((e) => {
+      const stem = e.name.slice(0, -".age".length);
+      return { keyPath: stem.replace(/_/g, "/"), envName: void 0 };
+    });
   }
 };
 function generateDataKey() {
@@ -9563,6 +9581,21 @@ var SopsProvider = class {
     file.entries[ctx.keyPath] = encryptValue(dataKey, value);
     file.sops.mac = computeMac(dataKey, file.entries);
     await writeSecretsFile(opts2.secretsFile, file);
+  }
+  async list(ctx) {
+    const identityFile = resolvePath(requireStringConfig("sops", ctx, "identityFile"), ctx.rootDir);
+    const secretsFile = resolvePath(requireStringConfig("sops", ctx, "secretsFile"), ctx.rootDir);
+    let file;
+    try {
+      file = await readSecretsFile(secretsFile);
+    } catch (err) {
+      if (err.code === "ENOENT") return [];
+      throw err;
+    }
+    const identity = await readIdentity(identityFile);
+    const dataKey = await decryptDataKey(file.sops.dataKey, identity);
+    verifyMac(dataKey, file);
+    return Object.keys(file.entries).map((keyPath) => ({ keyPath, envName: void 0 }));
   }
 };
 
