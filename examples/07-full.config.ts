@@ -1,4 +1,4 @@
-import { defineConfig, config, secret, age, gcp, sops } from "keyshelf/config";
+import { defineConfig, config, secret, age, aws, gcp, sops } from "keyshelf/config";
 
 export default defineConfig({
   name: "example-07-full",
@@ -45,6 +45,7 @@ export default defineConfig({
         group: "app",
         optional: true,
         values: {
+          staging: aws({ region: "eu-west-1" }),
           production: gcp({ project: "myproj" })
         }
       })

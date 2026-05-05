@@ -43,6 +43,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1043.0",
     "@google-cloud/secret-manager": "^6.1.1",
     "age-encryption": "^0.3.0",
     "commander": "^14.0.3",

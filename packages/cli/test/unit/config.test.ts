@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   age,
+  aws,
   config,
   defineConfig,
   gcp,
   normalizeConfig,
+  providerRefSchema,
   secret,
   validateAppMappingReferences
 } from "../../src/config/index.js";
@@ -365,5 +367,69 @@ describe("config factories and validation", () => {
         normalized.keys
       )
     ).toThrow('DB_PASSWORD: references unknown key "db/password"');
+  });
+});
+
+describe("aws() factory", () => {
+  it("returns a provider ref with empty options when called bare", () => {
+    expect(aws()).toEqual({ __kind: "provider:aws", name: "aws", options: {} });
+  });
+
+  it("preserves region and kmsKeyId when provided", () => {
+    const ref = aws({ region: "eu-west-1", kmsKeyId: "alias/keyshelf" });
+    expect(ref.options).toEqual({ region: "eu-west-1", kmsKeyId: "alias/keyshelf" });
+  });
+
+  it("normalizes through the full config pipeline", () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["prod"],
+        keys: {
+          token: secret({ value: aws({ region: "us-east-1" }) })
+        }
+      })
+    );
+    const token = normalized.keys.find((k) => k.path === "token");
+    expect(token).toMatchObject({
+      kind: "secret",
+      value: { __kind: "provider:aws", name: "aws", options: { region: "us-east-1" } }
+    });
+  });
+});
+
+describe("aws provider schema", () => {
+  it("accepts a ref with no options (relies on SDK region chain)", () => {
+    expect(() => providerRefSchema.parse(aws())).not.toThrow();
+  });
+
+  it("accepts a ref with explicit region", () => {
+    expect(() => providerRefSchema.parse(aws({ region: "eu-west-2" }))).not.toThrow();
+  });
+
+  it("accepts a ref with kmsKeyId", () => {
+    expect(() =>
+      providerRefSchema.parse(aws({ region: "eu-west-2", kmsKeyId: "alias/x" }))
+    ).not.toThrow();
+  });
+
+  it("rejects unknown option keys (strict mode)", () => {
+    expect(() =>
+      providerRefSchema.parse({
+        __kind: "provider:aws",
+        name: "aws",
+        options: { region: "eu-west-1", bogus: true }
+      })
+    ).toThrow();
+  });
+
+  it("rejects empty-string region", () => {
+    expect(() =>
+      providerRefSchema.parse({
+        __kind: "provider:aws",
+        name: "aws",
+        options: { region: "" }
+      })
+    ).toThrow();
   });
 });

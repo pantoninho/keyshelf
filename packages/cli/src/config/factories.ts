@@ -1,5 +1,6 @@
 import type {
   AgeProviderOptions,
+  AwsProviderOptions,
   BuiltinProviderRef,
   ConfigRecordInput,
   DefineConfigInput,
@@ -41,6 +42,12 @@ export function age<const Options extends AgeProviderOptions>(
   options: Options
 ): ProviderRef<"age", Options> {
   return { __kind: "provider:age", name: "age", options };
+}
+
+export function aws<const Options extends AwsProviderOptions = AwsProviderOptions>(
+  options: Options = {} as Options
+): ProviderRef<"aws", Options> {
+  return { __kind: "provider:aws", name: "aws", options };
 }
 
 export function gcp<const Options extends GcpProviderOptions>(

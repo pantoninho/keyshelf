@@ -100,6 +100,45 @@ describe("yaml-loader", () => {
     );
   });
 
+  it("parses bare !aws (relies on SDK region chain)", async () => {
+    const root = await writeProject({
+      "keyshelf.yaml": ["name: app", "keys:", "  api:", "    token: !secret"].join("\n"),
+      ".keyshelf/prod.yaml": ["keys:", "  api:", "    token: !aws"].join("\n")
+    });
+
+    const config = normalizeConfig(await loadYamlConfig(join(root, "keyshelf.yaml")));
+    const token = config.keys.find((k) => k.path === "api/token");
+    expect(token).toMatchObject({
+      kind: "secret",
+      values: { prod: { __kind: "provider:aws", name: "aws", options: {} } }
+    });
+  });
+
+  it("parses !aws with region and kmsKeyId mappings", async () => {
+    const root = await writeProject({
+      "keyshelf.yaml": ["name: app", "keys:", "  api:", "    token: !secret"].join("\n"),
+      ".keyshelf/prod.yaml": [
+        "keys:",
+        "  api:",
+        "    token: !aws",
+        "      region: eu-west-1",
+        "      kmsKeyId: alias/keyshelf"
+      ].join("\n")
+    });
+
+    const config = normalizeConfig(await loadYamlConfig(join(root, "keyshelf.yaml")));
+    const token = config.keys.find((k) => k.path === "api/token");
+    expect(token).toMatchObject({
+      kind: "secret",
+      values: {
+        prod: {
+          __kind: "provider:aws",
+          options: { region: "eu-west-1", kmsKeyId: "alias/keyshelf" }
+        }
+      }
+    });
+  });
+
   it("requires a top-level name", async () => {
     const root = await writeProject({
       "keyshelf.yaml": "keys: { foo: bar }\n",

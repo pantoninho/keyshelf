@@ -24,9 +24,9 @@ keys:
 
 Don't change anything else yet.
 
-## 2a. No GCP bindings — you're done
+## 2a. No remote-store bindings — you're done
 
-If none of your secrets use `!gcp`, adding `name:` is the entire migration. The v5 CLI accepts your existing YAML as-is. Verify:
+If none of your secrets use `!gcp` or `!aws`, adding `name:` is the entire migration. The v5 CLI accepts your existing YAML as-is. Verify:
 
 ```sh
 keyshelf ls --env <env>

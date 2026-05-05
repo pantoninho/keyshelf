@@ -213,6 +213,35 @@ the active `envName`, and the key path:
 `/` is not a valid character in GCP secret ids, so path separators are
 mangled to `__`.
 
+### `aws(options)`
+
+```ts
+aws({
+  region?: string;        // optional; falls back to the AWS SDK region chain
+                          // (AWS_REGION → AWS_DEFAULT_REGION → ~/.aws/config
+                          // profile). Set explicitly to override that chain.
+  kmsKeyId?: string;      // optional; passed to CreateSecret as KmsKeyId for
+                          // customer-managed KMS encryption. Inherited from
+                          // the secret on subsequent updates.
+})
+```
+
+The AWS Secrets Manager secret name is derived from the keyshelf config
+`name`, the active `envName`, and the key path, separated by `/` (the
+conventional hierarchy character in Secrets Manager):
+
+- env-scoped: `keyshelf/<name>/<env>/<keyPath>`
+- envless: `keyshelf/<name>/<keyPath>`
+
+The bare form `aws()` is valid and works whenever the SDK can resolve a
+region from the environment or active profile. Credentials follow the AWS
+SDK default credential chain (env vars → shared credentials file → SSO →
+IAM role).
+
+Reconcile (`keyshelf up`) force-deletes secrets without the 30-day
+recovery window so that orphan removal is genuinely terminal — re-applying
+will not see the deleted entry on its next `list` call.
+
 ### `sops(options)`
 
 ```ts

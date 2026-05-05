@@ -1,4 +1,4 @@
-export { defineConfig, config, secret, age, gcp, sops } from "./factories.js";
+export { defineConfig, config, secret, age, aws, gcp, sops } from "./factories.js";
 export { findRootDir, loadConfig, type LoadedConfig, type LoadConfigOptions } from "./loader.js";
 export {
   isProviderRef,
@@ -9,6 +9,7 @@ export {
 } from "./schema.js";
 export type {
   AgeProviderOptions,
+  AwsProviderOptions,
   BuiltinProviderRef,
   ConfigBinding,
   ConfigRecord,
