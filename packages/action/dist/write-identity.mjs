@@ -13,16 +13,22 @@ var TEMPLATE_RE = /\$\{([^}]+)\}/g;
 function isTemplateMapping(m) {
   return "template" in m;
 }
-function parseAppMapping(content) {
-  const mappings = [];
+function* iterDotEnvEntries(content) {
   for (const raw of content.split("\n")) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
     const eqIndex = line.indexOf("=");
     if (eqIndex === -1) continue;
-    const envVar = line.slice(0, eqIndex).trim();
+    const key = line.slice(0, eqIndex).trim();
     const value = line.slice(eqIndex + 1).trim();
-    if (!envVar || !value) continue;
+    if (!key) continue;
+    yield { key, value };
+  }
+}
+function parseAppMapping(content) {
+  const mappings = [];
+  for (const { key: envVar, value } of iterDotEnvEntries(content)) {
+    if (!value) continue;
     if (TEMPLATE_RE.test(value)) {
       TEMPLATE_RE.lastIndex = 0;
       const keyPaths = [...value.matchAll(TEMPLATE_RE)].map((m) => m[1].trim());
