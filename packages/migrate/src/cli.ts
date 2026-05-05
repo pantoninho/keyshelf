@@ -4,7 +4,12 @@ import { resolve } from "node:path";
 import { Command } from "commander";
 import { emitConfig } from "./emit.js";
 import { loadV4Project } from "./load-v4.js";
-import { normalizeProject, type NormalizedMigration, type ProviderRef } from "./normalize.js";
+import {
+  normalizeProject,
+  type NormalizedMigration,
+  type NormalizedRecord,
+  type ProviderRef
+} from "./normalize.js";
 import { buildReport } from "./report.js";
 import { formatGcpRows, hasGcpBindings, migrateGcpSecrets } from "./migrate-gcp.js";
 
@@ -59,10 +64,6 @@ await program.parseAsync(process.argv);
 async function runYamlToTypescript(options: YamlToTsOptions): Promise<void> {
   const migration = await loadMigration();
   const outPath = resolve(process.cwd(), options.out);
-  if (!options.dryRun && existsSync(outPath) && !options.force) {
-    throw new Error(`${outPath} already exists. Re-run with --force to overwrite it.`);
-  }
-
   const source = emitConfig(migration);
   const report = buildReport(migration);
 
@@ -72,9 +73,16 @@ async function runYamlToTypescript(options: YamlToTsOptions): Promise<void> {
     return;
   }
 
+  assertWritable(outPath, options.force === true);
   await writeFile(outPath, source, "utf-8");
   process.stderr.write(report);
   process.stderr.write(`Wrote ${outPath}\n`);
+}
+
+function assertWritable(outPath: string, force: boolean): void {
+  if (!force && existsSync(outPath)) {
+    throw new Error(`${outPath} already exists. Re-run with --force to overwrite it.`);
+  }
 }
 
 async function runProjectName(options: ProjectNameOptions): Promise<void> {
@@ -139,15 +147,15 @@ async function runGcpMigration(
 }
 
 function collectProviders(migration: NormalizedMigration): Set<ProviderRef["name"]> {
-  const providers = new Set<ProviderRef["name"]>();
-  for (const record of migration.keys) {
-    if (record.kind !== "secret") continue;
-    if (record.default !== undefined) providers.add(record.default.name);
-    for (const value of Object.values(record.values ?? {})) {
-      providers.add(value.name);
-    }
-  }
-  return providers;
+  return new Set(migration.keys.flatMap(providerNamesOf));
+}
+
+function providerNamesOf(record: NormalizedRecord): ProviderRef["name"][] {
+  if (record.kind !== "secret") return [];
+  const bindings = [record.default, ...Object.values(record.values ?? {})];
+  return bindings
+    .filter((binding): binding is ProviderRef => binding !== undefined)
+    .map((binding) => binding.name);
 }
 
 async function loadMigration(): Promise<NormalizedMigration> {
