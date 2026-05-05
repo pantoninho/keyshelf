@@ -290,7 +290,11 @@ function resolveShapeMatches(
     const matches = findShapeMatches(pools, desiredEnvs);
     if (matches.length === 1) {
       const candidate = matches[0];
-      const orphanEnvs = pools.pureOrphans.get(candidate)!;
+      const orphanEnvs = pools.pureOrphans.get(candidate);
+      // pureOrphans was populated for every entry in `matches` by
+      // findShapeMatches, so the lookup is guaranteed to hit. The guard
+      // exists to satisfy strict-null without a non-null assertion.
+      if (orphanEnvs === undefined) continue;
       commitRename(
         state,
         pools,

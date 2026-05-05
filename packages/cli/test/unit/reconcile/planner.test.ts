@@ -37,7 +37,8 @@ function gcpListing(
 function actionsByKind(actions: Action[]): Record<string, Action[]> {
   const out: Record<string, Action[]> = {};
   for (const a of actions) {
-    (out[a.kind] ??= []).push(a);
+    if (out[a.kind] === undefined) out[a.kind] = [];
+    out[a.kind].push(a);
   }
   return out;
 }
