@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/pantoninho/keyshelf/compare/migrate-v1.0.0...migrate-v1.1.0) (2026-05-05)
+
+
+### Features
+
+* detect v4 config and migrate gcp ids before emitting v5 config ([#115](https://github.com/pantoninho/keyshelf/issues/115)) ([d84ab4d](https://github.com/pantoninho/keyshelf/commit/d84ab4dec61edb0fc876e0ed3782a95554abb0cd))
+
 ## [1.0.0](https://github.com/pantoninho/keyshelf/compare/migrate-v0.1.0...migrate-v1.0.0) (2026-05-03)
 
 
