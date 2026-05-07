@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.1.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.1.0...keyshelf-v5.1.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* **cli:** hide value input in interactive keyshelf set ([#133](https://github.com/pantoninho/keyshelf/issues/133)) ([1caa064](https://github.com/pantoninho/keyshelf/commit/1caa064b4ac58355e4b32c2ff3d8dbb58b239857))
+
 ## [5.1.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.0.0...keyshelf-v5.1.0) (2026-05-05)
 
 
