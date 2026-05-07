@@ -1,5 +1,4 @@
 import { Command } from "commander";
-import { createInterface } from "node:readline";
 import { loadConfig } from "../config/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { findStaleRenameSource, pickProviderRef, writeSecret } from "./secret-binding.js";
@@ -78,16 +77,41 @@ function readStdinPipe(): Promise<string> {
 }
 
 function readHiddenInput(prompt: string): Promise<string> {
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stderr
-  });
-
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const stdin = process.stdin;
+    const wasRaw = stdin.isRaw;
     process.stderr.write(prompt);
-    rl.on("line", (line) => {
-      rl.close();
-      resolve(line);
-    });
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding("utf-8");
+
+    let buffer = "";
+    const onData = (chunk: string): void => {
+      for (const ch of chunk) {
+        const code = ch.charCodeAt(0);
+        if (ch === "\r" || ch === "\n") {
+          stdin.removeListener("data", onData);
+          stdin.setRawMode(wasRaw);
+          stdin.pause();
+          process.stderr.write("\n");
+          resolve(buffer);
+          return;
+        }
+        if (code === 0x03) {
+          stdin.removeListener("data", onData);
+          stdin.setRawMode(wasRaw);
+          stdin.pause();
+          process.stderr.write("\n");
+          reject(new Error("aborted"));
+          return;
+        }
+        if (code === 0x7f || code === 0x08) {
+          buffer = buffer.slice(0, -1);
+          continue;
+        }
+        buffer += ch;
+      }
+    };
+    stdin.on("data", onData);
   });
 }
