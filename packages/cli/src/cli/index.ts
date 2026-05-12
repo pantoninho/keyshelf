@@ -4,6 +4,7 @@ import { lsCommand } from "./ls.js";
 import { setCommand } from "./set.js";
 import { importCommand } from "./import.js";
 import { upCommand } from "./up.js";
+import { cpCommand, cpClearCommand } from "./cp.js";
 
 const CLI_VERSION = "5.0.0";
 
@@ -17,6 +18,8 @@ export function createProgram(): Command {
   program.addCommand(setCommand);
   program.addCommand(importCommand);
   program.addCommand(upCommand);
+  program.addCommand(cpCommand);
+  program.addCommand(cpClearCommand, { hidden: true });
 
   return program;
 }
