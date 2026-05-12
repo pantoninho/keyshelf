@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { loadConfig } from "../config/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { findStaleRenameSource, pickProviderRef, writeSecret } from "./secret-binding.js";
+import { findRecordOrExit } from "./options.js";
 
 interface SetOptions {
   env?: string;
@@ -21,12 +22,7 @@ export const setCommand = new Command("set")
   .action(async (keyPath: string, opts: SetOptions) => {
     const appDir = process.cwd();
     const loaded = await loadConfig(appDir);
-    const record = loaded.config.keys.find((entry) => entry.path === keyPath);
-
-    if (record === undefined) {
-      console.error(`error: key "${keyPath}" is not defined in keyshelf.config.ts`);
-      process.exit(1);
-    }
+    const record = findRecordOrExit(loaded.config, keyPath);
 
     if (record.kind === "config") {
       console.error(
