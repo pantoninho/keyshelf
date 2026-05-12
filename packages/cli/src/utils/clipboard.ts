@@ -66,37 +66,35 @@ export async function readClipboard(): Promise<string> {
 }
 
 function runWithStdin(tool: ClipboardTool, input: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(tool.command, tool.args, { stdio: ["pipe", "ignore", "pipe"] });
-    let stderr = "";
-    child.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`${tool.command} exited with code ${code}${stderr ? `: ${stderr}` : ""}`));
-    });
-    child.stdin?.end(input);
-  });
+  return runTool(tool, "ignore", (child) => child.stdin?.end(input)).then(() => undefined);
 }
 
 function runCaptureStdout(tool: ClipboardTool): Promise<string> {
+  return runTool(tool, "pipe");
+}
+
+function runTool(
+  tool: ClipboardTool,
+  stdout: "pipe" | "ignore",
+  onSpawn?: (child: ReturnType<typeof spawn>) => void
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(tool.command, tool.args, { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
+    const child = spawn(tool.command, tool.args, {
+      stdio: [stdout === "pipe" ? "ignore" : "pipe", stdout, "pipe"]
+    });
+    let out = "";
+    let err = "";
+    child.stdout?.on("data", (chunk) => (out += chunk.toString()));
+    child.stderr?.on("data", (chunk) => (err += chunk.toString()));
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {
-        resolve(stdout);
+        resolve(out);
         return;
       }
-      reject(new Error(`${tool.command} exited with code ${code}${stderr ? `: ${stderr}` : ""}`));
+      reject(new Error(`${tool.command} exited with code ${code}${err ? `: ${err}` : ""}`));
     });
+    onSpawn?.(child);
   });
 }
 

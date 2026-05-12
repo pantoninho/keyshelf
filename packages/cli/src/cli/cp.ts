@@ -5,6 +5,7 @@ import { loadConfig } from "../config/index.js";
 import { resolveWithStatus } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { assertValidationPasses } from "./validation.js";
+import { findRecordOrExit } from "./options.js";
 import { readClipboard, writeClipboard } from "../utils/clipboard.js";
 import type { KeyResolutionStatus } from "../resolver/types.js";
 
@@ -29,11 +30,7 @@ export const cpCommand = new Command("cp")
     const clearSeconds = parseClearSeconds(opts);
 
     const loaded = await loadConfig(process.cwd());
-    const record = loaded.config.keys.find((entry) => entry.path === keyPath);
-    if (record === undefined) {
-      console.error(`error: key "${keyPath}" is not defined in keyshelf.config.ts`);
-      process.exit(1);
-    }
+    findRecordOrExit(loaded.config, keyPath);
 
     const resolveOpts = {
       config: loaded.config,
