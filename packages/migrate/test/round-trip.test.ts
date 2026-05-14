@@ -18,7 +18,7 @@ describe("round-trip through the keyshelf loader", () => {
     roots.length = 0;
   });
 
-  it.each(["basic", "multi-env", "optional", "nested", "name-rename"])(
+  it.each(["basic", "multi-env", "optional", "nested", "name-rename", "plain-overrides"])(
     "loads emitted %s config",
     async (fixture) => {
       const migration = await loadFixture(fixture);

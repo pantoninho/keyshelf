@@ -11,13 +11,13 @@ If neither applies, you can stop reading here. Run `keyshelf ls --env <env>` aga
 
 ## What changed at runtime
 
-| v4                                                     | v5                                                                                                |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `keyshelf.yaml` + `.keyshelf/<env>.yaml`               | Same files still work, **or** a single `keyshelf.config.ts`                                       |
-| `default-provider:` block per env file                 | YAML form unchanged; TS form binds providers per `secret(...)` record                             |
-| `!secret`, `!age`, `!aws`, `!gcp`, `!sops` YAML tags   | Still valid in YAML; TS uses `secret(...)`, `age(...)`, `aws(...)`, `gcp(...)`, `sops(...)` calls |
-| Plaintext values in env files override schema defaults | YAML form unchanged; TS form expresses the same thing as `values: { <env>: ... }`                 |
-| `name:` introduced in v4.6 to namespace GCP secrets    | `name:` is required (`/^[A-Za-z0-9_-]+$/`) — same rule the v4 loader applied                      |
+| v4                                                     | v5                                                                                                                                                  |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keyshelf.yaml` + `.keyshelf/<env>.yaml`               | Same files still work, **or** a single `keyshelf.config.ts`                                                                                         |
+| `default-provider:` block per env file                 | YAML form unchanged; TS form binds providers per `secret(...)` record                                                                               |
+| `!secret`, `!age`, `!aws`, `!gcp`, `!sops` YAML tags   | Still valid in YAML; TS uses `secret(...)`, `age(...)`, `aws(...)`, `gcp(...)`, `sops(...)` calls                                                   |
+| Plaintext values in env files override schema defaults | Plain strings still work for `config` keys; secret keys now require an explicit `!plain "..."` / `plain("...")` tag for inline literals (see below) |
+| `name:` introduced in v4.6 to namespace GCP secrets    | `name:` is required (`/^[A-Za-z0-9_-]+$/`) — same rule the v4 loader applied                                                                        |
 
 ### `keyshelf set`
 
@@ -34,6 +34,35 @@ keyshelf set --env production db/password --value "s3cret"
 ```
 
 If you used `set` to update plaintext config values in v4, edit the YAML file (or `keyshelf.config.ts`) directly in v5.
+
+### Plain-string overrides on `!secret` keys
+
+v4 silently accepted plain-string overrides on secret keys:
+
+```yaml
+# .keyshelf/mirror.yaml — v4-style
+keys:
+  web:
+    client-secret: "" # secretly overrode the !secret with empty plaintext
+```
+
+v5 rejects this at config-load time (`secret keys require a provider tag, got a plain value`) because it erases the type signal. The fix is to tag it explicitly:
+
+```yaml
+keys:
+  web:
+    client-secret: !plain "" # explicit inline literal — visible in review
+```
+
+Or in TypeScript:
+
+```ts
+secret({ values: { mirror: plain("") } });
+```
+
+`plain(...)` is an inline provider — the value lives in the config, not in remote storage. `keyshelf up` ignores it, and `keyshelf set` refuses to write through it (edit the config directly).
+
+The `@keyshelf/migrate` package handles this automatically: plain-string overrides on `!secret` keys are converted to `plain("...")` calls in the emitted v5 config, with a summary line counting the conversions for review.
 
 ### `--env` is optional
 

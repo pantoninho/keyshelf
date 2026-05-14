@@ -87,4 +87,17 @@ describe("normalizeProject", () => {
     const project = await loadV4Project(fixturePath("name-rename"));
     expect(normalizeProject(project)).toMatchObject({ name: "My_Project" });
   });
+
+  it("converts plain-string overrides on !secret keys into plain providers", async () => {
+    const migration = await loadFixture("plain-overrides");
+    expect(migration.keys).toContainEqual({
+      path: "web/client-secret",
+      kind: "secret",
+      optional: false,
+      values: {
+        dev: { name: "plain", options: { value: "dev-stub" } },
+        mirror: { name: "plain", options: { value: "" } }
+      }
+    });
+  });
 });

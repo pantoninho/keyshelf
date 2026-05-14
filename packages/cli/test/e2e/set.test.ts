@@ -130,4 +130,29 @@ describe("keyshelf-next set", () => {
     );
     expect(out).not.toContain("hint:");
   });
+
+  it("refuses to set a plain()-bound key (value is inline in the config)", async () => {
+    await writeKeyshelfConfig(root, [
+      `name: "demo",`,
+      `envs: ["dev"],`,
+      `keys: {`,
+      `  web: {`,
+      `    "client-secret": secret({ value: plain("stub") }),`,
+      `  },`,
+      `},`
+    ]);
+    await writeEnvKeyshelf(root, ["WEB_CLIENT_SECRET=web/client-secret"]);
+    try {
+      execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "x", "web/client-secret"], {
+        cwd: root,
+        encoding: "utf-8",
+        stdio: "pipe"
+      });
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as { stderr: string }).stderr).toContain(
+        "bound to plain(...) — its value lives inline in the config"
+      );
+    }
+  });
 });

@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SecretManagerServiceClient } from "@google-cloud/secret-manager";
-import { age, config, defineConfig, secret, gcp } from "../../src/config/index.js";
+import { age, config, defineConfig, plain, secret, gcp } from "../../src/config/index.js";
 import { normalizeConfig } from "../../src/config/index.js";
+import { loadYamlConfig } from "../../src/config/yaml-loader.js";
 import { resolve as resolveResult } from "../../src/resolver/index.js";
 import { ProviderRegistry } from "../../src/providers/registry.js";
 import { AgeProvider, generateIdentity } from "../../src/providers/age.js";
 import { GcpSmProvider } from "../../src/providers/gcp-sm.js";
+import { PlaintextProvider } from "../../src/providers/plaintext.js";
 
 async function ageFixture() {
   const dir = await mkdtemp(join(tmpdir(), "keyshelf-age-"));
@@ -140,5 +142,69 @@ describe("resolver → providers", () => {
     expect(accessSecretVersion).toHaveBeenCalledWith({
       name: "projects/my-gcp-proj/secrets/keyshelf__myapp__github__token/versions/latest"
     });
+  });
+
+  it("resolves a TS plain() secret through the registered plain provider", async () => {
+    const registry = new ProviderRegistry();
+    registry.register(new PlaintextProvider());
+
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "myapp",
+        envs: ["dev", "mirror"],
+        keys: {
+          web: {
+            "client-secret": secret({
+              values: {
+                dev: plain("dev-stub"),
+                mirror: plain("")
+              }
+            })
+          }
+        }
+      })
+    );
+
+    const dev = await resolveResult({
+      config: normalized,
+      rootDir: "/repo",
+      envName: "dev",
+      registry
+    });
+    const mirror = await resolveResult({
+      config: normalized,
+      rootDir: "/repo",
+      envName: "mirror",
+      registry
+    });
+
+    expect(dev).toEqual([{ path: "web/client-secret", value: "dev-stub" }]);
+    expect(mirror).toEqual([{ path: "web/client-secret", value: "" }]);
+  });
+
+  it("resolves a YAML !plain secret through the registered plain provider", async () => {
+    const root = await mkdtemp(join(tmpdir(), "keyshelf-plain-yaml-"));
+    await mkdir(join(root, ".keyshelf"));
+    await writeFile(
+      join(root, "keyshelf.yaml"),
+      ["name: app", "keys:", "  web:", "    client-secret: !secret"].join("\n")
+    );
+    await writeFile(
+      join(root, ".keyshelf/dev.yaml"),
+      ["keys:", "  web:", '    client-secret: !plain "yaml-stub"'].join("\n")
+    );
+
+    const registry = new ProviderRegistry();
+    registry.register(new PlaintextProvider());
+
+    const normalized = normalizeConfig(await loadYamlConfig(join(root, "keyshelf.yaml")));
+    const resolved = await resolveResult({
+      config: normalized,
+      rootDir: root,
+      envName: "dev",
+      registry
+    });
+
+    expect(resolved).toEqual([{ path: "web/client-secret", value: "yaml-stub" }]);
   });
 });

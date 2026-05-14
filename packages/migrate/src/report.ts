@@ -20,6 +20,12 @@ export function buildReport(migration: NormalizedMigration): string {
   lines.push("Review:");
   lines.push("  - groups: [] is a placeholder; add v5 groups manually if you use group filters.");
   lines.push("  - Secret values are not copied by this config migration.");
+  const plainCount = countPlainConversions(migration.keys);
+  if (plainCount > 0) {
+    lines.push(
+      `  - ${plainCount} plain-string secret override(s) were converted to plain("..."). Review for sensitive material.`
+    );
+  }
   lines.push(mappingReview(migration.appMapping));
 
   return `${lines.join("\n")}\n`;
@@ -32,10 +38,23 @@ function buildRebindCommands(records: NormalizedRecord[], envs: string[]): strin
     for (const env of envs) {
       const provider = record.values?.[env] ?? record.default;
       if (provider === undefined) continue;
+      if (provider.name === "plain") continue;
       commands.push(commandFor(record.path, env, provider));
     }
   }
   return commands;
+}
+
+function countPlainConversions(records: NormalizedRecord[]): number {
+  let count = 0;
+  for (const record of records) {
+    if (record.kind !== "secret") continue;
+    if (record.default?.name === "plain") count += 1;
+    for (const value of Object.values(record.values ?? {})) {
+      if (value.name === "plain") count += 1;
+    }
+  }
+  return count;
 }
 
 function commandFor(path: string, env: string, provider: ProviderRef): string {

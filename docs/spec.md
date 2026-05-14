@@ -165,8 +165,8 @@ Same `value` / `default` / `values` semantics as `config`, with the
 following differences:
 
 - All bindings (`value`, `default`, each entry in `values`) **must** be a
-  `ProviderRef` — the result of a provider factory call. Plaintext secrets are
-  not supported.
+  `ProviderRef` — the result of a provider factory call. Use `plain("...")`
+  for inline literal values; plain untagged strings are not accepted.
 - A `secret` must have _some_ binding that can resolve in the active env.
   Concretely: at least one of `value`/`default`, or a matching entry in
   `values`. The validator enforces that `secret(...)` declarations are not
@@ -250,6 +250,29 @@ sops({
   secretsFile: string;    // path to the encrypted JSON document
 })
 ```
+
+### `plain(value)`
+
+```ts
+plain("literal-value"); // TS — value is stored inline in the config
+```
+
+```yaml
+api:
+  token: !plain "literal-value" # YAML — same shape as a provider tag
+```
+
+`plain` is an inline provider — the value lives in the config (TS file or env
+YAML), not in remote storage. Intended for dev stubs, CI envs where a secret
+doesn't apply, or optional secrets that are deliberately blank.
+
+Implications:
+
+- The value is checked into your repo as-is. Don't use `plain(...)` for real
+  secrets — that's what the other providers exist for.
+- `keyshelf set` will not write to a `plain`-bound key; edit the config (or env
+  YAML override) directly.
+- `keyshelf up` ignores `plain` bindings — they have no storage to reconcile.
 
 Phase 4 ports these providers to the new `ProviderContext`; option shapes
 above are pinned.
@@ -481,6 +504,7 @@ skip the var."
 - TS-format `.env.keyshelf`. Stay with the v4 format.
 - Variation axes beyond env (region, tenant, …). The `values` naming was
   chosen to leave the door open, but no implementation work happens in v5.
-- Plaintext secrets. `secret(...)` always requires a `ProviderRef`. If you
-  truly want a plaintext "secret-shaped" value, use `config(...)` and accept
-  that it will be treated as non-sensitive by the tooling.
+- Untagged plaintext for secrets. `secret(...)` always requires a `ProviderRef`.
+  Inline literal values are supported via `plain("...")` / `!plain "..."` —
+  the value lives in the config and is treated as non-sensitive by the tooling
+  (no remote storage, no `keyshelf set` write path).

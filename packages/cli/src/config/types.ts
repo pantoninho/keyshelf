@@ -26,11 +26,16 @@ export interface SopsProviderOptions {
   secretsFile: string;
 }
 
+export interface PlainProviderOptions {
+  value: string;
+}
+
 export type BuiltinProviderRef =
   | ProviderRef<"age", AgeProviderOptions>
   | ProviderRef<"aws", AwsProviderOptions>
   | ProviderRef<"gcp", GcpProviderOptions>
-  | ProviderRef<"sops", SopsProviderOptions>;
+  | ProviderRef<"sops", SopsProviderOptions>
+  | ProviderRef<"plain", PlainProviderOptions>;
 
 export interface BaseRecord<GroupName extends string = string> {
   group?: GroupName;

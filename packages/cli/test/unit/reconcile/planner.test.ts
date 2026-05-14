@@ -5,6 +5,7 @@ import {
   defineConfig,
   gcp,
   normalizeConfig,
+  plain,
   secret
 } from "../../../src/config/index.js";
 import { planReconciliation } from "../../../src/reconcile/planner.js";
@@ -350,5 +351,30 @@ describe("planReconciliation", () => {
     );
 
     expect(planReconciliation(cfg, [])).toEqual([]);
+  });
+
+  it("ignores plain() bindings — they have no remote storage to reconcile", () => {
+    const cfg = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev", "mirror"],
+        keys: {
+          token: secret({
+            values: {
+              dev: age(ageOpts),
+              mirror: plain("")
+            }
+          })
+        }
+      })
+    );
+
+    const plan = planReconciliation(cfg, [ageListing([{ keyPath: "token" }])]);
+
+    // Only the age binding shows up; the plain mirror binding is invisible to the planner.
+    // age's storageScope is envless, so envName collapses to undefined.
+    expect(plan).toEqual([
+      { kind: "noop", keyPath: "token", envName: undefined, providerName: "age" }
+    ]);
   });
 });

@@ -15,6 +15,13 @@ export function collectDesiredBindings(config: NormalizedConfig): DesiredBinding
   return collector.bindings;
 }
 
+// `plain` is an inline provider — its value lives in the config, not in remote
+// storage. Reconcile has nothing to plan or apply for it, so it's excluded from
+// both desired-binding collection and provider listings.
+export function isReconcilableProvider(name: string): boolean {
+  return name !== "plain";
+}
+
 export function collectProviderRefs(record: NormalizedRecord): BuiltinProviderRef[] {
   if (record.kind !== "secret") return [];
   const refs: BuiltinProviderRef[] = [];
@@ -47,6 +54,7 @@ class BindingsCollector {
     envless: BuiltinProviderRef,
     perEnv: Record<string, BuiltinProviderRef>
   ): void {
+    if (!isReconcilableProvider(envless.name)) return;
     const overridden = new Map<string, true>();
     for (const env of Object.keys(perEnv)) overridden.set(env, true);
     for (const env of this.envs) {
@@ -62,6 +70,7 @@ class BindingsCollector {
 
   private absorbPerEnv(keyPath: string, perEnv: Record<string, BuiltinProviderRef>): void {
     for (const [envName, ref] of Object.entries(perEnv)) {
+      if (!isReconcilableProvider(ref.name)) continue;
       this.bindings.push({
         keyPath,
         envName,

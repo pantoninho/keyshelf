@@ -40,6 +40,13 @@ export const setCommand = new Command("set")
       process.exit(1);
     }
 
+    if (providerRef.name === "plain") {
+      console.error(
+        `error: "${keyPath}" is bound to plain(...) — its value lives inline in the config. Edit ${loaded.configPath} (or the env override) directly instead of using keyshelf set.`
+      );
+      process.exit(1);
+    }
+
     const value = await readValue(keyPath, opts.value);
     const registry = createDefaultRegistry();
 

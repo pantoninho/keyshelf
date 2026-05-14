@@ -100,6 +100,55 @@ describe("yaml-loader", () => {
     );
   });
 
+  it("accepts a !plain override on a !secret key", async () => {
+    const root = await writeProject({
+      "keyshelf.yaml": ["name: app", "keys:", "  api:", "    token: !secret"].join("\n"),
+      ".keyshelf/dev.yaml": ["keys:", "  api:", '    token: !plain "stub"'].join("\n")
+    });
+
+    const config = normalizeConfig(await loadYamlConfig(join(root, "keyshelf.yaml")));
+    const token = config.keys.find((k) => k.path === "api/token");
+    expect(token).toMatchObject({
+      kind: "secret",
+      values: {
+        dev: { __kind: "provider:plain", name: "plain", options: { value: "stub" } }
+      }
+    });
+  });
+
+  it("accepts an empty !plain override (the v4 empty-string case)", async () => {
+    const root = await writeProject({
+      "keyshelf.yaml": ["name: app", "keys:", "  api:", "    token: !secret"].join("\n"),
+      ".keyshelf/mirror.yaml": ["keys:", "  api:", '    token: !plain ""'].join("\n")
+    });
+
+    const config = normalizeConfig(await loadYamlConfig(join(root, "keyshelf.yaml")));
+    const token = config.keys.find((k) => k.path === "api/token");
+    expect(token).toMatchObject({
+      values: { mirror: { __kind: "provider:plain", options: { value: "" } } }
+    });
+  });
+
+  it("accepts the mapping form of !plain", async () => {
+    const root = await writeProject({
+      "keyshelf.yaml": ["name: app", "keys:", "  api:", "    token: !secret"].join("\n"),
+      ".keyshelf/dev.yaml": [
+        "keys:",
+        "  api:",
+        "    token: !plain",
+        '      value: "from-mapping"'
+      ].join("\n")
+    });
+
+    const config = normalizeConfig(await loadYamlConfig(join(root, "keyshelf.yaml")));
+    const token = config.keys.find((k) => k.path === "api/token");
+    expect(token).toMatchObject({
+      values: {
+        dev: { __kind: "provider:plain", options: { value: "from-mapping" } }
+      }
+    });
+  });
+
   it("parses bare !aws (relies on SDK region chain)", async () => {
     const root = await writeProject({
       "keyshelf.yaml": ["name: app", "keys:", "  api:", "    token: !secret"].join("\n"),
