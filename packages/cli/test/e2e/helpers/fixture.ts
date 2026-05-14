@@ -19,7 +19,7 @@ export async function writeKeyshelfConfig(root: string, body: string[]): Promise
   await writeFile(
     join(root, "keyshelf.config.ts"),
     [
-      `import { defineConfig, config, secret, age } from "keyshelf/config";`,
+      `import { defineConfig, config, secret, age, plain } from "keyshelf/config";`,
       ``,
       `export default defineConfig({`,
       ...body.map((line) => `  ${line}`),
