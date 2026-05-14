@@ -100,6 +100,9 @@ function objectLiteral(value: Record<string, unknown>, indent: number): string {
 
 function valueLiteral(value: unknown, indent: number): string {
   if (isProviderRef(value)) {
+    if (value.name === "plain") {
+      return `plain(${literal(String(value.options.value ?? ""))})`;
+    }
     return `${value.name}(${objectLiteral(value.options, indent)})`;
   }
   if (Array.isArray(value)) {

@@ -11,7 +11,7 @@ import {
 export type ConfigScalar = string | number | boolean;
 
 export interface ProviderRef {
-  name: "age" | "gcp" | "sops";
+  name: "age" | "gcp" | "sops" | "plain";
   options: Record<string, unknown>;
 }
 
@@ -40,7 +40,7 @@ export interface NormalizedMigration {
 }
 
 const V5_PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
-const SUPPORTED_PROVIDERS = new Set(["age", "gcp", "sops"]);
+const SUPPORTED_PROVIDERS = new Set(["age", "gcp", "sops", "plain"]);
 
 export function normalizeProject(project: V4Project): NormalizedMigration {
   if (project.name === undefined) {
@@ -94,9 +94,7 @@ function normalizeConfig(key: KeyDefinition, envs: V4Environment[]): NormalizedR
 function pickSecretProvider(env: V4Environment, keyPath: string): ProviderRef | undefined {
   const override = env.env.overrides[keyPath];
   if (override !== undefined && !isTaggedValue(override)) {
-    throw new Error(
-      `${env.name}:${keyPath} has a plaintext secret override. v5 secret records require provider bindings; move the value into a provider with keyshelf set before migrating.`
-    );
+    return { name: "plain", options: { value: String(override) } };
   }
   if (override !== undefined) {
     return providerFromTag(override, env);
