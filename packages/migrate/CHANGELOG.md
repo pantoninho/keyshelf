@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/pantoninho/keyshelf/compare/migrate-v1.1.0...migrate-v1.2.0) (2026-05-14)
+
+
+### Features
+
+* **config:** add plain() / !plain inline provider for secrets ([#137](https://github.com/pantoninho/keyshelf/issues/137)) ([b8928d2](https://github.com/pantoninho/keyshelf/commit/b8928d2eb890527f33cdfb2d237d20a13b83c69e))
+
 ## [1.1.0](https://github.com/pantoninho/keyshelf/compare/migrate-v1.0.0...migrate-v1.1.0) (2026-05-05)
 
 
