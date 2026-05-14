@@ -1,6 +1,6 @@
 import type { BuiltinProviderRef, NormalizedConfig } from "../config/types.js";
 import type { ProviderRegistry } from "../providers/registry.js";
-import { collectProviderRefs } from "./internal/desired-bindings.js";
+import { collectProviderRefs, isReconcilableProvider } from "./internal/desired-bindings.js";
 import { instanceKey } from "./internal/instance-key.js";
 import type { ProviderListing } from "./planner.js";
 
@@ -88,6 +88,7 @@ function collectProviderInstances(config: NormalizedConfig): Map<string, Builtin
   const out = new Map<string, BuiltinProviderRef>();
   for (const record of config.keys) {
     for (const ref of collectProviderRefs(record)) {
+      if (!isReconcilableProvider(ref.name)) continue;
       out.set(instanceKey(ref.name, ref.options), ref);
     }
   }

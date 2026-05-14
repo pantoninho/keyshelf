@@ -68,11 +68,24 @@ const sopsProviderSchema = z
   })
   .strict();
 
+const plainProviderSchema = z
+  .object({
+    __kind: z.literal("provider:plain"),
+    name: z.literal("plain"),
+    options: z
+      .object({
+        value: z.string()
+      })
+      .strict()
+  })
+  .strict();
+
 const providerRefSchema = z.discriminatedUnion("__kind", [
   ageProviderSchema,
   awsProviderSchema,
   gcpProviderSchema,
-  sopsProviderSchema
+  sopsProviderSchema,
+  plainProviderSchema
 ]);
 
 const movedFromSchema = z

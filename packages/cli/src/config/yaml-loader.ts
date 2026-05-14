@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DEFAULT_SCHEMA, load as loadYaml, Type as YamlType } from "js-yaml";
-import { age, aws, config as configRecord, gcp, secret, sops } from "./factories.js";
+import { age, aws, config as configRecord, gcp, plain, secret, sops } from "./factories.js";
 import type {
   AgeProviderOptions,
   AwsProviderOptions,
@@ -12,6 +12,7 @@ import type {
   GcpProviderOptions,
   KeyshelfConfig,
   KeyTree,
+  PlainProviderOptions,
   SecretRecord,
   SopsProviderOptions
 } from "./types.js";
@@ -49,7 +50,9 @@ interface EnvFile {
   overrides: Record<string, ConfigBinding | TaggedValue>;
 }
 
-const PROVIDER_TAGS = ["age", "aws", "gcp", "sops"] as const;
+const PROVIDER_TAGS = ["age", "aws", "gcp", "sops", "plain"] as const;
+const BARE_EMPTY_TAGS = ["secret", "age", "aws", "gcp", "sops"] as const;
+const SCALAR_PAYLOAD_TAGS = ["plain"] as const;
 const ALL_TAGS = ["secret", ...PROVIDER_TAGS] as const;
 
 function makeMappingTag(name: string): YamlType {
@@ -70,11 +73,21 @@ function makeBareTag(name: string): YamlType {
   });
 }
 
+function makeScalarPayloadTag(name: string): YamlType {
+  return new YamlType(`!${name}`, {
+    kind: "scalar",
+    construct(data: string | null): TaggedValue {
+      return { tag: name, options: { value: data ?? "" } };
+    }
+  });
+}
+
 // js-yaml v4 has no unsafe loader — `load` always uses the schema we pass.
 // We extend DEFAULT_SCHEMA only with our own keyshelf tags, so no `!!js/*`
 // constructors are reachable from user content.
 const KEYSHELF_SCHEMA = DEFAULT_SCHEMA.extend([
-  ...ALL_TAGS.map(makeBareTag),
+  ...BARE_EMPTY_TAGS.map(makeBareTag),
+  ...SCALAR_PAYLOAD_TAGS.map(makeScalarPayloadTag),
   ...ALL_TAGS.map(makeMappingTag)
 ]);
 
@@ -362,6 +375,8 @@ function providerRef(
       return sops(
         requireOptions<SopsProviderOptions>(options, ["identityFile", "secretsFile"], label, "sops")
       );
+    case "plain":
+      return plain(requirePlainValue(options, label));
     default:
       throw new Error(`${label}: unknown provider "${name}"`);
   }
@@ -379,4 +394,12 @@ function requireOptions<T>(
     }
   }
   return options as T;
+}
+
+function requirePlainValue(options: Record<string, unknown>, label: string): string {
+  const { value } = options as PlainProviderOptions;
+  if (typeof value !== "string") {
+    throw new Error(`${label}: !plain requires a string value (use \`!plain "..."\`)`);
+  }
+  return value;
 }

@@ -8,6 +8,7 @@ import type {
   KeyPaths,
   KeyshelfConfig,
   KeyTree,
+  PlainProviderOptions,
   ProviderRef,
   SecretRecordInput,
   SopsProviderOptions
@@ -60,6 +61,12 @@ export function sops<const Options extends SopsProviderOptions>(
   options: Options
 ): ProviderRef<"sops", Options> {
   return { __kind: "provider:sops", name: "sops", options };
+}
+
+export function plain<const V extends string>(
+  value: V
+): ProviderRef<"plain", PlainProviderOptions & { value: V }> {
+  return { __kind: "provider:plain", name: "plain", options: { value } };
 }
 
 export type { BuiltinProviderRef };
