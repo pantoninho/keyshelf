@@ -12,7 +12,6 @@ import type {
   GcpProviderOptions,
   KeyshelfConfig,
   KeyTree,
-  PlainProviderOptions,
   SecretRecord,
   SopsProviderOptions
 } from "./types.js";
@@ -397,7 +396,7 @@ function requireOptions<T>(
 }
 
 function requirePlainValue(options: Record<string, unknown>, label: string): string {
-  const { value } = options as PlainProviderOptions;
+  const value = options.value;
   if (typeof value !== "string") {
     throw new Error(`${label}: !plain requires a string value (use \`!plain "..."\`)`);
   }

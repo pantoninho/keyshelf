@@ -107,6 +107,7 @@ async function migrateProvider(
   switch (provider) {
     case "age":
     case "sops":
+    case "plain":
       process.stderr.write(
         `${provider}: no-op (secrets stay co-located with the project; no remote namespacing required).\n`
       );
