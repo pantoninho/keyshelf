@@ -104,22 +104,18 @@ async function migrateProvider(
   migration: NormalizedMigration,
   options: ProjectNameOptions
 ): Promise<void> {
-  switch (provider) {
-    case "age":
-    case "sops":
-    case "plain":
-      process.stderr.write(
-        `${provider}: no-op (secrets stay co-located with the project; no remote namespacing required).\n`
-      );
-      return;
-    case "gcp":
-      await runGcpMigration(migration, options);
-      return;
-    default: {
-      const exhaustive: never = provider;
-      throw new Error(`Unsupported provider for project-name migration: ${String(exhaustive)}`);
-    }
+  if (provider === "gcp") {
+    await runGcpMigration(migration, options);
+    return;
   }
+  // Local-storage providers — project-name namespacing only matters for
+  // remote stores. The annotation keeps this exhaustive: TS errors if a
+  // new provider name lands in the union without being routed above.
+  const _localStorageProvider: "age" | "sops" | "plain" = provider;
+  void _localStorageProvider;
+  process.stderr.write(
+    `${provider}: no-op (secrets stay co-located with the project; no remote namespacing required).\n`
+  );
 }
 
 async function runGcpMigration(

@@ -2625,7 +2625,7 @@ function requireOptions(options, required, label, providerName) {
   return options;
 }
 function requirePlainValue(options, label) {
-  const { value } = options;
+  const value = options.value;
   if (typeof value !== "string") {
     throw new Error(`${label}: !plain requires a string value (use \`!plain "..."\`)`);
   }
