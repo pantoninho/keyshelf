@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.2.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.1.1...keyshelf-v5.2.0) (2026-05-14)
+
+
+### Features
+
+* **cli:** add `keyshelf cp` to copy secrets to the clipboard ([#135](https://github.com/pantoninho/keyshelf/issues/135)) ([425ff63](https://github.com/pantoninho/keyshelf/commit/425ff631046acba11d08fe2469c2a180c83772a5))
+* **config:** add plain() / !plain inline provider for secrets ([#137](https://github.com/pantoninho/keyshelf/issues/137)) ([b8928d2](https://github.com/pantoninho/keyshelf/commit/b8928d2eb890527f33cdfb2d237d20a13b83c69e))
+
 ## [5.1.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.1.0...keyshelf-v5.1.1) (2026-05-07)
 
 
