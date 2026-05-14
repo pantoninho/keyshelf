@@ -20,5 +20,8 @@ function gcp(options) {
 function sops(options) {
   return { __kind: "provider:sops", name: "sops", options };
 }
+function plain(value) {
+  return { __kind: "provider:plain", name: "plain", options: { value } };
+}
 
-export { age, aws, config, defineConfig, gcp, secret, sops };
+export { age, aws, config, defineConfig, gcp, plain, secret, sops };

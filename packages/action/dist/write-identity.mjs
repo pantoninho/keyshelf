@@ -74,11 +74,19 @@ var sopsProviderSchema = z.object({
     secretsFile: z.string().min(1)
   }).strict()
 }).strict();
+var plainProviderSchema = z.object({
+  __kind: z.literal("provider:plain"),
+  name: z.literal("plain"),
+  options: z.object({
+    value: z.string()
+  }).strict()
+}).strict();
 var providerRefSchema = z.discriminatedUnion("__kind", [
   ageProviderSchema,
   awsProviderSchema,
   gcpProviderSchema,
-  sopsProviderSchema
+  sopsProviderSchema,
+  plainProviderSchema
 ]);
 var movedFromSchema = z.union([z.string().min(1), z.array(z.string().min(1)).nonempty()]).optional();
 var baseRecordSchema = {
@@ -2349,10 +2357,15 @@ function gcp(options) {
 function sops(options) {
   return { __kind: "provider:sops", name: "sops", options };
 }
+function plain(value) {
+  return { __kind: "provider:plain", name: "plain", options: { value } };
+}
 
 // ../cli/dist/src/config/yaml-loader.js
 var ENV_DIR = ".keyshelf";
-var PROVIDER_TAGS = ["age", "aws", "gcp", "sops"];
+var PROVIDER_TAGS = ["age", "aws", "gcp", "sops", "plain"];
+var BARE_EMPTY_TAGS = ["secret", "age", "aws", "gcp", "sops"];
+var SCALAR_PAYLOAD_TAGS = ["plain"];
 var ALL_TAGS = ["secret", ...PROVIDER_TAGS];
 function makeMappingTag(name) {
   return new Type(`!${name}`, {
@@ -2370,8 +2383,17 @@ function makeBareTag(name) {
     }
   });
 }
+function makeScalarPayloadTag(name) {
+  return new Type(`!${name}`, {
+    kind: "scalar",
+    construct(data) {
+      return { tag: name, options: { value: data ?? "" } };
+    }
+  });
+}
 var KEYSHELF_SCHEMA = DEFAULT_SCHEMA.extend([
-  ...ALL_TAGS.map(makeBareTag),
+  ...BARE_EMPTY_TAGS.map(makeBareTag),
+  ...SCALAR_PAYLOAD_TAGS.map(makeScalarPayloadTag),
   ...ALL_TAGS.map(makeMappingTag)
 ]);
 function safeYamlLoad(content) {
@@ -2588,6 +2610,8 @@ function providerRef(name, options, label) {
       return sops(
         requireOptions(options, ["identityFile", "secretsFile"], label, "sops")
       );
+    case "plain":
+      return plain(requirePlainValue(options, label));
     default:
       throw new Error(`${label}: unknown provider "${name}"`);
   }
@@ -2599,6 +2623,13 @@ function requireOptions(options, required, label, providerName) {
     }
   }
   return options;
+}
+function requirePlainValue(options, label) {
+  const { value } = options;
+  if (typeof value !== "string") {
+    throw new Error(`${label}: !plain requires a string value (use \`!plain "..."\`)`);
+  }
+  return value;
 }
 
 // ../cli/dist/src/config/loader.js
