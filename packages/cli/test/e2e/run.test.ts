@@ -167,3 +167,46 @@ describe("keyshelf-next run (groups)", () => {
     expect(result.trim()).toBe("ci-secret-value");
   });
 });
+
+describe("keyshelf-next run (scoped to app mapping)", () => {
+  let root: string;
+  let paths: AgeFixturePaths;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-run-scope-"));
+    paths = await setupAgeFixtureDir(root);
+    // a: a config the app maps. b: an unrelated required secret that is never
+    // seeded — it must not be resolved or validated for an app that doesn't map it.
+    await writeKeyshelfConfig(root, [
+      `name: "demo",`,
+      `envs: ["dev", "production"],`,
+      `keys: {`,
+      `  a: config({ value: "alpha" }),`,
+      `  b: secret({ value: age({ identityFile: ${JSON.stringify(paths.identityFile)}, secretsDir: ${JSON.stringify(paths.secretsDir)} }) }),`,
+      `},`
+    ]);
+    await writeEnvKeyshelf(root, ["A=a"]);
+  });
+
+  it("succeeds when an unrelated required key is unseeded and unmapped", () => {
+    const result = spawnSync(
+      TSX,
+      [CLI, "run", "--env", "dev", "--", "node", "-e", "console.log(process.env.A)"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe("alpha");
+  });
+
+  it("fails loudly when a mapped required key is unresolvable", async () => {
+    await writeEnvKeyshelf(root, ["B=b"]);
+    const result = spawnSync(
+      TSX,
+      [CLI, "run", "--env", "dev", "--", "node", "-e", "console.log('ran')"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).not.toContain("ran");
+    expect(result.stderr).toContain("b");
+  });
+});

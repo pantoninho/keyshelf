@@ -180,7 +180,7 @@ For each key, given an active `envName`:
 
 `value` and `default` are aliases. Setting both on the same record is a validation error. The two names exist purely for legibility — `value:` reads naturally for envless records, `default:` reads naturally when paired with `values:`.
 
-`--env` is **only required** when at least one selected key has a `values` map without a fallback. A fully envless config can run without `--env`.
+`--env` is **only required** when at least one selected key has a `values` map without a fallback. A fully envless config can run without `--env`. For `keyshelf run`, "selected" means a key that is reachable from the active `.env.keyshelf` (see [App mapping](#app-mapping-envkeyshelf)) — a `values`-only key the app never maps does not force `--env`.
 
 ## Templates
 
@@ -254,6 +254,10 @@ keyshelf run --env production --group app -- node server.js
 keyshelf run --filter db -- ./scripts/check-db.sh
 keyshelf run --map ./infra/.env.keyshelf -- terraform apply
 ```
+
+Resolution is **scoped to the app mapping**. The roots are the keys the mapping references — direct mappings and the `${...}` references inside template mappings — expanded transitively through `${...}` references in `config(...)` bindings. Only that reachable set is resolved and validated: a required key outside it is never resolved and can never fail the run, even if it is unseeded or has no binding for the active env. A _mapped_ required key that can't resolve (unseeded, or no binding for the active env) still fails loudly.
+
+`--group` / `--filter` intersect with the mapped set — excluding a mapped key keeps the [skip-with-warning](#groups-and-filters) behavior rather than failing. A mapping that points at an undeclared key path still fails fast at load.
 
 Forwards the child process exit code.
 

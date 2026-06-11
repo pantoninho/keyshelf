@@ -551,3 +551,166 @@ describe("resolver", () => {
     ).rejects.toThrow('Unknown group "ci"');
   });
 });
+
+describe("scoped resolution (roots)", () => {
+  it("never resolves or validates required keys outside the reachable set", async () => {
+    const providerA = mockProvider("age", "value-a");
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev", "production"],
+        keys: {
+          a: secret({ value: age({ identityFile: "./a.txt", secretsDir: "./secrets" }) }),
+          // b is required but bound only for production — would fail a dev run if resolved.
+          b: config({ values: { production: "prod-only" } })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "dev",
+      rootDir: "/repo",
+      registry: registry(providerA),
+      roots: ["a"]
+    });
+
+    expect(result.topLevelErrors).toEqual([]);
+    expect(result.keyErrors).toEqual([]);
+    expect(result.resolution?.resolved).toEqual([{ path: "a", value: "value-a" }]);
+    // b never appears in the resolution at all.
+    expect(result.resolution?.statusByPath.has("b")).toBe(false);
+  });
+
+  it("fails loudly when a mapped required key is unresolvable in the active env", async () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev", "production"],
+        keys: {
+          a: config({ values: { production: "prod-only" } }),
+          b: config({ value: "always" })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "dev",
+      rootDir: "/repo",
+      registry: registry(),
+      roots: ["a"]
+    });
+
+    expect(result.keyErrors).toEqual([expect.objectContaining({ path: "a" })]);
+  });
+
+  it("expands roots transitively through config template references", async () => {
+    const provider = mockProvider("age", "pw");
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev", "production"],
+        keys: {
+          db: {
+            host: config({ value: "localhost" }),
+            password: secret({ value: age({ identityFile: "./a.txt", secretsDir: "./s" }) }),
+            url: config({ default: "postgres://${db/password}@${db/host}/x" })
+          },
+          unrelated: config({ values: { production: "x" } })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "dev",
+      rootDir: "/repo",
+      registry: registry(provider),
+      // Root references only the url template; password + host must be pulled in.
+      roots: ["db/url"]
+    });
+
+    expect(result.topLevelErrors).toEqual([]);
+    expect(result.keyErrors).toEqual([]);
+    expect(result.resolution?.statusByPath.has("db/password")).toBe(true);
+    expect(result.resolution?.statusByPath.has("db/host")).toBe(true);
+    expect(result.resolution?.statusByPath.has("unrelated")).toBe(false);
+  });
+
+  it("only requires --env when a reachable key needs it", async () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev", "production"],
+        keys: {
+          a: config({ value: "always" }),
+          // b needs --env, but is out of scope.
+          b: config({ values: { dev: "d", production: "p" } })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      rootDir: "/repo",
+      registry: registry(),
+      roots: ["a"]
+    });
+
+    expect(result.topLevelErrors).toEqual([]);
+    expect(result.resolution?.resolved).toEqual([{ path: "a", value: "always" }]);
+  });
+
+  it("requires --env when a reachable key needs it", async () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev", "production"],
+        keys: {
+          a: config({ values: { dev: "d", production: "p" } })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      rootDir: "/repo",
+      registry: registry(),
+      roots: ["a"]
+    });
+
+    expect(result.topLevelErrors).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining("--env is required")
+      })
+    ]);
+  });
+
+  it("keeps skip-with-warning when a group/filter excludes a mapped key", async () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev"],
+        groups: ["app", "infra"],
+        keys: {
+          a: config({ group: "app", value: "av" }),
+          b: config({ group: "infra", value: "bv" })
+        }
+      })
+    );
+
+    const resolution = await resolveWithStatus({
+      config: normalized,
+      envName: "dev",
+      rootDir: "/repo",
+      registry: registry(),
+      roots: ["a", "b"],
+      groups: ["app"]
+    });
+
+    // a resolves; b is in scope (mapped) but filtered out by --group.
+    expect(resolution.statusByPath.get("a")?.status).toBe("resolved");
+    expect(resolution.statusByPath.get("b")?.status).toBe("filtered");
+  });
+});

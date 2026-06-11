@@ -29,6 +29,12 @@ export interface ResolveOptions {
   registry: ProviderRegistry;
   groups?: string[];
   filters?: string[];
+  // When set, scope resolution + validation to the keys reachable from these
+  // root key paths (expanded transitively through `${...}` references inside
+  // config bindings). Keys outside the reachable set are never resolved and
+  // never produce validation errors. When undefined, every config key is in
+  // scope (legacy behavior).
+  roots?: string[];
 }
 
 export async function resolve(options: ResolveOptions): Promise<ResolvedKey[]> {
@@ -70,7 +76,12 @@ function checkTopLevel(options: ResolveOptions): TopLevelError[] {
 
   if (topLevelErrors.length > 0) return topLevelErrors;
 
-  const selected = selectRecords(options.config, options.groups, options.filters);
+  const selected = selectRecords(
+    options.config,
+    options.groups,
+    options.filters,
+    computeReachable(options.config, options.roots)
+  );
   const envRequiredError = checkEnvProvidedWhenRequired(selected, options.envName);
   if (envRequiredError !== undefined) return [envRequiredError];
 
@@ -91,7 +102,12 @@ function validateResolution(resolution: Resolution): ValidationResult["keyErrors
 
 export async function resolveWithStatus(options: ResolveOptions): Promise<Resolution> {
   assertValidEnv(options);
-  const selected = selectRecords(options.config, options.groups, options.filters);
+  const selected = selectRecords(
+    options.config,
+    options.groups,
+    options.filters,
+    computeReachable(options.config, options.roots)
+  );
   assertEnvProvidedWhenRequired(selected, options.envName);
 
   const selectedByPath = new Map(
@@ -184,13 +200,20 @@ export function renderAppMapping(mappings: AppMapping[], resolution: Resolution)
 function selectRecords(
   config: NormalizedConfig,
   groups: string[] | undefined,
-  filters: string[] | undefined
+  filters: string[] | undefined,
+  reachable: Set<string> | undefined
 ): SelectedRecord[] {
   const groupSet = normalizeGroupFilter(config, groups);
   const activeGroups = [...groupSet];
   const pathPrefixes = normalizePathFilters(filters);
 
   return config.keys.map((record) => {
+    // Out of scope: not reachable from the app mapping. Drop it silently —
+    // no cause means no resolution status, so it never resolves and never
+    // surfaces a validation error or skip warning.
+    if (reachable !== undefined && !reachable.has(record.path)) {
+      return { record, selected: false };
+    }
     if (isExcludedByGroup(record, groupSet)) {
       return {
         record,
@@ -207,6 +230,56 @@ function selectRecords(
     }
     return { record, selected: true };
   });
+}
+
+// Expands the given root key paths into the full set of keys reachable through
+// `${...}` references inside config bindings. Returns undefined when no roots
+// are given (every key is in scope — legacy behavior). Unknown root paths are
+// ignored here; load-time validateAppMappingReferences already rejects mappings
+// that point at undeclared keys.
+function computeReachable(
+  config: NormalizedConfig,
+  roots: string[] | undefined
+): Set<string> | undefined {
+  if (roots === undefined) return undefined;
+
+  const recordByPath = new Map(config.keys.map((record) => [record.path, record] as const));
+  const reachable = new Set<string>();
+  const queue = [...roots];
+
+  while (queue.length > 0) {
+    const path = queue.shift() as string;
+    if (reachable.has(path)) continue;
+    reachable.add(path);
+
+    const record = recordByPath.get(path);
+    if (record === undefined) continue;
+
+    for (const reference of bindingReferences(record)) {
+      if (!reachable.has(reference)) queue.push(reference);
+    }
+  }
+
+  return reachable;
+}
+
+// Every `${...}` reference across a record's bindings (value + every env in
+// values). We follow all of them rather than just the active env's binding so
+// the reachable set — and therefore the `--env` requirement check — is
+// computed before the active env is known.
+function bindingReferences(record: NormalizedRecord): string[] {
+  if (record.kind !== "config") return [];
+
+  const references: string[] = [];
+  const bindings: unknown[] = [record.value, ...Object.values(record.values ?? {})];
+  for (const binding of bindings) {
+    if (typeof binding !== "string") continue;
+    TEMPLATE_RE.lastIndex = 0;
+    for (const match of binding.matchAll(TEMPLATE_RE)) {
+      references.push(match[1].trim());
+    }
+  }
+  return references;
 }
 
 function normalizeGroupFilter(config: NormalizedConfig, groups: string[] | undefined): Set<string> {
