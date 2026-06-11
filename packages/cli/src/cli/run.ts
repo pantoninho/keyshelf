@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import spawn from "cross-spawn";
 import { loadConfig } from "../config/index.js";
+import { isTemplateMapping, type AppMapping } from "../config/app-mapping.js";
 import { formatSkipCause, renderAppMapping } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { splitList } from "./options.js";
@@ -40,7 +41,11 @@ export const runCommand = new Command("run")
       rootDir: loaded.rootDir,
       registry,
       groups: splitList(opts.group),
-      filters: splitList(opts.filter)
+      filters: splitList(opts.filter),
+      // Scope resolution + validation to the keys this app actually maps.
+      // Keys unreachable from .env.keyshelf are never resolved, so an
+      // unseeded secret belonging to another app can't fail this run.
+      roots: appMappingRoots(loaded.appMapping)
     };
 
     const resolution = await assertValidationPasses(resolveOpts);
@@ -72,3 +77,17 @@ export const runCommand = new Command("run")
       process.exit(1);
     });
   });
+
+// The key paths directly referenced by the app mapping — the resolution roots.
+// Transitive `${...}` expansion through config templates happens in the resolver.
+function appMappingRoots(mappings: AppMapping[]): string[] {
+  const roots = new Set<string>();
+  for (const mapping of mappings) {
+    if (isTemplateMapping(mapping)) {
+      for (const keyPath of mapping.keyPaths) roots.add(keyPath);
+    } else {
+      roots.add(mapping.keyPath);
+    }
+  }
+  return [...roots];
+}
