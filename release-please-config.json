@@ -3,6 +3,7 @@
   "release-type": "node",
   "include-component-in-tag": true,
   "separate-pull-requests": true,
+  "plugins": ["node-workspace"],
   "packages": {
     "packages/cli": {
       "package-name": "keyshelf"
