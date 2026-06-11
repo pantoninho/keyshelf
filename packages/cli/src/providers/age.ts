@@ -45,7 +45,16 @@ export class AgeProvider implements Provider {
     const filePath = secretFilePath(opts.secretsDir, ctx.keyPath);
     const identity = await readIdentity(opts.identityFile);
 
-    const ciphertext = await readFile(filePath);
+    let ciphertext: Uint8Array;
+    try {
+      ciphertext = await readFile(filePath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error(`age: secret "${ctx.keyPath}" not found in ${opts.secretsDir}`);
+      }
+      throw err;
+    }
+
     const decrypter = new Decrypter();
     decrypter.addIdentity(identity);
     return await decrypter.decrypt(ciphertext, "text");

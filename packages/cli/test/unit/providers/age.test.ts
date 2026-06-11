@@ -22,8 +22,10 @@ describe("AgeProvider", () => {
     identityFile: state.identityFile
   }));
 
-  it("resolve throws for missing secret", async () => {
-    await expect(state.provider.resolve(state.ctx("missing/key"))).rejects.toThrow();
+  it("resolve throws a not-found error for a missing secret", async () => {
+    // The message must be recognizable as not-found so the resolver can treat
+    // an unseeded optional secret as a skip rather than a hard error.
+    await expect(state.provider.resolve(state.ctx("missing/key"))).rejects.toThrow(/not found/i);
   });
 
   describe("list", () => {
