@@ -2749,7 +2749,12 @@ function checkTopLevel(options) {
   const groupCheck = checkGroupFilter(options.config, options.groups);
   topLevelErrors.push(...groupCheck.errors);
   if (topLevelErrors.length > 0) return topLevelErrors;
-  const selected = selectRecords(options.config, options.groups, options.filters);
+  const selected = selectRecords(
+    options.config,
+    options.groups,
+    options.filters,
+    computeReachable(options.config, options.roots)
+  );
   const envRequiredError = checkEnvProvidedWhenRequired(selected, options.envName);
   if (envRequiredError !== void 0) return [envRequiredError];
   return [];
@@ -2765,7 +2770,12 @@ function validateResolution(resolution) {
 }
 async function resolveWithStatus(options) {
   assertValidEnv(options);
-  const selected = selectRecords(options.config, options.groups, options.filters);
+  const selected = selectRecords(
+    options.config,
+    options.groups,
+    options.filters,
+    computeReachable(options.config, options.roots)
+  );
   assertEnvProvidedWhenRequired(selected, options.envName);
   const selectedByPath = new Map(
     selected.filter((entry) => entry.selected).map((entry) => [entry.record.path, entry.record])
@@ -2836,11 +2846,14 @@ function renderAppMapping(mappings, resolution) {
     };
   });
 }
-function selectRecords(config2, groups2, filters2) {
+function selectRecords(config2, groups2, filters2, reachable) {
   const groupSet = normalizeGroupFilter(config2, groups2);
   const activeGroups = [...groupSet];
   const pathPrefixes = normalizePathFilters(filters2);
   return config2.keys.map((record) => {
+    if (reachable !== void 0 && !reachable.has(record.path)) {
+      return { record, selected: false };
+    }
     if (isExcludedByGroup(record, groupSet)) {
       return {
         record,
@@ -2857,6 +2870,36 @@ function selectRecords(config2, groups2, filters2) {
     }
     return { record, selected: true };
   });
+}
+function computeReachable(config2, roots) {
+  if (roots === void 0) return void 0;
+  const recordByPath = new Map(config2.keys.map((record) => [record.path, record]));
+  const reachable = /* @__PURE__ */ new Set();
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const path = queue.shift();
+    if (reachable.has(path)) continue;
+    reachable.add(path);
+    const record = recordByPath.get(path);
+    if (record === void 0) continue;
+    for (const reference of bindingReferences(record)) {
+      if (!reachable.has(reference)) queue.push(reference);
+    }
+  }
+  return reachable;
+}
+function bindingReferences(record) {
+  if (record.kind !== "config") return [];
+  const references = [];
+  const bindings = [record.value, ...Object.values(record.values ?? {})];
+  for (const binding of bindings) {
+    if (typeof binding !== "string") continue;
+    TEMPLATE_RE3.lastIndex = 0;
+    for (const match of binding.matchAll(TEMPLATE_RE3)) {
+      references.push(match[1].trim());
+    }
+  }
+  return references;
 }
 function normalizeGroupFilter(config2, groups2) {
   const { errors, groupSet } = checkGroupFilter(config2, groups2);
