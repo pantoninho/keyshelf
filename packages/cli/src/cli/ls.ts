@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { loadConfig } from "../config/index.js";
-import { formatSkipCause, renderAppMapping, resolveWithStatus } from "../resolver/index.js";
+import { formatSkipCause, renderAppMapping } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { splitList } from "./options.js";
 import { assertValidationPasses } from "./validation.js";
@@ -95,8 +95,7 @@ async function runReveal({ loaded, env, groups, filters, format }: RevealArgs): 
     filters
   };
 
-  await assertValidationPasses(resolveOpts);
-  const resolution = await resolveWithStatus(resolveOpts);
+  const resolution = await assertValidationPasses(resolveOpts);
 
   if (format === "json") {
     const vars = buildJsonVars(loaded.appMapping, loaded.config.keys, resolution);

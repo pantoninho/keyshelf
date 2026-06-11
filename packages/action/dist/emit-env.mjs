@@ -2731,28 +2731,37 @@ function formatSkipCause(cause) {
 var TEMPLATE_RE3 = /(?<!\$)\$\{([^}]+)\}/g;
 var ESCAPED_TEMPLATE_RE = /\$\$\{/g;
 async function validate(options) {
+  const { topLevelErrors, keyErrors } = await resolveValidated(options);
+  return { topLevelErrors, keyErrors };
+}
+async function resolveValidated(options) {
+  const topLevelErrors = checkTopLevel(options);
+  if (topLevelErrors.length > 0) {
+    return { topLevelErrors, keyErrors: [] };
+  }
+  const resolution = await resolveWithStatus(options);
+  return { topLevelErrors: [], keyErrors: validateResolution(resolution), resolution };
+}
+function checkTopLevel(options) {
   const topLevelErrors = [];
   const envError = checkValidEnv(options);
   if (envError !== void 0) topLevelErrors.push(envError);
   const groupCheck = checkGroupFilter(options.config, options.groups);
   topLevelErrors.push(...groupCheck.errors);
-  if (topLevelErrors.length > 0) {
-    return { topLevelErrors, keyErrors: [] };
-  }
+  if (topLevelErrors.length > 0) return topLevelErrors;
   const selected = selectRecords(options.config, options.groups, options.filters);
   const envRequiredError = checkEnvProvidedWhenRequired(selected, options.envName);
-  if (envRequiredError !== void 0) {
-    return { topLevelErrors: [envRequiredError], keyErrors: [] };
-  }
-  const resolution = await resolveWithStatus(options);
-  const keyErrors = resolution.statuses.filter((status) => {
+  if (envRequiredError !== void 0) return [envRequiredError];
+  return [];
+}
+function validateResolution(resolution) {
+  return resolution.statuses.filter((status) => {
     return status.status === "error";
   }).map((status) => ({
     path: status.path,
     message: status.message,
     error: status.error
   }));
-  return { topLevelErrors: [], keyErrors };
 }
 async function resolveWithStatus(options) {
   assertValidEnv(options);

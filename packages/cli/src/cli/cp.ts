@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import spawn from "cross-spawn";
 import { Command } from "commander";
 import { loadConfig } from "../config/index.js";
-import { resolveWithStatus } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { assertValidationPasses } from "./validation.js";
 import { findRecordOrExit } from "./options.js";
@@ -40,8 +39,7 @@ export const cpCommand = new Command("cp")
       filters: [keyPath]
     };
 
-    await assertValidationPasses(resolveOpts);
-    const resolution = await resolveWithStatus(resolveOpts);
+    const resolution = await assertValidationPasses(resolveOpts);
     const status = resolution.statusByPath.get(keyPath);
 
     if (status === undefined || status.status !== "resolved") {
