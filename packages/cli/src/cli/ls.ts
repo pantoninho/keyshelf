@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { loadConfig } from "../config/index.js";
-import { formatSkipCause, renderAppMapping } from "../resolver/index.js";
+import { formatSkipCause, renderAppMapping, resolveValidated } from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { splitList } from "./options.js";
 import { assertValidationPasses } from "./validation.js";
@@ -15,6 +15,7 @@ interface LsOptions {
   group?: string;
   filter?: string;
   reveal?: boolean;
+  check?: boolean;
   map?: string;
   format?: string;
 }
@@ -48,6 +49,10 @@ export const lsCommand = new Command("ls")
     "Comma-separated key-path prefix filter (e.g. db,log); non-matching keys are marked filtered"
   )
   .option("--reveal", "Resolve through bound providers and show resolved values (requires --env)")
+  .option(
+    "--check",
+    "Validate that every declared key resolves for --env, ignoring app mappings; exits non-zero on any unresolvable required key (CI sweep)"
+  )
   .option("--map <file>", "Path to app mapping file (default: .env.keyshelf)")
   .option("--format <format>", "Output format: table (default) or json", "table")
   .action(async (opts: LsOptions) => {
@@ -58,6 +63,11 @@ export const lsCommand = new Command("ls")
     const groups = splitList(opts.group);
     const filters = splitList(opts.filter);
 
+    if (opts.check) {
+      await runCheck({ loaded, env: opts.env as string, groups, filters });
+      return;
+    }
+
     if (opts.reveal && opts.env !== undefined) {
       await runReveal({ loaded, env: opts.env, groups, filters, format });
       return;
@@ -66,15 +76,24 @@ export const lsCommand = new Command("ls")
     printRows(buildSchemaRows(loaded.config.keys, opts.env, groups, filters));
   });
 
+function fail(message: string): never {
+  console.error(`error: ${message}`);
+  process.exit(1);
+}
+
 function assertValidOptions(opts: LsOptions, format: LsFormat): void {
-  if (opts.reveal && !opts.env) {
-    console.error("error: --reveal requires --env");
-    process.exit(1);
-  }
+  if (opts.check) return assertValidCheckOptions(opts, format);
+
+  if (opts.reveal && !opts.env) fail("--reveal requires --env");
   if (format === "json" && !(opts.reveal && opts.env && opts.map)) {
-    console.error("error: --format json requires --reveal, --env, and --map");
-    process.exit(1);
+    fail("--format json requires --reveal, --env, and --map");
   }
+}
+
+function assertValidCheckOptions(opts: LsOptions, format: LsFormat): void {
+  if (!opts.env) fail("--check requires --env");
+  if (opts.reveal) fail("--check cannot be combined with --reveal");
+  if (format === "json") fail("--check does not support --format json");
 }
 
 interface RevealArgs {
@@ -105,6 +124,60 @@ async function runReveal({ loaded, env, groups, filters, format }: RevealArgs): 
 
   console.error("warning: revealing secret values");
   printRows(buildRevealedRows(loaded.config.keys, resolution));
+}
+
+interface CheckArgs {
+  loaded: Awaited<ReturnType<typeof loadConfig>>;
+  env: string;
+  groups: string[] | undefined;
+  filters: string[] | undefined;
+}
+
+// Exhaustive validation sweep: resolve every declared key for the given env,
+// ignoring app mappings (roots stay undefined => legacy "all keys in scope").
+// Required keys that don't resolve fail the sweep; optional ones are reported
+// as skipped. Designed for CI gating, so it never reveals resolved values.
+async function runCheck({ loaded, env, groups, filters }: CheckArgs): Promise<void> {
+  const { topLevelErrors, keyErrors, resolution } = await resolveValidated({
+    config: loaded.config,
+    envName: env,
+    rootDir: loaded.rootDir,
+    registry: createDefaultRegistry(),
+    groups,
+    filters
+    // roots intentionally omitted: validate the full config, not the app mapping.
+  });
+
+  if (topLevelErrors.length > 0) {
+    for (const err of topLevelErrors) console.error(`error: ${err.message}`);
+    process.exit(1);
+  }
+
+  // resolution is always present once top-level checks pass.
+  const skipped = resolution ? reportOptionalSkips(resolution, loaded.config.keys) : 0;
+
+  if (keyErrors.length > 0) {
+    console.error(`error: ${keyErrors.length} key(s) failed validation for env "${env}":`);
+    for (const err of keyErrors) console.error(`  FAIL ${err.path}: ${err.message}`);
+    process.exit(1);
+  }
+
+  const suffix = skipped > 0 ? ` (${skipped} optional skipped)` : "";
+  console.log(`OK: all required keys resolve for env "${env}"${suffix}`);
+}
+
+// Prints a SKIP line for every optional key that didn't resolve and returns
+// how many were skipped. Required keys that fail surface as keyErrors instead.
+function reportOptionalSkips(resolution: Resolution, records: NormalizedRecord[]): number {
+  const optionalPaths = new Set(records.filter((r) => r.optional).map((r) => r.path));
+  let skipped = 0;
+  for (const status of resolution.statuses) {
+    if (status.status === "skipped" && optionalPaths.has(status.path)) {
+      console.log(`SKIP ${status.path}: ${formatSkipCause(status.cause)}`);
+      skipped += 1;
+    }
+  }
+  return skipped;
 }
 
 function parseFormat(raw: string | undefined): LsFormat {

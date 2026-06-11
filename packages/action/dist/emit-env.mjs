@@ -11756,7 +11756,17 @@ var AgeProvider = class {
     const opts2 = this.resolveOptions(ctx);
     const filePath = secretFilePath(opts2.secretsDir, ctx.keyPath);
     const identity = await readIdentity(opts2.identityFile);
-    const ciphertext = await readFile(filePath);
+    let ciphertext;
+    try {
+      ciphertext = await readFile(filePath);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        throw new Error(`age: secret "${ctx.keyPath}" not found in ${opts2.secretsDir}`, {
+          cause: err
+        });
+      }
+      throw err;
+    }
     const decrypter = new Decrypter();
     decrypter.addIdentity(identity);
     return await decrypter.decrypt(ciphertext, "text");

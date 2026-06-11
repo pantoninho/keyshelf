@@ -274,6 +274,22 @@ keyshelf ls --env dev --reveal --map ./apps/api/.env.keyshelf --format json
 
 `--reveal` decrypts secrets — guard accordingly. `--format json` is intended for programmatic consumers (e.g. the GitHub Action) and requires `--reveal`, `--env`, and `--map`.
 
+#### `keyshelf ls --check` — exhaustive validation sweep
+
+`run` resolution is **lazy**: it only checks the keys an app mapping actually references (see [`keyshelf run`](#keyshelf-run)). That keeps unrelated runs from failing, but it also means a never-mapped required key can sit unseeded — or rot — until the day something maps it. `--check` is the deliberate counterpart: the **exhaustive sweep** that resolves _every_ declared key for an env, ignoring app mappings entirely.
+
+```sh
+keyshelf ls --check --env dev
+keyshelf ls --check --env production        # sweep each env CI cares about
+```
+
+- Resolves every declared key for `--env` and **exits non-zero** if any _required_ key is unresolvable, listing each failing key and its cause (no binding for the env vs. a provider error) — never the secret value.
+- A _required_ key that can't resolve fails the sweep; an _optional_ key that doesn't resolve is reported as `SKIP`, not a failure.
+- Exit code `0` when everything required resolves — suitable for CI gating, one invocation per env.
+- `--check` requires `--env` and can't be combined with `--reveal` or `--format json`. `--group` / `--filter` narrow the swept set when you want to gate a subset.
+
+The rule of thumb: **`run` = lazy** (only what an app needs, right now); **`ls --check` = the exhaustive sweep** (everything declared, deliberately, in CI).
+
 ### `keyshelf set`
 
 Write a secret value through its bound provider. Does **not** edit `keyshelf.config.ts` — config keys are hand-edited.
