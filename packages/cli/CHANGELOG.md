@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.3.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.2.0...keyshelf-v5.3.0) (2026-06-11)
+
+
+### Features
+
+* **ls:** opt-in exhaustive validation sweep for CI ([#151](https://github.com/pantoninho/keyshelf/issues/151)) ([ea60893](https://github.com/pantoninho/keyshelf/commit/ea60893339ac3f6fdc61fe2ebe1a96f59ad81668))
+* **resolver:** scope run resolution + validation to the app mapping ([#150](https://github.com/pantoninho/keyshelf/issues/150)) ([e81a028](https://github.com/pantoninho/keyshelf/commit/e81a028b90deb234b0d6e96cc8cd18bcc8486b91))
+
+
+### Bug Fixes
+
+* **run:** single resolution pass — stop resolving every secret twice ([#146](https://github.com/pantoninho/keyshelf/issues/146)) ([56080c7](https://github.com/pantoninho/keyshelf/commit/56080c755e546a68e8e8dac6dcde1919be67e573))
+
 ## [5.2.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.1.1...keyshelf-v5.2.0) (2026-05-14)
 
 
