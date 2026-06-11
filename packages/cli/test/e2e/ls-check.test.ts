@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { CLI, TSX } from "./helpers/cli.js";
 import { setupAgeFixtureDir, writeEnvKeyshelf, writeKeyshelfConfig } from "./helpers/fixture.js";
+
+// Each test spawns at least one tsx subprocess; cold-start adds up on CI, so
+// give the whole file plenty of headroom over the 5s default.
+const SPAWN_TIMEOUT = 30_000;
 
 interface ExecResult {
   status: number;
@@ -50,92 +54,136 @@ async function writeFixture(root: string) {
   // App mapping only references db/host — the sweep must ignore this and check
   // db/password, ci/token, optionalThing regardless.
   await writeEnvKeyshelf(root, ["DB_HOST=db/host"]);
-  return { identityFile, secretsDir };
 }
 
-function seedAll(root: string) {
-  execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "host-pw", "db/password"], {
-    cwd: root,
-    encoding: "utf-8"
-  });
-  execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "ci-pw", "ci/token"], {
+function setSecret(root: string, env: string, keyPath: string, value: string) {
+  execFileSync(TSX, [CLI, "set", "--env", env, "--value", value, keyPath], {
     cwd: root,
     encoding: "utf-8"
   });
 }
 
-describe("keyshelf ls --check", () => {
+// Read-only sweeps against a fully-seeded fixture. Seeding once in beforeAll
+// keeps each test to a single spawn so the suite stays well under timeout.
+describe("keyshelf ls --check (seeded)", () => {
   let root: string;
 
-  beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), "keyshelf-ls-check-"));
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-ls-check-seeded-"));
     await writeFixture(root);
-  });
+    setSecret(root, "dev", "db/password", "host-pw");
+    setSecret(root, "dev", "ci/token", "ci-pw");
+  }, SPAWN_TIMEOUT);
 
-  it("exits 0 when every required key resolves (optional unresolved is fine)", () => {
-    seedAll(root);
-    const result = runCheck(["--env", "dev"], root);
-    expect(result.status).toBe(0);
-  });
+  it(
+    "exits 0 when every required key resolves (optional unresolved is fine)",
+    () => {
+      const result = runCheck(["--env", "dev"], root);
+      expect(result.status).toBe(0);
+    },
+    SPAWN_TIMEOUT
+  );
 
-  it("validates keys that no app mapping references", () => {
-    // Nothing seeded: db/password and ci/token are unmapped but required.
-    const result = runCheck(["--env", "dev"], root);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("db/password");
-    expect(result.stderr).toContain("ci/token");
-  });
+  it(
+    "reports optional unresolved keys as skipped, not failures",
+    () => {
+      // optionalThing is never seeded -> skipped, but the sweep still exits 0.
+      const result = runCheck(["--env", "dev"], root);
+      expect(result.status).toBe(0);
+      expect(result.stdout + result.stderr).toMatch(/optionalThing|optional/);
+    },
+    SPAWN_TIMEOUT
+  );
 
-  it("reports failing keys with a cause and never the secret value", () => {
-    // Seed only ci/token; db/password stays unseeded.
-    execFileSync(TSX, [CLI, "set", "--env", "dev", "--value", "the-secret", "ci/token"], {
-      cwd: root,
-      encoding: "utf-8"
-    });
-    const result = runCheck(["--env", "dev"], root);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("db/password");
-    expect(result.stderr.toLowerCase()).toMatch(/not[ _-]?found|no binding|could not/);
-    expect(result.stderr).not.toContain("the-secret");
-  });
+  it(
+    "distinguishes no binding for env from a provider error",
+    () => {
+      // Secrets are envless storage, so seeding for dev satisfies production
+      // too. What stays unresolvable for production is apiUrl: required,
+      // dev-only binding, no fallback => "no value for required key" (a binding
+      // gap, not a provider error).
+      const result = runCheck(["--env", "production"], root);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("apiUrl");
+      expect(result.stderr.toLowerCase()).toMatch(/no value|required/);
+    },
+    SPAWN_TIMEOUT
+  );
+});
 
-  it("distinguishes no binding for env from a provider error", () => {
-    // Secrets are envless storage, so seeding for dev satisfies production too.
-    // What stays unresolvable for production is apiUrl: required, dev-only
-    // binding, no fallback => "no value for required key" (a binding gap, not a
-    // provider error).
-    seedAll(root);
-    const result = runCheck(["--env", "production"], root);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("apiUrl");
-    expect(result.stderr.toLowerCase()).toMatch(/no value|required/);
-  });
+describe("keyshelf ls --check (unseeded)", () => {
+  let root: string;
 
-  it("surfaces a provider error cause for an unseeded required secret", () => {
-    // Nothing seeded; db/password is required and its provider file is absent.
-    const result = runCheck(["--env", "dev"], root);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("db/password");
-    expect(result.stderr.toLowerCase()).toMatch(/not found/);
-  });
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-ls-check-unseeded-"));
+    await writeFixture(root);
+  }, SPAWN_TIMEOUT);
 
-  it("reports optional unresolved keys as skipped, not failures", () => {
-    seedAll(root);
-    const result = runCheck(["--env", "dev"], root);
-    // optionalThing is never seeded -> skipped, still exit 0
-    expect(result.status).toBe(0);
-    expect(result.stdout + result.stderr).toMatch(/optionalThing|optional/);
-  });
+  it(
+    "validates keys that no app mapping references",
+    () => {
+      // db/password and ci/token are unmapped but required, and unseeded.
+      const result = runCheck(["--env", "dev"], root);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("db/password");
+      expect(result.stderr).toContain("ci/token");
+    },
+    SPAWN_TIMEOUT
+  );
 
-  it("requires --env", () => {
-    const result = runCheck([], root);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("--env");
-  });
+  it(
+    "surfaces a provider not-found cause without leaking values",
+    () => {
+      const result = runCheck(["--env", "dev"], root);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("db/password");
+      expect(result.stderr.toLowerCase()).toMatch(/not found/);
+    },
+    SPAWN_TIMEOUT
+  );
 
-  it("rejects an unknown env", () => {
-    const result = runCheck(["--env", "nope"], root);
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("nope");
-  });
+  it(
+    "requires --env",
+    () => {
+      const result = runCheck([], root);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("--env");
+    },
+    SPAWN_TIMEOUT
+  );
+
+  it(
+    "rejects an unknown env",
+    () => {
+      const result = runCheck(["--env", "nope"], root);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("nope");
+    },
+    SPAWN_TIMEOUT
+  );
+});
+
+// A failing sweep must never print a seeded secret's value. Kept separate
+// because it seeds a value we then assert is absent from output.
+describe("keyshelf ls --check (no value leak)", () => {
+  let root: string;
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-ls-check-leak-"));
+    await writeFixture(root);
+    // Seed only ci/token; db/password stays unseeded so the sweep fails.
+    setSecret(root, "dev", "ci/token", "the-secret-value");
+  }, SPAWN_TIMEOUT);
+
+  it(
+    "never prints a resolved secret value in its report",
+    () => {
+      const result = runCheck(["--env", "dev"], root);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("db/password");
+      expect(result.stderr).not.toContain("the-secret-value");
+      expect(result.stdout).not.toContain("the-secret-value");
+    },
+    SPAWN_TIMEOUT
+  );
 });
