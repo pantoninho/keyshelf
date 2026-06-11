@@ -13,9 +13,11 @@ export {
 export {
   formatSkipCause,
   renderAppMapping,
+  resolveValidated,
   resolveWithStatus,
   validate,
-  type ResolveOptions
+  type ResolveOptions,
+  type ResolveValidatedResult
 } from "./resolver/index.js";
 
 export type {

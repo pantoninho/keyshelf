@@ -5,6 +5,7 @@ import { age, config, defineConfig, normalizeConfig, secret } from "../../src/co
 import {
   renderAppMapping,
   resolve,
+  resolveValidated,
   resolveWithStatus,
   validate
 } from "../../src/resolver/index.js";
@@ -445,6 +446,84 @@ describe("resolver", () => {
       ],
       keyErrors: []
     });
+  });
+
+  it("resolveValidated resolves each key through its provider at most once", async () => {
+    const provider = mockProvider("age", "secret-value");
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev"],
+        keys: {
+          a: secret({ value: age({ identityFile: "./a.txt", secretsDir: "./secrets" }) }),
+          b: secret({ value: age({ identityFile: "./b.txt", secretsDir: "./secrets" }) })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "dev",
+      rootDir: "/repo",
+      registry: registry(provider)
+    });
+
+    expect(result.topLevelErrors).toEqual([]);
+    expect(result.keyErrors).toEqual([]);
+    expect(result.resolution.resolved).toEqual([
+      { path: "a", value: "secret-value" },
+      { path: "b", value: "secret-value" }
+    ]);
+    // One resolution per key per run — not two passes.
+    expect(provider.resolve).toHaveBeenCalledTimes(2);
+  });
+
+  it("resolveValidated surfaces top-level errors without resolving", async () => {
+    const provider = mockProvider("age", "secret-value");
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev"],
+        keys: {
+          token: secret({ value: age({ identityFile: "./a.txt", secretsDir: "./secrets" }) })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "prod",
+      rootDir: "/repo",
+      registry: registry(provider)
+    });
+
+    expect(result.topLevelErrors).toMatchObject([{ message: 'Unknown env "prod"' }]);
+    expect(provider.resolve).not.toHaveBeenCalled();
+  });
+
+  it("resolveValidated surfaces unresolvable required keys as keyErrors", async () => {
+    const provider = mockProvider("age");
+    (provider.resolve as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("auth failed"));
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["dev"],
+        keys: {
+          token: secret({ value: age({ identityFile: "./a.txt", secretsDir: "./secrets" }) })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "dev",
+      rootDir: "/repo",
+      registry: registry(provider)
+    });
+
+    expect(result.topLevelErrors).toEqual([]);
+    expect(result.keyErrors).toMatchObject([{ path: "token", message: "auth failed" }]);
+    expect(provider.resolve).toHaveBeenCalledTimes(1);
   });
 
   it("resolve still throws on top-level errors (unchanged fast-fail behavior)", async () => {
