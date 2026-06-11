@@ -76,30 +76,24 @@ export const lsCommand = new Command("ls")
     printRows(buildSchemaRows(loaded.config.keys, opts.env, groups, filters));
   });
 
+function fail(message: string): never {
+  console.error(`error: ${message}`);
+  process.exit(1);
+}
+
 function assertValidOptions(opts: LsOptions, format: LsFormat): void {
-  if (opts.check) {
-    if (!opts.env) {
-      console.error("error: --check requires --env");
-      process.exit(1);
-    }
-    if (opts.reveal) {
-      console.error("error: --check cannot be combined with --reveal");
-      process.exit(1);
-    }
-    if (format === "json") {
-      console.error("error: --check does not support --format json");
-      process.exit(1);
-    }
-    return;
-  }
-  if (opts.reveal && !opts.env) {
-    console.error("error: --reveal requires --env");
-    process.exit(1);
-  }
+  if (opts.check) return assertValidCheckOptions(opts, format);
+
+  if (opts.reveal && !opts.env) fail("--reveal requires --env");
   if (format === "json" && !(opts.reveal && opts.env && opts.map)) {
-    console.error("error: --format json requires --reveal, --env, and --map");
-    process.exit(1);
+    fail("--format json requires --reveal, --env, and --map");
   }
+}
+
+function assertValidCheckOptions(opts: LsOptions, format: LsFormat): void {
+  if (!opts.env) fail("--check requires --env");
+  if (opts.reveal) fail("--check cannot be combined with --reveal");
+  if (format === "json") fail("--check does not support --format json");
 }
 
 interface RevealArgs {
@@ -160,32 +154,30 @@ async function runCheck({ loaded, env, groups, filters }: CheckArgs): Promise<vo
   }
 
   // resolution is always present once top-level checks pass.
-  const recordByPath = new Map(loaded.config.keys.map((record) => [record.path, record]));
-  let skipped = 0;
-
-  if (resolution !== undefined) {
-    for (const status of resolution.statuses) {
-      if (status.status === "skipped") {
-        const record = recordByPath.get(status.path);
-        if (record?.optional) {
-          console.log(`SKIP ${status.path}: ${formatSkipCause(status.cause)}`);
-          skipped += 1;
-        }
-      }
-    }
-  }
+  const skipped = resolution ? reportOptionalSkips(resolution, loaded.config.keys) : 0;
 
   if (keyErrors.length > 0) {
     console.error(`error: ${keyErrors.length} key(s) failed validation for env "${env}":`);
-    for (const err of keyErrors) {
-      console.error(`  FAIL ${err.path}: ${err.message}`);
-    }
+    for (const err of keyErrors) console.error(`  FAIL ${err.path}: ${err.message}`);
     process.exit(1);
   }
 
-  console.log(
-    `OK: all required keys resolve for env "${env}"${skipped > 0 ? ` (${skipped} optional skipped)` : ""}`
-  );
+  const suffix = skipped > 0 ? ` (${skipped} optional skipped)` : "";
+  console.log(`OK: all required keys resolve for env "${env}"${suffix}`);
+}
+
+// Prints a SKIP line for every optional key that didn't resolve and returns
+// how many were skipped. Required keys that fail surface as keyErrors instead.
+function reportOptionalSkips(resolution: Resolution, records: NormalizedRecord[]): number {
+  const optionalPaths = new Set(records.filter((r) => r.optional).map((r) => r.path));
+  let skipped = 0;
+  for (const status of resolution.statuses) {
+    if (status.status === "skipped" && optionalPaths.has(status.path)) {
+      console.log(`SKIP ${status.path}: ${formatSkipCause(status.cause)}`);
+      skipped += 1;
+    }
+  }
+  return skipped;
 }
 
 function parseFormat(raw: string | undefined): LsFormat {
