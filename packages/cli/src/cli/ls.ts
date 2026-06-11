@@ -183,7 +183,9 @@ async function runCheck({ loaded, env, groups, filters }: CheckArgs): Promise<vo
     process.exit(1);
   }
 
-  console.log(`OK: all required keys resolve for env "${env}"${skipped > 0 ? ` (${skipped} optional skipped)` : ""}`);
+  console.log(
+    `OK: all required keys resolve for env "${env}"${skipped > 0 ? ` (${skipped} optional skipped)` : ""}`
+  );
 }
 
 function parseFormat(raw: string | undefined): LsFormat {

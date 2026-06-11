@@ -50,7 +50,9 @@ export class AgeProvider implements Provider {
       ciphertext = await readFile(filePath);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        throw new Error(`age: secret "${ctx.keyPath}" not found in ${opts.secretsDir}`);
+        throw new Error(`age: secret "${ctx.keyPath}" not found in ${opts.secretsDir}`, {
+          cause: err
+        });
       }
       throw err;
     }
