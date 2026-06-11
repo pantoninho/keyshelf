@@ -602,9 +602,7 @@ describe("scoped resolution (roots)", () => {
       roots: ["a"]
     });
 
-    expect(result.keyErrors).toEqual([
-      expect.objectContaining({ path: "a" })
-    ]);
+    expect(result.keyErrors).toEqual([expect.objectContaining({ path: "a" })]);
   });
 
   it("expands roots transitively through config template references", async () => {
