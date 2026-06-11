@@ -36,6 +36,30 @@ export async function resolve(options: ResolveOptions): Promise<ResolvedKey[]> {
 }
 
 export async function validate(options: ResolveOptions): Promise<ValidationResult> {
+  const { topLevelErrors, keyErrors } = await resolveValidated(options);
+  return { topLevelErrors, keyErrors };
+}
+
+export interface ResolveValidatedResult extends ValidationResult {
+  // Present only when no top-level error short-circuited resolution.
+  resolution?: Resolution;
+}
+
+// Single-pass validate + resolve. Runs the pre-resolution top-level checks,
+// then resolves every selected key exactly once and derives key-level
+// validation errors from that one Resolution. Callers reuse `resolution` for
+// rendering instead of resolving a second time.
+export async function resolveValidated(options: ResolveOptions): Promise<ResolveValidatedResult> {
+  const topLevelErrors = checkTopLevel(options);
+  if (topLevelErrors.length > 0) {
+    return { topLevelErrors, keyErrors: [] };
+  }
+
+  const resolution = await resolveWithStatus(options);
+  return { topLevelErrors: [], keyErrors: validateResolution(resolution), resolution };
+}
+
+function checkTopLevel(options: ResolveOptions): TopLevelError[] {
   const topLevelErrors: TopLevelError[] = [];
 
   const envError = checkValidEnv(options);
@@ -44,18 +68,17 @@ export async function validate(options: ResolveOptions): Promise<ValidationResul
   const groupCheck = checkGroupFilter(options.config, options.groups);
   topLevelErrors.push(...groupCheck.errors);
 
-  if (topLevelErrors.length > 0) {
-    return { topLevelErrors, keyErrors: [] };
-  }
+  if (topLevelErrors.length > 0) return topLevelErrors;
 
   const selected = selectRecords(options.config, options.groups, options.filters);
   const envRequiredError = checkEnvProvidedWhenRequired(selected, options.envName);
-  if (envRequiredError !== undefined) {
-    return { topLevelErrors: [envRequiredError], keyErrors: [] };
-  }
+  if (envRequiredError !== undefined) return [envRequiredError];
 
-  const resolution = await resolveWithStatus(options);
-  const keyErrors = resolution.statuses
+  return [];
+}
+
+function validateResolution(resolution: Resolution): ValidationResult["keyErrors"] {
+  return resolution.statuses
     .filter((status): status is Extract<KeyResolutionStatus, { status: "error" }> => {
       return status.status === "error";
     })
@@ -64,8 +87,6 @@ export async function validate(options: ResolveOptions): Promise<ValidationResul
       message: status.message,
       error: status.error
     }));
-
-  return { topLevelErrors: [], keyErrors };
 }
 
 export async function resolveWithStatus(options: ResolveOptions): Promise<Resolution> {
