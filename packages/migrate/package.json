@@ -1,6 +1,6 @@
 {
   "name": "@keyshelf/migrate",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Migrate keyshelf v4 YAML projects to keyshelf.config.ts",
   "type": "module",
   "bin": {
