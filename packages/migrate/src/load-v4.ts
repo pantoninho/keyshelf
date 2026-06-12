@@ -87,9 +87,24 @@ function createBareTagType(tagName: string): yaml.Type {
   });
 }
 
+// `!plain "value"` forces a scalar to be treated as a literal value rather
+// than a provider reference. We construct the raw string so it flows through
+// the override path as a plain-string override, which normalize() turns into
+// `plain("value")` in the emitted v5 config (matching keyshelf's own loader).
+const plainScalarType = new yaml.Type("!plain", {
+  kind: "scalar",
+  construct(data: unknown): string {
+    return data == null ? "" : String(data);
+  }
+});
+
 const mappingTypes = TAG_NAMES.map((name) => createTagType(name));
 const bareTypes = TAG_NAMES.map((name) => createBareTagType(name));
-const KEYSHELF_SCHEMA = yaml.DEFAULT_SCHEMA.extend([...bareTypes, ...mappingTypes]);
+const KEYSHELF_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
+  ...bareTypes,
+  ...mappingTypes,
+  plainScalarType
+]);
 
 export async function loadV4Project(cwd: string): Promise<V4Project> {
   const rootDir = resolve(cwd);

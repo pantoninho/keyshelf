@@ -93,9 +93,19 @@ function objectLiteral(value: Record<string, unknown>, indent: number): string {
   const childSpaces = " ".repeat(indent + 2);
   return [
     "{",
-    ...entries.map(([key, entry]) => `${childSpaces}${key}: ${valueLiteral(entry, indent + 2)},`),
+    ...entries.map(
+      ([key, entry]) => `${childSpaces}${propertyKey(key)}: ${valueLiteral(entry, indent + 2)},`
+    ),
     `${spaces}}`
   ].join("\n");
+}
+
+// Valid JS identifiers can be bare object keys; anything else (e.g. env names
+// like "pr-tests") must be quoted to produce valid TypeScript.
+const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function propertyKey(key: string): string {
+  return IDENTIFIER_RE.test(key) ? key : JSON.stringify(key);
 }
 
 function valueLiteral(value: unknown, indent: number): string {
