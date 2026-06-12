@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.2](https://github.com/pantoninho/keyshelf/compare/migrate-v1.2.0...migrate-v1.2.2) (2026-06-12)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * keyshelf bumped from file:../cli to 5.3.1
+
 ## [1.2.1](https://github.com/pantoninho/keyshelf/compare/migrate-v1.2.0...migrate-v1.2.1) (2026-06-11)
 
 
