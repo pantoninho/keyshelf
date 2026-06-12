@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.3.0...keyshelf-v5.3.1) (2026-06-12)
+
+
+### Bug Fixes
+
+* **cli:** derive --version from package.json (closes [#153](https://github.com/pantoninho/keyshelf/issues/153)) ([#154](https://github.com/pantoninho/keyshelf/issues/154)) ([534fb89](https://github.com/pantoninho/keyshelf/commit/534fb89a1889efcebee434c269f659cdec335462))
+
 ## [5.3.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.2.0...keyshelf-v5.3.0) (2026-06-11)
 
 
