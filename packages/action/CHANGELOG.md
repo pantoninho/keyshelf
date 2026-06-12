@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v1.3.0...keyshelf-action-v1.3.1) (2026-06-12)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * keyshelf bumped from file:../cli to 5.3.1
+
 ## [1.3.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v1.2.0...keyshelf-action-v1.3.0) (2026-06-11)
 
 
