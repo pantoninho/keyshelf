@@ -10,9 +10,9 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -119,9 +119,9 @@ jobs:
   runtime-deps-benchmark:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -140,11 +140,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (acts as action source at a separate path)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: action-source
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
