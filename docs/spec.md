@@ -365,7 +365,7 @@ the config. The other commands are helpers around it:
 config is hand-edited; `up` is what propagates structural changes (renames,
 deletions) into storage.
 
-#### `ls` visibility and env applicability
+### `ls` visibility and env applicability
 
 Plain `keyshelf ls` (no `--env`) lists the **full schema** — every declared
 key, including env-scoped ones. Once an env is active (`ls --env`,
