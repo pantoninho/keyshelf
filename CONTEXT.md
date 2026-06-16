@@ -35,10 +35,13 @@ _Avoid_: Supported env, valid env
 A (key, env) pair where the env is not among the key's applicable envs. When an
 env is active the key is excluded from that env's universe entirely — not
 resolved, not listed, never an error — the env-driven analog of a key being out
-of scope. Distinct from `optional` (which tolerates a missing binding _within_
-an applicable env) and from a CLI `--filter`/`--group` (a user-supplied
-selection that still reports the key as filtered).
-_Avoid_: Skipped (an N/A key is invisible, not reported), disabled
+of scope. "Never an error" applies to the env-driven sweep (`ls`, bare `run`),
+where nothing referenced the key; an **explicit** user reference is the
+exception — a `run --map` entry that names an N/A key is an error (the env does
+not have that key), not a silent drop. Distinct from `optional` (which tolerates
+a missing binding _within_ an applicable env) and from a CLI `--filter`/`--group`
+(a user-supplied selection that still reports the key as filtered).
+_Avoid_: Skipped (an N/A key is invisible in the env sweep, not reported), disabled
 
 **Optional key**:
 A key that may legitimately have no value in an applicable env: the resolver
