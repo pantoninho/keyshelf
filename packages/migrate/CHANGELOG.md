@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/pantoninho/keyshelf/compare/migrate-v1.2.0...migrate-v1.2.1) (2026-06-16)
+
+
+### Bug Fixes
+
+* **migrate:** handle !plain scalars and non-identifier keys in yaml-to-typescript ([8d3a198](https://github.com/pantoninho/keyshelf/commit/8d3a1981441332a59b38e050c9801e6daf464ee0))
+
 ## [1.2.1](https://github.com/pantoninho/keyshelf/compare/migrate-v1.2.0...migrate-v1.2.1) (2026-06-11)
 
 
