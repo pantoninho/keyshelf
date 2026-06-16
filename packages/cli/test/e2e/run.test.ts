@@ -210,3 +210,53 @@ describe("keyshelf-next run (scoped to app mapping)", () => {
     expect(result.stderr).toContain("b");
   });
 });
+
+describe("keyshelf-next run (env-scoped key applicability)", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-run-envscope-"));
+    // prodUrl is env-scoped (production-only binding, no fallback). Mapped to an
+    // env var so we can observe whether `run` resolves it per active env.
+    await writeKeyshelfConfig(root, [
+      `name: "demo",`,
+      `envs: ["dev", "production"],`,
+      `keys: {`,
+      `  always: config({ value: "alpha" }),`,
+      `  prodUrl: config({ values: { production: "prod-url" } }),`,
+      `},`
+    ]);
+    await writeEnvKeyshelf(root, ["ALWAYS=always", "PROD_URL=prodUrl"]);
+  });
+
+  it("excludes an N/A env-scoped key in dev: succeeds, injects no value, no error", () => {
+    const result = spawnSync(
+      TSX,
+      [
+        CLI,
+        "run",
+        "--env",
+        "dev",
+        "--",
+        "node",
+        "-e",
+        "console.log(JSON.stringify({a: process.env.ALWAYS ?? null, p: process.env.PROD_URL ?? null}))"
+      ],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout.trim())).toEqual({ a: "alpha", p: null });
+    // N/A keys are not errors and not the loud "no value for required key" path.
+    expect(result.stderr).not.toMatch(/no value for required key/i);
+  });
+
+  it("resolves the env-scoped key in its applicable env (production)", () => {
+    const result = spawnSync(
+      TSX,
+      [CLI, "run", "--env", "production", "--", "node", "-e", "console.log(process.env.PROD_URL)"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe("prod-url");
+  });
+});

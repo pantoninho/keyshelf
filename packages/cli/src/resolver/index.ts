@@ -386,7 +386,9 @@ function hasValuesWithoutFallback(record: NormalizedRecord): boolean {
 
 // An env-scoped key (values, no fallback) is N/A in any active env not named in
 // its `values` map. A key with a fallback applies to every env and is never N/A.
-function isNotApplicable(record: NormalizedRecord, envName: string): boolean {
+// Exported so `ls` can drop N/A keys from its rows when an env is active,
+// matching the resolver's selection-phase exclusion.
+export function isNotApplicable(record: NormalizedRecord, envName: string): boolean {
   return hasValuesWithoutFallback(record) && !Object.hasOwn(record.values ?? {}, envName);
 }
 

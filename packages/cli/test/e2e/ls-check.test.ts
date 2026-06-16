@@ -162,6 +162,49 @@ describe("keyshelf ls --check (unseeded)", () => {
   );
 });
 
+// Env-scoped + optional composition under the exhaustive sweep.
+describe("keyshelf ls --check (env-scoped + optional)", () => {
+  let root: string;
+
+  beforeAll(async () => {
+    const { identityFile, secretsDir } = await setupAgeFixtureDir(
+      (root = await mkdtemp(join(tmpdir(), "keyshelf-ls-check-envscope-")))
+    );
+    const age = `age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} })`;
+    await writeKeyshelfConfig(root, [
+      `name: "demo",`,
+      `envs: ["dev", "production"],`,
+      `keys: {`,
+      `  base: config({ default: "ok" }),`,
+      // env-scoped + optional: production-only binding, no fallback.
+      `  prodOptional: secret({ optional: true, values: { production: ${age} } }),`,
+      `},`
+    ]);
+    await writeEnvKeyshelf(root, ["BASE=base"]);
+  }, SPAWN_TIMEOUT);
+
+  it(
+    "is N/A (excluded, not even a SKIP line) in a non-applicable env",
+    () => {
+      const result = runCheck(["--env", "dev"], root);
+      expect(result.status).toBe(0);
+      expect(result.stdout + result.stderr).not.toContain("prodOptional");
+    },
+    SPAWN_TIMEOUT
+  );
+
+  it(
+    "is tolerated as an optional SKIP in its applicable env when unseeded",
+    () => {
+      // production ∈ values → applicable; unseeded provider → optional skip, sweep OK.
+      const result = runCheck(["--env", "production"], root);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("SKIP prodOptional");
+    },
+    SPAWN_TIMEOUT
+  );
+});
+
 // A failing sweep must never print a seeded secret's value. Kept separate
 // because it seeds a value we then assert is absent from output.
 describe("keyshelf ls --check (no value leak)", () => {
