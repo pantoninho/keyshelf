@@ -283,10 +283,23 @@ above are pinned.
 
 For each declared key, given an active `envName`:
 
+0. **Applicability (N/A exclusion).** If the key is **env-scoped** — it has at
+   least one `values` entry and **no** `value`/`default` fallback — and
+   `envName` is **not** among its `values` keys, the key is **not applicable**
+   to this env. It is excluded from the env's universe entirely: not resolved,
+   not listed, never an error (no required-key failure, no `optional` skip, no
+   count). A key with a fallback applies to every env and is never excluded
+   here. This step only runs when an env is active; with no `--env` the full
+   schema is in scope. See
+   [ADR-0001](adr/0001-env-applicability-derived-from-values.md).
 1. If `values[envName]` is set → use that binding.
 2. Else if `value` or `default` is set → use that binding.
 3. Else if the key is `optional` → skip (resolver returns `undefined`).
 4. Else → resolver raises a required-key error.
+
+Step 0 is the env-driven analog of the reachability (`roots`) exclusion: an
+applicable key that fails to resolve still FAILs (rot is preserved); only a key
+the active env does **not** apply to is silently dropped.
 
 For a binding that is a `ProviderRef`, the resolver invokes the provider with
 a `ProviderContext` (Phase 4 shape) and uses the returned string.
@@ -351,6 +364,16 @@ the config. The other commands are helpers around it:
 `set` and `import` only write values — they never edit the config. The
 config is hand-edited; `up` is what propagates structural changes (renames,
 deletions) into storage.
+
+#### `ls` visibility and env applicability
+
+Plain `keyshelf ls` (no `--env`) lists the **full schema** — every declared
+key, including env-scoped ones. Once an env is active (`ls --env`,
+`ls --reveal`, `ls --check`, and likewise `run`), env-scoped keys that are
+**N/A** to that env (step 0 above) are dropped from the output entirely: no
+row, no `(missing)` marker, no SKIP line, no FAIL. They simply do not exist in
+that env's universe. See
+[ADR-0001](adr/0001-env-applicability-derived-from-values.md).
 
 ### Renaming a key
 

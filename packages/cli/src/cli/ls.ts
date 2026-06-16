@@ -201,36 +201,40 @@ function buildSchemaRows(
   const groupSet = groups ? new Set(groups) : undefined;
   const filterPrefixes = filters ?? [];
 
-  return records
-    // When an env is active, env-scoped keys N/A to it are excluded from the
-    // env's universe (no row) — matching the resolver's selection-phase drop.
-    // Plain `ls` (no env) lists the full schema.
-    .filter((record) => envName === undefined || !isNotApplicable(record, envName))
-    .map((record): KeyRow => {
-      const filtered = isFiltered(record, groupSet, filterPrefixes);
-      return {
-        path: record.path,
-        kind: record.kind,
-        group: record.group ?? "",
-        detail: filtered ? "(filtered)" : describeSource(record, envName)
-      };
-    });
+  return (
+    records
+      // When an env is active, env-scoped keys N/A to it are excluded from the
+      // env's universe (no row) — matching the resolver's selection-phase drop.
+      // Plain `ls` (no env) lists the full schema.
+      .filter((record) => envName === undefined || !isNotApplicable(record, envName))
+      .map((record): KeyRow => {
+        const filtered = isFiltered(record, groupSet, filterPrefixes);
+        return {
+          path: record.path,
+          kind: record.kind,
+          group: record.group ?? "",
+          detail: filtered ? "(filtered)" : describeSource(record, envName)
+        };
+      })
+  );
 }
 
 function buildRevealedRows(records: NormalizedRecord[], resolution: Resolution): KeyRow[] {
-  return records
-    // N/A env-scoped keys carry no resolution status (the resolver never
-    // selected them); drop them so they don't render as "(missing)".
-    .filter((record) => resolution.statusByPath.has(record.path))
-    .map((record): KeyRow => {
-      const status = resolution.statusByPath.get(record.path);
-      return {
-        path: record.path,
-        kind: record.kind,
-        group: record.group ?? "",
-        detail: describeStatus(record, status)
-      };
-    });
+  return (
+    records
+      // N/A env-scoped keys carry no resolution status (the resolver never
+      // selected them); drop them so they don't render as "(missing)".
+      .filter((record) => resolution.statusByPath.has(record.path))
+      .map((record): KeyRow => {
+        const status = resolution.statusByPath.get(record.path);
+        return {
+          path: record.path,
+          kind: record.kind,
+          group: record.group ?? "",
+          detail: describeStatus(record, status)
+        };
+      })
+  );
 }
 
 function describeStatus(record: NormalizedRecord, status: KeyResolutionStatus | undefined): string {
