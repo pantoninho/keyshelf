@@ -392,6 +392,42 @@ export function isNotApplicable(record: NormalizedRecord, envName: string): bool
   return hasValuesWithoutFallback(record) && !Object.hasOwn(record.values ?? {}, envName);
 }
 
+export interface NotApplicableMapReference {
+  envVar: string;
+  keyPath: string;
+  envName: string;
+}
+
+// An explicit `--map` entry that names a key which is N/A in the active env is
+// an error (ADR-0002): from the map's point of view the key is absent in this
+// env, exactly like a reference to a key that does not exist. This is the
+// opposite of bare-`run`'s env-driven sweep, where an unreferenced N/A key is
+// silently excluded. Returns one entry per offending (env var, key) pair so the
+// caller can fail before running the subprocess.
+export function findNotApplicableMapReferences(
+  config: NormalizedConfig,
+  mappings: AppMapping[],
+  envName: string | undefined
+): NotApplicableMapReference[] {
+  if (envName === undefined) return [];
+
+  const recordByPath = new Map(config.keys.map((record) => [record.path, record] as const));
+  const offenders: NotApplicableMapReference[] = [];
+
+  for (const mapping of mappings) {
+    const references = isTemplateMapping(mapping) ? mapping.keyPaths : [mapping.keyPath];
+    for (const keyPath of references) {
+      const record = recordByPath.get(keyPath);
+      // Unknown keys are already rejected at load time; only N/A applies here.
+      if (record !== undefined && isNotApplicable(record, envName)) {
+        offenders.push({ envVar: mapping.envVar, keyPath, envName });
+      }
+    }
+  }
+
+  return offenders;
+}
+
 async function resolveSelectedRecord(
   record: NormalizedRecord,
   options: ResolveOptions,
@@ -522,15 +558,19 @@ function skippedEnvVar(
     envVar,
     status: "skipped",
     keyPath,
-    cause: statusToSkipCause(status),
+    cause: statusToSkipCause(status, keyPath),
     mapping
   };
 }
 
-function statusToSkipCause(status: KeyResolutionStatus | undefined): SkipCause {
+function statusToSkipCause(status: KeyResolutionStatus | undefined, keyPath: string): SkipCause {
   if (status?.status === "filtered" || status?.status === "skipped") return status.cause;
-  // Defensive fallback — shouldn't be reached with a validated config.
-  return { type: "optional-no-value" };
+  // A mapped key with no skip status is unexpected: filters/optional produce a
+  // skip cause, and an N/A map reference is rejected upstream (ADR-0002) before
+  // rendering. Reaching here means the key neither resolved nor has a reason —
+  // surface it loudly rather than inventing a misleading "optional and has no
+  // value" cause (which previously masked N/A references).
+  throw new Error(`mapped key "${keyPath}" was not resolved and has no skip reason`);
 }
 
 class FilteredTemplateReferenceError extends Error {
