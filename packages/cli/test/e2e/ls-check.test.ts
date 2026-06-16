@@ -96,16 +96,15 @@ describe("keyshelf ls --check (seeded)", () => {
   );
 
   it(
-    "distinguishes no binding for env from a provider error",
+    "excludes an env-scoped key from an env outside its values (N/A)",
     () => {
-      // Secrets are envless storage, so seeding for dev satisfies production
-      // too. What stays unresolvable for production is apiUrl: required,
-      // dev-only binding, no fallback => "no value for required key" (a binding
-      // gap, not a provider error).
+      // apiUrl is env-scoped (dev-only binding, no fallback), so it is N/A in
+      // production: excluded from the sweep entirely — no FAIL, no SKIP line,
+      // never even mentioned. Secrets are envless storage seeded for dev, which
+      // satisfies production too, so the whole sweep passes.
       const result = runCheck(["--env", "production"], root);
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toContain("apiUrl");
-      expect(result.stderr.toLowerCase()).toMatch(/no value|required/);
+      expect(result.status).toBe(0);
+      expect(result.stdout + result.stderr).not.toContain("apiUrl");
     },
     SPAWN_TIMEOUT
   );
