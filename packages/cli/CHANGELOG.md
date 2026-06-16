@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.4.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.3.1...keyshelf-v5.4.0) (2026-06-16)
+
+
+### Features
+
+* env applicability derived from values (N/A exclusion) ([#161](https://github.com/pantoninho/keyshelf/issues/161)) ([4695c7f](https://github.com/pantoninho/keyshelf/commit/4695c7f0a094a041fb609cc31f47572d32616332))
+
 ## [5.3.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.3.0...keyshelf-v5.3.1) (2026-06-12)
 
 
