@@ -2753,7 +2753,8 @@ function checkTopLevel(options) {
     options.config,
     options.groups,
     options.filters,
-    computeReachable(options.config, options.roots)
+    computeReachable(options.config, options.roots),
+    options.envName
   );
   const envRequiredError = checkEnvProvidedWhenRequired(selected, options.envName);
   if (envRequiredError !== void 0) return [envRequiredError];
@@ -2774,7 +2775,8 @@ async function resolveWithStatus(options) {
     options.config,
     options.groups,
     options.filters,
-    computeReachable(options.config, options.roots)
+    computeReachable(options.config, options.roots),
+    options.envName
   );
   assertEnvProvidedWhenRequired(selected, options.envName);
   const selectedByPath = new Map(
@@ -2846,12 +2848,15 @@ function renderAppMapping(mappings, resolution) {
     };
   });
 }
-function selectRecords(config2, groups2, filters2, reachable) {
+function selectRecords(config2, groups2, filters2, reachable, envName2) {
   const groupSet = normalizeGroupFilter(config2, groups2);
   const activeGroups = [...groupSet];
   const pathPrefixes = normalizePathFilters(filters2);
   return config2.keys.map((record) => {
     if (reachable !== void 0 && !reachable.has(record.path)) {
+      return { record, selected: false };
+    }
+    if (envName2 !== void 0 && isNotApplicable(record, envName2)) {
       return { record, selected: false };
     }
     if (isExcludedByGroup(record, groupSet)) {
@@ -2962,6 +2967,9 @@ function checkEnvProvidedWhenRequired(selected, envName2) {
 }
 function hasValuesWithoutFallback(record) {
   return record.value === void 0 && Object.keys(record.values ?? {}).length > 0;
+}
+function isNotApplicable(record, envName2) {
+  return hasValuesWithoutFallback(record) && !Object.hasOwn(record.values ?? {}, envName2);
 }
 async function resolveSelectedRecord(record, options, resolveRecord) {
   const binding = getActiveBinding(record, options.envName);

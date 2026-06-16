@@ -69,13 +69,21 @@ describe("resolver", () => {
   });
 
   it("reports required missing keys and skips optional keys with no active binding", async () => {
+    // A secret applicable to dev (envless storage) that the provider can't find
+    // → required FAILs, optional SKIPs. Both keys apply to dev (no env-scoping),
+    // so neither is N/A — this exercises the missing-binding paths, not exclusion.
+    const notFound = mockProvider("age", "");
+    (notFound.resolve as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("NOT_FOUND"));
     const normalized = normalizeConfig(
       defineConfig({
         name: "test",
         envs: ["dev", "production"],
         keys: {
-          required: config({ values: { production: "prod" } }),
-          optional: config({ optional: true, values: { production: "prod" } })
+          required: secret({ value: age({ identityFile: "./a.txt", secretsDir: "./s" }) }),
+          optional: secret({
+            optional: true,
+            value: age({ identityFile: "./a.txt", secretsDir: "./s" })
+          })
         }
       })
     );
@@ -84,28 +92,23 @@ describe("resolver", () => {
       config: normalized,
       envName: "dev",
       rootDir: "/repo",
-      registry: registry()
+      registry: registry(notFound)
     });
 
     expect(result).toMatchObject({
       topLevelErrors: [],
-      keyErrors: [
-        {
-          path: "required",
-          message: 'No value for required key "required"'
-        }
-      ]
+      keyErrors: [expect.objectContaining({ path: "required" })]
     });
 
     const resolution = await resolveWithStatus({
       config: normalized,
       envName: "dev",
       rootDir: "/repo",
-      registry: registry()
+      registry: registry(notFound)
     });
     expect(resolution.statusByPath.get("optional")).toMatchObject({
       status: "skipped",
-      cause: { type: "optional-no-value" }
+      cause: { type: "optional-not-found" }
     });
   });
 
@@ -583,12 +586,16 @@ describe("scoped resolution (roots)", () => {
   });
 
   it("fails loudly when a mapped required key is unresolvable in the active env", async () => {
+    // `a` is a secret bound for dev (envless storage) that the provider can't
+    // find: applicable to dev but unresolvable → FAIL, not silent exclusion.
+    const notFound = mockProvider("age", "");
+    (notFound.resolve as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("NOT_FOUND"));
     const normalized = normalizeConfig(
       defineConfig({
         name: "test",
         envs: ["dev", "production"],
         keys: {
-          a: config({ values: { production: "prod-only" } }),
+          a: secret({ values: { dev: age({ identityFile: "./a.txt", secretsDir: "./s" }) } }),
           b: config({ value: "always" })
         }
       })
@@ -598,7 +605,7 @@ describe("scoped resolution (roots)", () => {
       config: normalized,
       envName: "dev",
       rootDir: "/repo",
-      registry: registry(),
+      registry: registry(notFound),
       roots: ["a"]
     });
 
@@ -712,5 +719,174 @@ describe("scoped resolution (roots)", () => {
     // a resolves; b is in scope (mapped) but filtered out by --group.
     expect(resolution.statusByPath.get("a")?.status).toBe("resolved");
     expect(resolution.statusByPath.get("b")?.status).toBe("filtered");
+  });
+});
+
+describe("env applicability (N/A exclusion)", () => {
+  it("excludes an env-scoped key from a non-applicable active env", async () => {
+    const provider = mockProvider("age", "prod-secret");
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["staging", "production"],
+        keys: {
+          always: config({ value: "always" }),
+          // Env-scoped: values for production only, no fallback. N/A in staging.
+          prodOnly: secret({
+            values: { production: age({ identityFile: "./p.txt", secretsDir: "./s" }) }
+          })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "staging",
+      rootDir: "/repo",
+      registry: registry(provider)
+    });
+
+    expect(result.topLevelErrors).toEqual([]);
+    expect(result.keyErrors).toEqual([]);
+    // prodOnly is excluded entirely: no status, no resolution, no error.
+    expect(result.resolution?.statusByPath.has("prodOnly")).toBe(false);
+    expect(result.resolution?.resolved).toEqual([{ path: "always", value: "always" }]);
+    expect(provider.resolve).not.toHaveBeenCalled();
+  });
+
+  it("includes and resolves an env-scoped key in an applicable active env", async () => {
+    const provider = mockProvider("age", "prod-secret");
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["staging", "production"],
+        keys: {
+          prodOnly: secret({
+            values: { production: age({ identityFile: "./p.txt", secretsDir: "./s" }) }
+          })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "production",
+      rootDir: "/repo",
+      registry: registry(provider)
+    });
+
+    expect(result.keyErrors).toEqual([]);
+    expect(result.resolution?.resolved).toEqual([{ path: "prodOnly", value: "prod-secret" }]);
+  });
+
+  it("still FAILs an applicable env-scoped key that does not resolve (rot preserved)", async () => {
+    // production ∈ values → applicable. A deleted/unseeded binding for an
+    // applicable env still fails: the secret has no seeded value.
+    const provider = mockProvider("age", "");
+    (provider.resolve as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("NOT_FOUND"));
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["staging", "production"],
+        keys: {
+          prodOnly: secret({
+            values: { production: age({ identityFile: "./p.txt", secretsDir: "./s" }) }
+          })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "production",
+      rootDir: "/repo",
+      registry: registry(provider)
+    });
+
+    expect(result.keyErrors).toEqual([expect.objectContaining({ path: "prodOnly" })]);
+  });
+
+  it("never excludes a key with a fallback (applies to all envs)", async () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["staging", "production"],
+        keys: {
+          // Has a fallback default plus a production override → applies everywhere.
+          withFallback: config({ default: "fb", values: { production: "p" } })
+        }
+      })
+    );
+
+    const result = await resolveValidated({
+      config: normalized,
+      envName: "staging",
+      rootDir: "/repo",
+      registry: registry()
+    });
+
+    expect(result.keyErrors).toEqual([]);
+    expect(result.resolution?.resolved).toEqual([{ path: "withFallback", value: "fb" }]);
+  });
+
+  it("composes with optional: N/A in non-applicable env, tolerant in applicable env", async () => {
+    const provider = mockProvider("age", "ok");
+    // N/A: env-scoped + optional, staging active, staging ∉ values → excluded.
+    const naConfig = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["staging", "production"],
+        keys: {
+          optProd: secret({
+            optional: true,
+            values: { production: age({ identityFile: "./p.txt", secretsDir: "./s" }) }
+          })
+        }
+      })
+    );
+    const naResult = await resolveValidated({
+      config: naConfig,
+      envName: "staging",
+      rootDir: "/repo",
+      registry: registry(provider)
+    });
+    expect(naResult.resolution?.statusByPath.has("optProd")).toBe(false);
+
+    // Applicable: production active, not-found from provider → skipped, not failed.
+    const notFound = mockProvider("age", "");
+    (notFound.resolve as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("NOT_FOUND"));
+    const applicableResult = await resolveValidated({
+      config: naConfig,
+      envName: "production",
+      rootDir: "/repo",
+      registry: registry(notFound)
+    });
+    expect(applicableResult.keyErrors).toEqual([]);
+    expect(applicableResult.resolution?.statusByPath.get("optProd")?.status).toBe("skipped");
+  });
+
+  it("does not exclude env-scoped keys when no env is active (full schema in scope)", async () => {
+    const normalized = normalizeConfig(
+      defineConfig({
+        name: "test",
+        envs: ["staging", "production"],
+        keys: {
+          always: config({ value: "always" }),
+          prodOnly: config({ values: { production: "p" } })
+        }
+      })
+    );
+
+    // No envName: an env-scoped key without --env is a top-level error today,
+    // so the exclusion must NOT kick in here — the key stays in scope.
+    const result = await resolveValidated({
+      config: normalized,
+      rootDir: "/repo",
+      registry: registry()
+    });
+
+    expect(result.topLevelErrors).toEqual([
+      expect.objectContaining({ message: expect.stringContaining("--env is required") })
+    ]);
   });
 });

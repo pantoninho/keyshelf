@@ -25,6 +25,22 @@ async function writeAgeFixture(root: string) {
   await writeEnvKeyshelf(root, ["DB_HOST=db/host", "DB_PASSWORD=db/password", "CI_TOKEN=ci/token"]);
 }
 
+// Adds an env-scoped config key (production-only binding, no fallback) so we can
+// assert it vanishes from a dev `ls` but lists under plain `ls`.
+async function writeEnvScopedFixture(root: string) {
+  const { identityFile, secretsDir } = await setupAgeFixtureDir(root);
+  await writeKeyshelfConfig(root, [
+    `name: "demo",`,
+    `envs: ["dev", "production"],`,
+    `keys: {`,
+    `  always: config({ default: "localhost" }),`,
+    `  prodOnly: config({ values: { production: "prod-url" } }),`,
+    `  prodSecret: secret({ values: { production: age({ identityFile: ${JSON.stringify(identityFile)}, secretsDir: ${JSON.stringify(secretsDir)} }) } }),`,
+    `},`
+  ]);
+  await writeEnvKeyshelf(root, ["ALWAYS=always"]);
+}
+
 describe("keyshelf-next ls", () => {
   let root: string;
 
@@ -116,5 +132,51 @@ describe("keyshelf-next ls (reveal)", () => {
         { envVar: "CI_TOKEN", keyPath: "ci/token", value: "ci-pw", secret: true }
       ]
     });
+  });
+});
+
+describe("keyshelf ls (env-scoped key applicability)", () => {
+  let root: string;
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "keyshelf-ls-envscope-"));
+    await writeEnvScopedFixture(root);
+  });
+
+  it("plain ls (no --env) lists every declared key, including env-scoped ones", () => {
+    const result = execFileSync(TSX, [CLI, "ls"], { cwd: root, encoding: "utf-8" });
+    expect(result).toContain("always");
+    expect(result).toContain("prodOnly");
+    expect(result).toContain("prodSecret");
+  });
+
+  it("ls --env dev drops env-scoped keys that are N/A in dev", () => {
+    const result = execFileSync(TSX, [CLI, "ls", "--env", "dev"], { cwd: root, encoding: "utf-8" });
+    expect(result).toContain("always");
+    expect(result).not.toContain("prodOnly");
+    expect(result).not.toContain("prodSecret");
+    // and never renders them as missing
+    expect(result).not.toContain("(missing)");
+  });
+
+  it("ls --env production lists env-scoped keys applicable to production", () => {
+    const result = execFileSync(TSX, [CLI, "ls", "--env", "production"], {
+      cwd: root,
+      encoding: "utf-8"
+    });
+    expect(result).toContain("prodOnly");
+    expect(result).toContain("prodSecret");
+  });
+
+  it("ls --reveal --env dev drops N/A env-scoped keys (no (missing) rows)", () => {
+    const result = execFileSync(TSX, [CLI, "ls", "--reveal", "--env", "dev"], {
+      cwd: root,
+      encoding: "utf-8",
+      stdio: ["inherit", "pipe", "pipe"]
+    });
+    expect(result).toContain("always");
+    expect(result).not.toContain("prodOnly");
+    expect(result).not.toContain("prodSecret");
+    expect(result).not.toContain("(missing)");
   });
 });

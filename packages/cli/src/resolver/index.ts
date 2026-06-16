@@ -80,7 +80,8 @@ function checkTopLevel(options: ResolveOptions): TopLevelError[] {
     options.config,
     options.groups,
     options.filters,
-    computeReachable(options.config, options.roots)
+    computeReachable(options.config, options.roots),
+    options.envName
   );
   const envRequiredError = checkEnvProvidedWhenRequired(selected, options.envName);
   if (envRequiredError !== undefined) return [envRequiredError];
@@ -106,7 +107,8 @@ export async function resolveWithStatus(options: ResolveOptions): Promise<Resolu
     options.config,
     options.groups,
     options.filters,
-    computeReachable(options.config, options.roots)
+    computeReachable(options.config, options.roots),
+    options.envName
   );
   assertEnvProvidedWhenRequired(selected, options.envName);
 
@@ -201,7 +203,8 @@ function selectRecords(
   config: NormalizedConfig,
   groups: string[] | undefined,
   filters: string[] | undefined,
-  reachable: Set<string> | undefined
+  reachable: Set<string> | undefined,
+  envName: string | undefined
 ): SelectedRecord[] {
   const groupSet = normalizeGroupFilter(config, groups);
   const activeGroups = [...groupSet];
@@ -212,6 +215,15 @@ function selectRecords(
     // no cause means no resolution status, so it never resolves and never
     // surfaces a validation error or skip warning.
     if (reachable !== undefined && !reachable.has(record.path)) {
+      return { record, selected: false };
+    }
+    // N/A: an env-scoped key (values, no fallback) whose `values` has no entry
+    // for the active env. The binding's *absence* is the assertion "this key
+    // does not apply here," so it is excluded from the env's universe — same
+    // silent drop as out-of-scope (no cause => no status, no SKIP, no error).
+    // Only an active env can make a key N/A; with no --env the full schema is
+    // in scope (and an env-scoped key without --env is a top-level error).
+    if (envName !== undefined && isNotApplicable(record, envName)) {
       return { record, selected: false };
     }
     if (isExcludedByGroup(record, groupSet)) {
@@ -370,6 +382,14 @@ function checkEnvProvidedWhenRequired(
 
 function hasValuesWithoutFallback(record: NormalizedRecord): boolean {
   return record.value === undefined && Object.keys(record.values ?? {}).length > 0;
+}
+
+// An env-scoped key (values, no fallback) is N/A in any active env not named in
+// its `values` map. A key with a fallback applies to every env and is never N/A.
+// Exported so `ls` can drop N/A keys from its rows when an env is active,
+// matching the resolver's selection-phase exclusion.
+export function isNotApplicable(record: NormalizedRecord, envName: string): boolean {
+  return hasValuesWithoutFallback(record) && !Object.hasOwn(record.values ?? {}, envName);
 }
 
 async function resolveSelectedRecord(
