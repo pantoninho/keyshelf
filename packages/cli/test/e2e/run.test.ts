@@ -229,7 +229,39 @@ describe("keyshelf-next run (env-scoped key applicability)", () => {
     await writeEnvKeyshelf(root, ["ALWAYS=always", "PROD_URL=prodUrl"]);
   });
 
-  it("excludes an N/A env-scoped key in dev: succeeds, injects no value, no error", () => {
+  it("errors when a --map entry references a key that is N/A in the active env", () => {
+    // ADR-0002: a map entry naming an N/A key fails the run (non-zero exit, no
+    // subprocess) — the same posture as referencing a key that does not exist.
+    const result = spawnSync(
+      TSX,
+      [CLI, "run", "--env", "dev", "--", "node", "-e", "console.log('ran')"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).not.toContain("ran");
+    // Message names the env var, the key, and the env.
+    expect(result.stderr).toContain("PROD_URL");
+    expect(result.stderr).toContain("prodUrl");
+    expect(result.stderr).toContain("dev");
+    // It is an error, not the misleading "optional and has no value" skip line.
+    expect(result.stderr).not.toMatch(/optional/i);
+  });
+
+  it("resolves the env-scoped key in its applicable env (production)", () => {
+    const result = spawnSync(
+      TSX,
+      [CLI, "run", "--env", "production", "--", "node", "-e", "console.log(process.env.PROD_URL)"],
+      { cwd: root, encoding: "utf-8" }
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe("prod-url");
+  });
+
+  it("still silently excludes an N/A env-scoped key that the map does not reference", async () => {
+    // No env var maps prodUrl, so bare-run's env-driven sweep excludes it
+    // silently in dev — the "never an error" rule still holds for unreferenced
+    // N/A keys (ADR-0001).
+    await writeEnvKeyshelf(root, ["ALWAYS=always"]);
     const result = spawnSync(
       TSX,
       [
@@ -246,17 +278,7 @@ describe("keyshelf-next run (env-scoped key applicability)", () => {
     );
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout.trim())).toEqual({ a: "alpha", p: null });
-    // N/A keys are not errors and not the loud "no value for required key" path.
+    expect(result.stderr).not.toMatch(/prodUrl/i);
     expect(result.stderr).not.toMatch(/no value for required key/i);
-  });
-
-  it("resolves the env-scoped key in its applicable env (production)", () => {
-    const result = spawnSync(
-      TSX,
-      [CLI, "run", "--env", "production", "--", "node", "-e", "console.log(process.env.PROD_URL)"],
-      { cwd: root, encoding: "utf-8" }
-    );
-    expect(result.status).toBe(0);
-    expect(result.stdout.trim()).toBe("prod-url");
   });
 });

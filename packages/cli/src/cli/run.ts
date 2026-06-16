@@ -2,7 +2,11 @@ import { Command } from "commander";
 import spawn from "cross-spawn";
 import { loadConfig } from "../config/index.js";
 import { isTemplateMapping, type AppMapping } from "../config/app-mapping.js";
-import { formatSkipCause, renderAppMapping } from "../resolver/index.js";
+import {
+  findNotApplicableMapReferences,
+  formatSkipCause,
+  renderAppMapping
+} from "../resolver/index.js";
 import { createDefaultRegistry } from "../providers/setup.js";
 import { splitList } from "./options.js";
 import { assertValidationPasses } from "./validation.js";
@@ -34,6 +38,20 @@ export const runCommand = new Command("run")
     const appDir = process.cwd();
     const loaded = await loadConfig(appDir, { mappingFile: opts.map });
     const registry = createDefaultRegistry();
+
+    // ADR-0002: a --map entry that names a key N/A in the active env is an
+    // error (the env does not have that key), not a silent drop or skip warning
+    // — the same posture as referencing a key that does not exist. Fail before
+    // resolving or spawning the subprocess.
+    const naReferences = findNotApplicableMapReferences(loaded.config, loaded.appMapping, opts.env);
+    if (naReferences.length > 0) {
+      for (const ref of naReferences) {
+        console.error(
+          `error: ${ref.envVar}: referenced key "${ref.keyPath}" does not exist in env "${ref.envName}"`
+        );
+      }
+      process.exit(1);
+    }
 
     const resolveOpts = {
       config: loaded.config,
