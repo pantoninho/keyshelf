@@ -3056,13 +3056,13 @@ function skippedEnvVar(envVar, mapping, keyPath, resolution) {
     envVar,
     status: "skipped",
     keyPath,
-    cause: statusToSkipCause(status),
+    cause: statusToSkipCause(status, keyPath),
     mapping
   };
 }
-function statusToSkipCause(status) {
+function statusToSkipCause(status, keyPath) {
   if (status?.status === "filtered" || status?.status === "skipped") return status.cause;
-  return { type: "optional-no-value" };
+  throw new Error(`mapped key "${keyPath}" was not resolved and has no skip reason`);
 }
 var FilteredTemplateReferenceError = class extends Error {
   constructor(keyPath, reference, referenceCause) {
