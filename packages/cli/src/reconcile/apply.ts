@@ -1,7 +1,7 @@
 import type { NormalizedConfig } from "../config/types.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { ProviderContext } from "../providers/types.js";
-import type { DeleteAction, Plan, RenameAction } from "./plan.js";
+import type { AmbiguousAction, DeleteAction, Plan, RenameAction } from "./plan.js";
 
 export interface ApplyContext {
   config: NormalizedConfig;
@@ -16,14 +16,26 @@ export interface ApplyResult {
 
 export class AmbiguousActionsError extends Error {
   readonly count: number;
-  constructor(count: number) {
-    super(
-      `Refusing to apply: plan contains ${count} ambiguous action${count === 1 ? "" : "s"}. ` +
-        `Add a movedFrom annotation to disambiguate, then re-run.`
-    );
+  constructor(actions: AmbiguousAction[]) {
+    super(buildAmbiguousMessage(actions));
     this.name = "AmbiguousActionsError";
-    this.count = count;
+    this.count = actions.length;
   }
+}
+
+// Name each renamed key and the orphan candidates it could not unambiguously
+// map, and embed the movedFrom fix on the renamed record.
+function buildAmbiguousMessage(actions: AmbiguousAction[]): string {
+  const count = actions.length;
+  const header =
+    `Refusing to apply: plan contains ${count} ambiguous rename${count === 1 ? "" : "s"}. ` +
+    `up cannot tell which orphan in storage maps to the renamed key — ` +
+    `add movedFrom on the renamed record to disambiguate, then re-run.`;
+  const details = actions.map((action) => {
+    const orphans = action.candidates.map((candidate) => `"${candidate.keyPath}"`).join(", ");
+    return `  "${action.desired.keyPath}": orphan candidates ${orphans} — set movedFrom to the one it was renamed from`;
+  });
+  return [header, ...details].join("\n");
 }
 
 // Thrown when copy succeeds but the new location does not validate. We do
@@ -49,8 +61,8 @@ export class ApplyValidationError extends Error {
 // is copy → validate → delete; standalone Deletes run after all renames so a
 // validate-fail can abort before any orphans are removed.
 export async function applyPlan(ctx: ApplyContext, plan: Plan): Promise<ApplyResult> {
-  const ambiguousCount = countAmbiguous(plan);
-  if (ambiguousCount > 0) throw new AmbiguousActionsError(ambiguousCount);
+  const ambiguous = collectAmbiguous(plan);
+  if (ambiguous.length > 0) throw new AmbiguousActionsError(ambiguous);
 
   let renamesApplied = 0;
   let deletesApplied = 0;
@@ -72,10 +84,8 @@ export async function applyPlan(ctx: ApplyContext, plan: Plan): Promise<ApplyRes
   return { renamesApplied, deletesApplied };
 }
 
-function countAmbiguous(plan: Plan): number {
-  let n = 0;
-  for (const a of plan) if (a.kind === "ambiguous") n += 1;
-  return n;
+function collectAmbiguous(plan: Plan): AmbiguousAction[] {
+  return plan.filter((action): action is AmbiguousAction => action.kind === "ambiguous");
 }
 
 async function applyRename(ctx: ApplyContext, action: RenameAction): Promise<void> {

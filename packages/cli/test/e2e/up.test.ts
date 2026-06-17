@@ -321,6 +321,11 @@ describe("keyshelf up --yes (apply)", () => {
     const result = runUp(root, ["--yes"]);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("ambiguous");
+    // Names the renamed key and the candidate orphans, and points at movedFrom.
+    expect(result.stderr).toContain("newKey");
+    expect(result.stderr).toContain("oldA");
+    expect(result.stderr).toContain("oldB");
+    expect(result.stderr).toContain("movedFrom");
     // Storage left untouched.
     const baseCtx = { envName: undefined, rootDir: root, config: { identityFile, secretsDir } };
     expect(await provider.validate({ ...baseCtx, keyPath: "oldA" })).toBe(true);
