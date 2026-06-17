@@ -8,6 +8,7 @@ import { setCommand } from "./set.js";
 import { importCommand } from "./import.js";
 import { upCommand } from "./up.js";
 import { cpCommand, cpClearCommand } from "./cp.js";
+import { initCommand } from "./init.js";
 
 /**
  * Read the CLI's own version from its package.json so `--version` always tracks
@@ -44,6 +45,7 @@ export function createProgram(): Command {
     .description("Keyshelf — config and secrets management for monorepos")
     .version(readPackageVersion());
 
+  program.addCommand(initCommand);
   program.addCommand(runCommand);
   program.addCommand(lsCommand);
   program.addCommand(setCommand);
