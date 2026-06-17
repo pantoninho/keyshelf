@@ -3,7 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { writeFileSync as fsWriteFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { CLI, TSX } from "./helpers/cli.js";
 import { setupAgeFixtureDir, writeEnvKeyshelf, writeKeyshelfConfig } from "./helpers/fixture.js";
 
@@ -71,6 +71,23 @@ describe("keyshelf-next import", () => {
       p: "imported-pw",
       k: "k1"
     });
+  });
+
+  it("warns with a teaching message when a mapped env var targets a config key", () => {
+    const envFile = join(root, ".env.values");
+    writeFileSync(envFile, ["DB_HOST=imported-host", "DB_PASSWORD=imported-pw"]);
+
+    const proc = spawnSync(TSX, [CLI, "import", "--env", "dev", "--file", envFile], {
+      cwd: root,
+      encoding: "utf-8"
+    });
+
+    // Names the offending env var and key, and states the corrective action:
+    // config values are edited in keyshelf.config.ts, not written via the CLI.
+    expect(proc.stderr).toContain("DB_HOST");
+    expect(proc.stderr).toContain("db/host");
+    expect(proc.stderr).toContain("config record");
+    expect(proc.stderr).toContain("keyshelf.config.ts");
   });
 
   it("skips unmapped env vars", () => {

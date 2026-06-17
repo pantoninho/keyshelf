@@ -52,7 +52,13 @@ describe("keyshelf-next set", () => {
       });
       expect.unreachable("should have thrown");
     } catch (err) {
-      expect((err as { stderr: string }).stderr).toContain("keyshelf does not write config values");
+      const stderr = (err as { stderr: string }).stderr;
+      // Names the offending key.
+      expect(stderr).toContain("db/host");
+      // States the corrective action: config values are edited in the config
+      // file, not written via the CLI.
+      expect(stderr).toContain("config record");
+      expect(stderr).toContain("keyshelf.config.ts");
     }
   });
 

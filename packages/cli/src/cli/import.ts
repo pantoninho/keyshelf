@@ -107,7 +107,7 @@ async function importOne(
   if (record.kind === "config") {
     return {
       kind: "skipped",
-      warning: `warning: ${envVar} -> ${keyPath} is a config key; keyshelf does not write config via import (edit keyshelf.config.ts directly)`
+      warning: `warning: ${envVar} -> "${keyPath}" is a config record. config values are edited in keyshelf.config.ts, not written via the CLI — edit the binding there directly.`
     };
   }
   if (
