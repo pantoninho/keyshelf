@@ -128,8 +128,9 @@ describe("config factories and validation", () => {
     ).toThrow("key namespaces must not be empty");
   });
 
-  it("rejects invalid provider options", () => {
-    expect(() =>
+  it("rejects invalid provider options, naming the record and the fix", () => {
+    let message = "";
+    try {
       normalizeConfig(
         defineConfig({
           name: "test",
@@ -139,8 +140,68 @@ describe("config factories and validation", () => {
             token: secret({ value: age({ identityFile: "./ci.txt" }) })
           }
         })
-      )
-    ).toThrow(/factory objects with __kind must match their declared schema/);
+      );
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    // Names the offending record path.
+    expect(message).toContain("token");
+    // Teaches the corrective action: a secret binding must be a provider call.
+    expect(message).toContain("provider call");
+    expect(message).toMatch(/age.*gcp.*aws.*sops.*plain/);
+    // Does not leak the raw zod refine text.
+    expect(message).not.toContain("factory objects with __kind");
+  });
+
+  // Mistake #1: the namespace trap. An object literal whose fields look like
+  // record options ({ value, values, default, group, optional }) is a namespace,
+  // never a record. The error names the path and points at the factory form.
+  it("teaches the fix when a namespace-trap object literal is a malformed factory", () => {
+    let message = "";
+    try {
+      normalizeConfig({
+        __kind: "keyshelf:config",
+        name: "test",
+        envs: ["dev"],
+        // An object that carries __kind but fails its declared factory schema —
+        // e.g. a config factory with a stray unknown option — is the symptom of
+        // the namespace trap surfacing through a broken factory call.
+        keys: { db: { __kind: "config", value: "localhost", bogus: 1 } }
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    // Names the offending path.
+    expect(message).toContain("db");
+    // Points at the factory form as the fix.
+    expect(message).toMatch(/config\(\{/);
+    expect(message).toMatch(/secret\(\{/);
+    expect(message).not.toContain("factory objects with __kind");
+  });
+
+  // Mistake #2: plaintext in secret(...). Every binding on a secret must be a
+  // provider call; a bare scalar is rejected with a message that names the key
+  // and embeds the fix.
+  it("teaches the fix for a plaintext binding inside secret(...)", () => {
+    let message = "";
+    try {
+      normalizeConfig({
+        __kind: "keyshelf:config",
+        name: "test",
+        envs: ["dev"],
+        keys: { password: { __kind: "secret", value: "hunter2" } }
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    // Names the offending key.
+    expect(message).toContain("password");
+    // States every secret binding must be a provider call, listing the providers.
+    expect(message).toContain("provider call");
+    expect(message).toMatch(/age.*gcp.*aws.*sops.*plain/);
+    // Suggests config(...) for non-secret values.
+    expect(message).toContain("config(");
+    expect(message).not.toContain("factory objects with __kind");
   });
 
   it("rejects duplicate flattened paths", () => {

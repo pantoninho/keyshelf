@@ -131,6 +131,11 @@ interface TemplateVisitState {
   stack: string[];
 }
 
+// A bare object literal is always a namespace. When one carries a `__kind` it
+// is a factory result (`config(...)` / `secret(...)` / a provider call) that
+// failed its declared schema and fell through to the namespace branch — the
+// namespace trap (mistake #1) and plaintext-in-secret (mistake #2). Teach the
+// fix here; `formatZodError` prefixes the offending path.
 const keyNodeSchema: z.ZodType<KeyNode> = z.lazy(() =>
   z.union([
     configScalarSchema,
@@ -146,6 +151,33 @@ const keyNodeSchema: z.ZodType<KeyNode> = z.lazy(() =>
       })
   ])
 );
+
+const PROVIDERS = "age/gcp/aws/sops/plain";
+
+function namespaceTrapMessage(kind: unknown): string {
+  if (kind === "secret") {
+    // Mistake #2: a secret whose binding is a plaintext value, or otherwise not
+    // a valid provider call.
+    return (
+      `every secret binding must be a provider call (${PROVIDERS}), not a plaintext value — ` +
+      `use secret({ value: age({ ... }) }) (or config({ ... }) for non-secret values)`
+    );
+  }
+  if (kind === "config") {
+    // A config factory with invalid options — name the valid record options and
+    // both factory forms so the fix is unambiguous.
+    return (
+      "config record has invalid options — declare a record with " +
+      "config({ value, default, values, group, optional }) or secret({ ... })"
+    );
+  }
+  // Mistake #1: the namespace trap — an object literal whose fields look like
+  // record options is a namespace, never a record.
+  return (
+    "declared as a namespace, but its fields look like record options — " +
+    "wrap them in config({ ... }) or secret({ ... }) to declare a record here"
+  );
+}
 
 const keyshelfConfigSchema = z
   .object({
@@ -166,8 +198,56 @@ const keyshelfConfigSchema = z
 
 export { keyshelfConfigSchema, providerRefSchema };
 
+// Render a ZodError from the config schema into the same teaching format as the
+// hand-rolled validation pass: each issue prefixed with the offending key path
+// (e.g. `db/host`) so the message names what to fix, not an opaque object dump.
+// When the failing node is a key entry, the message is rewritten to teach the
+// namespace-trap / plaintext-in-secret fixes.
+function formatZodError(error: z.ZodError, input: unknown): string {
+  const lines = error.issues.map((issue) => {
+    const keyPath = issuePathToKeyPath(issue.path);
+    if (keyPath === undefined) return issue.message;
+    const node = nodeAtPath(input, issue.path);
+    const taught = keyNodeMessage(node);
+    return `${keyPath}: ${taught ?? issue.message}`;
+  });
+  return `Invalid keyshelf.config.ts:\n${lines.map((line) => `- ${line}`).join("\n")}`;
+}
+
+// A teaching message for a key entry that failed schema validation, dispatched
+// on its `__kind`. Returns undefined for nodes we have nothing better to say
+// about (the raw zod message is used instead).
+function keyNodeMessage(node: unknown): string | undefined {
+  const kind = getKind(node);
+  if (kind === undefined) return undefined;
+  return namespaceTrapMessage(kind);
+}
+
+// Walk the input object down the zod issue path to fetch the failing node so we
+// can inspect its `__kind`.
+function nodeAtPath(input: unknown, path: ReadonlyArray<PropertyKey>): unknown {
+  let cursor: unknown = input;
+  for (const segment of path) {
+    if (cursor == null || typeof cursor !== "object") return undefined;
+    cursor = (cursor as Record<PropertyKey, unknown>)[segment];
+  }
+  return cursor;
+}
+
+// `["keys", "db", "host"]` → `db/host`. Drops the leading `keys` container and
+// any trailing schema-internal segments so the path reads as a declared key.
+function issuePathToKeyPath(path: ReadonlyArray<PropertyKey>): string | undefined {
+  if (path[0] !== "keys") return undefined;
+  const segments = path.slice(1).filter((segment) => typeof segment === "string");
+  return segments.length === 0 ? undefined : segments.join("/");
+}
+
 export function normalizeConfig(input: unknown): NormalizedConfig {
-  const parsed = keyshelfConfigSchema.parse(input) as KeyshelfConfig;
+  const result = keyshelfConfigSchema.safeParse(input);
+  if (!result.success) {
+    throw new Error(formatZodError(result.error, input));
+  }
+  const parsed = result.data as KeyshelfConfig;
   const errors: string[] = [];
 
   checkUnique("envs", parsed.envs, errors);
