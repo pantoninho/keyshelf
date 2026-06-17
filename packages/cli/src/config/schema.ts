@@ -204,14 +204,18 @@ export { keyshelfConfigSchema, providerRefSchema };
 // When the failing node is a key entry, the message is rewritten to teach the
 // namespace-trap / plaintext-in-secret fixes.
 function formatZodError(error: z.ZodError, input: unknown): string {
-  const lines = error.issues.map((issue) => {
-    const keyPath = issuePathToKeyPath(issue.path);
-    if (keyPath === undefined) return issue.message;
-    const node = nodeAtPath(input, issue.path);
-    const taught = keyNodeMessage(node);
-    return `${keyPath}: ${taught ?? issue.message}`;
-  });
+  const lines = error.issues.map((issue) => formatZodIssue(issue, input));
   return `Invalid keyshelf.config.ts:\n${lines.map((line) => `- ${line}`).join("\n")}`;
+}
+
+// Render a single zod issue into a teaching line: prefix the offending key path
+// and rewrite the message for key entries; fall back to the raw zod message.
+function formatZodIssue(issue: z.ZodError["issues"][number], input: unknown): string {
+  const keyPath = issuePathToKeyPath(issue.path);
+  if (keyPath === undefined) return issue.message;
+  const node = nodeAtPath(input, issue.path);
+  const taught = keyNodeMessage(node);
+  return `${keyPath}: ${taught ?? issue.message}`;
 }
 
 // A teaching message for a key entry that failed schema validation, dispatched

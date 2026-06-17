@@ -143,15 +143,16 @@ var keyshelfConfigSchema = z.object({
   })
 }).strict();
 function formatZodError(error, input) {
-  const lines = error.issues.map((issue) => {
-    const keyPath = issuePathToKeyPath(issue.path);
-    if (keyPath === void 0) return issue.message;
-    const node = nodeAtPath(input, issue.path);
-    const taught = keyNodeMessage(node);
-    return `${keyPath}: ${taught ?? issue.message}`;
-  });
+  const lines = error.issues.map((issue) => formatZodIssue(issue, input));
   return `Invalid keyshelf.config.ts:
 ${lines.map((line) => `- ${line}`).join("\n")}`;
+}
+function formatZodIssue(issue, input) {
+  const keyPath = issuePathToKeyPath(issue.path);
+  if (keyPath === void 0) return issue.message;
+  const node = nodeAtPath(input, issue.path);
+  const taught = keyNodeMessage(node);
+  return `${keyPath}: ${taught ?? issue.message}`;
 }
 function keyNodeMessage(node) {
   const kind = getKind(node);
