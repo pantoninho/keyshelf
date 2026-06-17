@@ -121,6 +121,16 @@ var keyNodeSchema = z.lazy(
     })
   ])
 );
+var PROVIDERS = "age/gcp/aws/sops/plain";
+function namespaceTrapMessage(kind) {
+  if (kind === "secret") {
+    return `every secret binding must be a provider call (${PROVIDERS}), not a plaintext value \u2014 use secret({ value: age({ ... }) }) (or config({ ... }) for non-secret values)`;
+  }
+  if (kind === "config") {
+    return "config record has invalid options \u2014 declare a record with config({ value, default, values, group, optional }) or secret({ ... })";
+  }
+  return "declared as a namespace, but its fields look like record options \u2014 wrap them in config({ ... }) or secret({ ... }) to declare a record here";
+}
 var keyshelfConfigSchema = z.object({
   __kind: z.literal("keyshelf:config"),
   name: z.string().min(1).refine((value) => CONFIG_NAME_RE.test(value), {
@@ -132,8 +142,41 @@ var keyshelfConfigSchema = z.object({
     message: "keys must contain at least one entry"
   })
 }).strict();
+function formatZodError(error, input) {
+  const lines = error.issues.map((issue) => {
+    const keyPath = issuePathToKeyPath(issue.path);
+    if (keyPath === void 0) return issue.message;
+    const node = nodeAtPath(input, issue.path);
+    const taught = keyNodeMessage(node);
+    return `${keyPath}: ${taught ?? issue.message}`;
+  });
+  return `Invalid keyshelf.config.ts:
+${lines.map((line) => `- ${line}`).join("\n")}`;
+}
+function keyNodeMessage(node) {
+  const kind = getKind(node);
+  if (kind === void 0) return void 0;
+  return namespaceTrapMessage(kind);
+}
+function nodeAtPath(input, path) {
+  let cursor = input;
+  for (const segment of path) {
+    if (cursor == null || typeof cursor !== "object") return void 0;
+    cursor = cursor[segment];
+  }
+  return cursor;
+}
+function issuePathToKeyPath(path) {
+  if (path[0] !== "keys") return void 0;
+  const segments = path.slice(1).filter((segment) => typeof segment === "string");
+  return segments.length === 0 ? void 0 : segments.join("/");
+}
 function normalizeConfig(input) {
-  const parsed = keyshelfConfigSchema.parse(input);
+  const result = keyshelfConfigSchema.safeParse(input);
+  if (!result.success) {
+    throw new Error(formatZodError(result.error, input));
+  }
+  const parsed = result.data;
   const errors = [];
   checkUnique("envs", parsed.envs, errors);
   const groups = [...parsed.groups ?? []];
@@ -164,7 +207,9 @@ function validateAppMappingReferences(mappings, flattenedKeys) {
     const references = isTemplateMapping(mapping) ? mapping.keyPaths : [mapping.keyPath];
     for (const reference of references) {
       if (!paths.has(reference)) {
-        errors.push(`${mapping.envVar}: references unknown key "${reference}"`);
+        errors.push(
+          `${mapping.envVar}: references unknown key "${reference}" \u2014 declare it in keyshelf.config.ts or fix the reference`
+        );
       }
     }
   }
@@ -2579,7 +2624,7 @@ function resolveSecretProvider(key, env, schemaDefault) {
   const override = env.overrides[key.path];
   if (override !== void 0 && !isTaggedValue(override)) {
     throw new Error(
-      `${env.name}:${key.path}: secret keys require a provider tag, got a plain value`
+      `${env.name}:${key.path}: every secret binding must be a provider call (age/gcp/aws/sops/plain), not a plain value \u2014 tag the override with a provider (e.g. !age, !gcp) or use config for non-secret values`
     );
   }
   const fallbackProvider = env.defaultProvider ?? schemaDefault;
