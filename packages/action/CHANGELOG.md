@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v1.4.0...keyshelf-action-v1.5.0) (2026-06-17)
+
+
+### Features
+
+* **run:** error on --map reference to an N/A key (ADR-0002) ([#164](https://github.com/pantoninho/keyshelf/issues/164)) ([40672b2](https://github.com/pantoninho/keyshelf/commit/40672b20b821391747ce89e182535c5b7ebe5b70))
+* teach the fix in errors for the five agent mistakes ([#168](https://github.com/pantoninho/keyshelf/issues/168)) ([#172](https://github.com/pantoninho/keyshelf/issues/172)) ([2e5db79](https://github.com/pantoninho/keyshelf/commit/2e5db792fb1b8be08d905914e706c97c361001e0))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * keyshelf bumped from file:../cli to 5.5.0
+
 ## [1.4.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-action-v1.3.0...keyshelf-action-v1.4.0) (2026-06-16)
 
 
