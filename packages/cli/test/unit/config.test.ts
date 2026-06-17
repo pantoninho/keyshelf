@@ -275,7 +275,7 @@ describe("config factories and validation", () => {
   });
 
   it("validates template references and cycles", () => {
-    expect(() =>
+    const cfgMissing = (): void => {
       normalizeConfig(
         defineConfig({
           name: "test",
@@ -286,8 +286,11 @@ describe("config factories and validation", () => {
             }
           }
         })
-      )
-    ).toThrow('template references unknown key "db/missing"');
+      );
+    };
+    expect(cfgMissing).toThrow('template references unknown key "db/missing"');
+    // Embeds the corrective fix: declare the key in keyshelf.config.ts.
+    expect(cfgMissing).toThrow("keyshelf.config.ts");
 
     expect(() =>
       normalizeConfig(
@@ -428,6 +431,19 @@ describe("config factories and validation", () => {
         normalized.keys
       )
     ).toThrow('DB_PASSWORD: references unknown key "db/password"');
+
+    // Names the bad reference and embeds the corrective fix: declare the key in
+    // keyshelf.config.ts.
+    let message = "";
+    try {
+      validateAppMappingReferences(
+        [{ envVar: "DB_PASSWORD", keyPath: "db/password" }],
+        normalized.keys
+      );
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain("keyshelf.config.ts");
   });
 });
 

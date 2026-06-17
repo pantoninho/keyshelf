@@ -287,7 +287,9 @@ export function validateAppMappingReferences(
     const references = isTemplateMapping(mapping) ? mapping.keyPaths : [mapping.keyPath];
     for (const reference of references) {
       if (!paths.has(reference)) {
-        errors.push(`${mapping.envVar}: references unknown key "${reference}"`);
+        errors.push(
+          `${mapping.envVar}: references unknown key "${reference}" — declare it in keyshelf.config.ts or fix the reference`
+        );
       }
     }
   }
