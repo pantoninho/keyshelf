@@ -26,7 +26,7 @@ export const setCommand = new Command("set")
 
     if (record.kind === "config") {
       console.error(
-        `error: "${keyPath}" is a config key. keyshelf does not write config values via set — edit keyshelf.config.ts directly.`
+        `error: "${keyPath}" is a config record. config values are edited in keyshelf.config.ts, not written via the CLI — edit the binding there directly.`
       );
       process.exit(1);
     }

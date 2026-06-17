@@ -95,9 +95,18 @@ describe("yaml-loader", () => {
       ".keyshelf/dev.yaml": ["keys:", "  api:", "    token: just-a-string"].join("\n")
     });
 
-    await expect(loadYamlConfig(join(root, "keyshelf.yaml"))).rejects.toThrow(
-      /secret keys require a provider tag/
-    );
+    let message = "";
+    try {
+      await loadYamlConfig(join(root, "keyshelf.yaml"));
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    // Names the offending key and the active env.
+    expect(message).toContain("api/token");
+    expect(message).toContain("dev");
+    // States every secret binding must be a provider call, listing the providers.
+    expect(message).toContain("provider call");
+    expect(message).toMatch(/age.*gcp.*aws.*sops.*plain/);
   });
 
   it("accepts a !plain override on a !secret key", async () => {

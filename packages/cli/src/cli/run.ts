@@ -47,7 +47,7 @@ export const runCommand = new Command("run")
     if (naReferences.length > 0) {
       for (const ref of naReferences) {
         console.error(
-          `error: ${ref.envVar}: referenced key "${ref.keyPath}" does not exist in env "${ref.envName}"`
+          `error: ${ref.envVar}: key "${ref.keyPath}" is N/A (not applicable) in the active env "${ref.envName}" — add "${ref.envName}" to its applicable envs in keyshelf.config.ts, or drop the reference`
         );
       }
       process.exit(1);

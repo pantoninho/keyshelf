@@ -270,9 +270,19 @@ describe("applyPlan", () => {
       }
     ];
 
-    await expect(
-      applyPlan({ config: cfg, registry: buildRegistry([age]), rootDir: "/r" }, plan)
-    ).rejects.toBeInstanceOf(AmbiguousActionsError);
+    const error = await applyPlan(
+      { config: cfg, registry: buildRegistry([age]), rootDir: "/r" },
+      plan
+    ).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(AmbiguousActionsError);
+    const message = (error as Error).message;
+    // Names the renamed key and the candidate orphans it could not map.
+    expect(message).toContain("new");
+    expect(message).toContain("oldA");
+    expect(message).toContain("oldB");
+    // Points at movedFrom as the fix.
+    expect(message).toContain("movedFrom");
 
     expect(age.copy).not.toHaveBeenCalled();
     expect(age.delete).not.toHaveBeenCalled();

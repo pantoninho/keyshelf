@@ -239,10 +239,12 @@ describe("keyshelf-next run (env-scoped key applicability)", () => {
     );
     expect(result.status).not.toBe(0);
     expect(result.stdout).not.toContain("ran");
-    // Message names the env var, the key, and the env.
+    // Message names the env var, the key, and the active env.
     expect(result.stderr).toContain("PROD_URL");
     expect(result.stderr).toContain("prodUrl");
     expect(result.stderr).toContain("dev");
+    // Uses the N/A domain vocabulary rather than a vague "does not exist".
+    expect(result.stderr).toMatch(/N\/A|not applicable/i);
     // It is an error, not the misleading "optional and has no value" skip line.
     expect(result.stderr).not.toMatch(/optional/i);
   });

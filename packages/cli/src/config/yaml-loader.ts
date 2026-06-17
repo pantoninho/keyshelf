@@ -330,7 +330,7 @@ function resolveSecretProvider(
 
   if (override !== undefined && !isTaggedValue(override)) {
     throw new Error(
-      `${env.name}:${key.path}: secret keys require a provider tag, got a plain value`
+      `${env.name}:${key.path}: every secret binding must be a provider call (age/gcp/aws/sops/plain), not a plain value — tag the override with a provider (e.g. !age, !gcp) or use config for non-secret values`
     );
   }
 

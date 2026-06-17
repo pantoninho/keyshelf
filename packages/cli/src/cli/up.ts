@@ -12,7 +12,7 @@ import {
 import { gatherListings, type ListingFailure } from "../reconcile/listings.js";
 import { planReconciliation } from "../reconcile/planner.js";
 import { countMutatingActions, renderPlan } from "../reconcile/format.js";
-import type { Plan } from "../reconcile/plan.js";
+import type { AmbiguousAction, Plan } from "../reconcile/plan.js";
 import type { NormalizedConfig } from "../config/types.js";
 
 interface UpOptions {
@@ -57,12 +57,11 @@ async function runUp(opts: UpOptions): Promise<number> {
   if (countMutatingActions(plan) === 0) return 0;
 
   // Apply path. Refuse on Ambiguous before prompting so the user sees the
-  // message immediately rather than after typing 'y'.
-  if (planHasAmbiguous(plan)) {
-    console.error(
-      "error: cannot apply — plan contains ambiguous actions. " +
-        "Add a movedFrom annotation on each ambiguous key, then re-run."
-    );
+  // message immediately rather than after typing 'y'. Reuse the apply error so
+  // the pre-prompt message names the same keys and movedFrom fix.
+  const ambiguous = plan.filter((a): a is AmbiguousAction => a.kind === "ambiguous");
+  if (ambiguous.length > 0) {
+    console.error(`error: ${new AmbiguousActionsError(ambiguous).message}`);
     return 1;
   }
 
@@ -94,11 +93,6 @@ async function runApply(
     }
     throw err;
   }
-}
-
-function planHasAmbiguous(plan: Plan): boolean {
-  for (const a of plan) if (a.kind === "ambiguous") return true;
-  return false;
 }
 
 function formatApplySummary(result: ApplyResult): string {
