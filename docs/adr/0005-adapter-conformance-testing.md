@@ -48,7 +48,7 @@ concrete: write a harness, pass both suites including the error-mapping and
 value-fidelity dimensions, and the adapter demonstrably behaves like every other.
 
 Two levels rather than one because they answer different questions: the contract
-suite *pinpoints* boundary failures and covers edge cases the CLI can't express;
+suite _pinpoints_ boundary failures and covers edge cases the CLI can't express;
 the E2E suite proves the end-to-end wiring. The in-memory `fake` adapter runs the
 full matrix both as the fast per-PR lane and as a faithfulness check that keeps the
 fake honest.

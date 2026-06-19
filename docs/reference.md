@@ -1,7 +1,7 @@
 # Keyshelf — Build Reference
 
 The committed contract surface for the MVP. Rationale lives in `docs/adr/`;
-vocabulary in `../CONTEXT.md`. This file is *what*, not *why*.
+vocabulary in `../CONTEXT.md`. This file is _what_, not _why_.
 
 ## File layout
 
@@ -22,16 +22,16 @@ or `schema:` fields anywhere. An environment is addressed as `{shelf}/{env}`
 ## config.yaml
 
 ```yaml
-project: myapp                      # required; namespaces secrets in shared backends
+project: myapp # required; namespaces secrets in shared backends
 providers:
   local:
-    adapter: sops                   # only required field for sops
+    adapter: sops # only required field for sops
     # store: "{shelf}/{env}.secrets.yaml"   # optional layout override (default shown)
   gcp-staging:
     adapter: gcp
-    projectId: my-gcp-proj-stg      # required; adapter fields never reuse `project`
+    projectId: my-gcp-proj-stg # required; adapter fields never reuse `project`
     # location: global              # optional; absent/global ⇒ automatic replication,
-                                    # else user-managed replication pinned to that region
+    # else user-managed replication pinned to that region
 ```
 
 - A provider entry is a named map with an `adapter:` discriminator plus
@@ -45,10 +45,15 @@ providers:
 
 ```yaml
 keys:
-  LOG_LEVEL: info                   # config default — overridable
-  REGION: !required                 # must be supplied by every environment
-  FEATURE_X: !optional              # may be supplied; absence is OK
-  DATABASE_PASSWORD: !required      # presence only — secret-ness is the env's call
+  LOG_LEVEL: info # config default — overridable
+  REGION: !required # must be supplied by every environment
+
+
+  FEATURE_X: !optional # may be supplied; absence is OK
+
+
+  DATABASE_PASSWORD: !required # presence only — secret-ness is the env's call
+
 ```
 
 Presence only — `default value` / `!required` / `!optional`. Never decides
@@ -57,12 +62,14 @@ plaintext vs secret. Closed contract: environments may only use declared keys.
 ## {shelf}/{env}.yaml
 
 ```yaml
-provider: gcp-staging               # references a provider in config.yaml
+provider: gcp-staging # references a provider in config.yaml
 keys:
-  LOG_LEVEL: debug                  # plaintext config (overrides schema default)
-  REGION: eu-west-1                 # required, supplied plaintext
-  DATABASE_PASSWORD: !secret        # convention: value lives in the store under this key
-  DATABASE_URL: !secret { ref: ... }  # explicit reference (foreign/pre-existing secret)
+  LOG_LEVEL: debug # plaintext config (overrides schema default)
+  REGION: eu-west-1 # required, supplied plaintext
+  DATABASE_PASSWORD: !secret # convention: value lives in the store under this key
+
+
+  DATABASE_URL: !secret { ref: ... } # explicit reference (foreign/pre-existing secret)
 ```
 
 - No `schema:` field — the environment is implicitly bound to its shelf's schema.
@@ -70,7 +77,7 @@ keys:
   environment. The same key may be plaintext in one environment and `!secret` in
   another.
 - Values are **strings** only.
-- Secret *values* never appear here — only `!secret` references. Values live in
+- Secret _values_ never appear here — only `!secret` references. Values live in
   the adapter's store (sops: `{shelf}/{env}.secrets.yaml`; gcp: the backend).
 - `!secret` payload shape is adapter-defined; bare = convention, optional explicit
   `{ ref: ... }` overrides.
@@ -80,14 +87,15 @@ keys:
 Built on **oclif**. The qualified environment `{shelf}/{env}` is a positional
 argument.
 
-| Command | Purpose |
-|---|---|
+| Command                                             | Purpose                                                                                                                                                                                                                                               |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `keyshelf init [--project <name>] [--shelf <name>]` | Scaffold `.keyshelf/` (non-interactive; project defaults to cwd name; creates `config.yaml` with a default `local` sops provider and a starter shelf — `--shelf`, default `app` — with an empty `schema.yaml`). Refuses to clobber without `--force`. |
-| `keyshelf set <KEY> <shelf>/<env> [--secret]` | Write a value. Read from stdin/prompt, never argv. `--secret` → store + write a `!secret` reference; plaintext → env file. Key must already be in the shelf's schema; never mutates the schema. |
-| `keyshelf run <shelf>/<env> -- <cmd>` | Resolve config + secrets into env vars, overlay the inherited environment, exec `<cmd>`. Fail-fast: aborts before exec if anything is unresolvable. |
-| `keyshelf validate [<shelf>/<env>]` | Run the same closed-contract + resolution checks as `run`, execute nothing, emit structured results. Validates the whole project when the argument is omitted. |
+| `keyshelf set <KEY> <shelf>/<env> [--secret]`       | Write a value. Read from stdin/prompt, never argv. `--secret` → store + write a `!secret` reference; plaintext → env file. Key must already be in the shelf's schema; never mutates the schema.                                                       |
+| `keyshelf run <shelf>/<env> -- <cmd>`               | Resolve config + secrets into env vars, overlay the inherited environment, exec `<cmd>`. Fail-fast: aborts before exec if anything is unresolvable.                                                                                                   |
+| `keyshelf validate [<shelf>/<env>]`                 | Run the same closed-contract + resolution checks as `run`, execute nothing, emit structured results. Validates the whole project when the argument is omitted.                                                                                        |
 
 Conventions:
+
 - Every command supports `--json` (covers **output and errors**).
 - `--help` on every command is the agent-facing discovery surface; oclif also
   emits a machine-readable command manifest (`oclif.manifest.json`).
@@ -109,24 +117,24 @@ with fields such as `key`, `shelf`, `environment`, `file` as relevant.
 
 Closed code set (additive growth OK; renames are breaking):
 
-| Code | Meaning / caller action |
-|---|---|
-| `NOT_INITIALIZED` | No `.keyshelf/` found → run `init` |
-| `ALREADY_INITIALIZED` | `init` on existing project → `--force` or skip |
-| `SHELF_NOT_FOUND` | Addressed shelf directory does not exist |
-| `SCHEMA_NOT_FOUND` | Shelf has no `schema.yaml` |
-| `ENVIRONMENT_NOT_FOUND` | Named environment file missing in the shelf |
-| `PROVIDER_NOT_FOUND` | Env references an undefined provider |
-| `UNKNOWN_KEY` | Env key not declared in the shelf's schema |
-| `MISSING_REQUIRED` | A `!required` key is absent |
-| `INVALID_KEY_NAME` | Key is not a valid env-var identifier |
-| `ADAPTER_UNAVAILABLE` | Backend prerequisite missing (e.g. sops not found) |
-| `PROVIDER_AUTH` | Backend authentication/credential failure |
-| `SECRET_NOT_FOUND` | Referenced secret absent from the store |
-| `NO_INPUT` | `set` received no value on stdin |
-| `MALFORMED_FILE` | Unparseable/invalid config, schema, or environment (`file` + `reason`) |
-| `ADAPTER_ERROR` | Other backend op failure (decrypt, network, write) |
-| `EXEC_FAILED` | `run` resolved but could not start the wrapped command |
+| Code                    | Meaning / caller action                                                |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `NOT_INITIALIZED`       | No `.keyshelf/` found → run `init`                                     |
+| `ALREADY_INITIALIZED`   | `init` on existing project → `--force` or skip                         |
+| `SHELF_NOT_FOUND`       | Addressed shelf directory does not exist                               |
+| `SCHEMA_NOT_FOUND`      | Shelf has no `schema.yaml`                                             |
+| `ENVIRONMENT_NOT_FOUND` | Named environment file missing in the shelf                            |
+| `PROVIDER_NOT_FOUND`    | Env references an undefined provider                                   |
+| `UNKNOWN_KEY`           | Env key not declared in the shelf's schema                             |
+| `MISSING_REQUIRED`      | A `!required` key is absent                                            |
+| `INVALID_KEY_NAME`      | Key is not a valid env-var identifier                                  |
+| `ADAPTER_UNAVAILABLE`   | Backend prerequisite missing (e.g. sops not found)                     |
+| `PROVIDER_AUTH`         | Backend authentication/credential failure                              |
+| `SECRET_NOT_FOUND`      | Referenced secret absent from the store                                |
+| `NO_INPUT`              | `set` received no value on stdin                                       |
+| `MALFORMED_FILE`        | Unparseable/invalid config, schema, or environment (`file` + `reason`) |
+| `ADAPTER_ERROR`         | Other backend op failure (decrypt, network, write)                     |
+| `EXEC_FAILED`           | `run` resolved but could not start the wrapped command                 |
 
 ## Distribution & the sops binary
 
@@ -166,8 +174,8 @@ ADR-0005 for rationale.
 - **Conformance** — two shared, adapter-agnostic suites run as a matrix over every
   adapter via a small per-adapter harness (provider config + backend
   setup/teardown):
-  - *Adapter-contract suite* — exercises `resolve`/`write` directly.
-  - *Black-box E2E suite* — spawns the real `keyshelf` binary; asserts `--json`
+  - _Adapter-contract suite_ — exercises `resolve`/`write` directly.
+  - _Black-box E2E suite_ — spawns the real `keyshelf` binary; asserts `--json`
     output, exit status, file effects, and the env a wrapped command sees.
 
   Both enforce two cross-cutting dimensions: **error-code mapping** (every adapter
@@ -177,11 +185,11 @@ ADR-0005 for rationale.
 
 Matrix execution:
 
-| Adapter | When |
-|---|---|
-| `fake` (in-memory) | every PR — hermetic, fast lane, keeps the fake faithful |
-| `sops` | every PR — hermetic (sops bundled) |
-| `gcp` | gated — real GCP infra, credentials + opt-in only (e.g. nightly on `main`), unique `{project}` prefix per run + teardown |
+| Adapter            | When                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `fake` (in-memory) | every PR — hermetic, fast lane, keeps the fake faithful                                                                  |
+| `sops`             | every PR — hermetic (sops bundled)                                                                                       |
+| `gcp`              | gated — real GCP infra, credentials + opt-in only (e.g. nightly on `main`), unique `{project}` prefix per run + teardown |
 
 A new adapter ships a harness and must pass both suites, including the
 error-mapping and value-fidelity dimensions.

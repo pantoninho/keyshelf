@@ -20,11 +20,11 @@ Concrete choices:
   the lazy-load complexity.
 
 - **Naming: one secret per key, by the fixed reference convention.** A key maps to
-  a Secret Manager *secret* whose id is `{project}-{shelf}-{env}-{key}`, in the
+  a Secret Manager _secret_ whose id is `{project}-{shelf}-{env}-{key}`, in the
   provider's `projectId`. The `{project}-{shelf}-{env}` prefix (the adapter's
-  *namespace*) keeps the same key distinct across environments and shelves in a
+  _namespace_) keeps the same key distinct across environments and shelves in a
   shared backend. `write` returns that id, which is exactly what `set` resolves by
-  — so a convention write records a *bare* `!secret`. An explicit
+  — so a convention write records a _bare_ `!secret`. An explicit
   `!secret { ref: NAME }` resolves a differently-named secret; a `NAME` that is a
   full `projects/.../secrets/...` resource path resolves a foreign secret in any
   project.

@@ -8,13 +8,13 @@ nothing else to install.
 
 ## The five packages
 
-| Package | `os` | `cpu` | binary |
-|---|---|---|---|
-| `@keyshelf/sops-linux-x64` | `linux` | `x64` | `bin/sops` |
-| `@keyshelf/sops-linux-arm64` | `linux` | `arm64` | `bin/sops` |
-| `@keyshelf/sops-darwin-x64` | `darwin` | `x64` | `bin/sops` |
-| `@keyshelf/sops-darwin-arm64` | `darwin` | `arm64` | `bin/sops` |
-| `@keyshelf/sops-win32-x64` | `win32` | `x64` | `bin/sops.exe` |
+| Package                       | `os`     | `cpu`   | binary         |
+| ----------------------------- | -------- | ------- | -------------- |
+| `@keyshelf/sops-linux-x64`    | `linux`  | `x64`   | `bin/sops`     |
+| `@keyshelf/sops-linux-arm64`  | `linux`  | `arm64` | `bin/sops`     |
+| `@keyshelf/sops-darwin-x64`   | `darwin` | `x64`   | `bin/sops`     |
+| `@keyshelf/sops-darwin-arm64` | `darwin` | `arm64` | `bin/sops`     |
+| `@keyshelf/sops-win32-x64`    | `win32`  | `x64`   | `bin/sops.exe` |
 
 Each package:
 
@@ -24,7 +24,7 @@ Each package:
 - has **`deps: none`** — it is a pure binary carrier (no `bin` command either; the
   resolver locates the file by path via `require.resolve`, matching esbuild);
 - is licensed **`MPL-2.0`** — sops's license, since these redistribute sops
-  itself, *not* keyshelf's MIT.
+  itself, _not_ keyshelf's MIT.
 
 **No `-gnu`/`-musl` libc split.** SWC/Rollup/lightningcss split linux on libc
 because they link native code; **sops is a statically-linked Go binary**, so one
@@ -41,7 +41,7 @@ agree).
 
 **Versioning philosophy — we track the upstream sops version (clef-sh style),
 not keyshelf's own version (esbuild style).** esbuild locks its platform packages
-to the main package version because the binary *is* esbuild. Our binary is
+to the main package version because the binary _is_ esbuild. Our binary is
 third-party sops, so its own release number (`3.13.1`) is the honest, greppable
 version to publish, and `sops-version.json` records the exact getsops release the
 bytes came from. The five packages and the main `optionalDependencies` are all
@@ -57,7 +57,7 @@ ranges to match, and re-run the build.
 
 1. **downloads** the pinned asset from the getsops/sops GitHub release (cached in
    `.cache/sops-binaries/`, gitignored, so the test suite never re-downloads);
-2. **SHA256-verifies** the bytes against `sops-version.json` *before packaging* —
+2. **SHA256-verifies** the bytes against `sops-version.json` _before packaging_ —
    a tampered/mismatched binary throws and fails the build (`verifySha256`);
 3. **assembles** `platforms/sops-{platform}-{arch}/` (binary at `bin/sops[.exe]`
    mode 0755, the derived `package.json`, sops's MPL-2.0 `LICENSE`);

@@ -21,7 +21,7 @@ a project means multiple shelves. A shelf's name is its directory name.
 _Avoid_: group, namespace, bundle, module
 
 **Adapter**:
-The implementation that talks to one type of backend (sops, gcp). Defines *how*
+The implementation that talks to one type of backend (sops, gcp). Defines _how_
 values are stored and fetched for that backend type.
 _Avoid_: driver, plugin, backend (backend is the external system, not the code)
 
@@ -48,7 +48,7 @@ _Avoid_: stage, env (in prose), target
 
 **Key**:
 A single named entry, declared in a schema and given a value in an environment.
-A key's *representation* (plaintext config vs. secret) is chosen per environment,
+A key's _representation_ (plaintext config vs. secret) is chosen per environment,
 not fixed by the schema.
 _Avoid_: field, variable, entry
 
@@ -67,7 +67,7 @@ _Avoid_: credential, password
 Where an adapter physically persists secret values, always outside the
 environment file. For the sops adapter, a sibling encrypted file
 (`{shelf}/{env}.secrets.yaml`); for a remote adapter (gcp), the backend itself.
-The environment file holds `!secret` references *into* the store, never the values.
+The environment file holds `!secret` references _into_ the store, never the values.
 _Avoid_: vault, backend, storage
 
 **Reference**:

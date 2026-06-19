@@ -2,7 +2,7 @@
 
 ## Decision
 
-Secret *values* are never written into the environment file. Each adapter owns a
+Secret _values_ are never written into the environment file. Each adapter owns a
 **store** where it persists values, and the environment file's `keys:` map holds
 only a `!secret` **reference** into that store. The reference's payload shape is
 adapter-defined, and resolves by convention by default (the key name locates the
@@ -21,7 +21,7 @@ Authentication is delegated to each backend's native credential mechanism.
 ## Why
 
 The original design put encrypted/secret material inline in the environment file.
-Separating the *reference* (committed, readable manifest) from the *value*
+Separating the _reference_ (committed, readable manifest) from the _value_
 (in the store) keeps environment files clean, diffable, and free of sensitive
 material, and unifies the two adapter archetypes — inline-encrypted (sops) and
 remote (gcp) — behind one model: the env file always references, the store always

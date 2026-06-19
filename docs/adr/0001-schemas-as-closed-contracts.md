@@ -26,8 +26,8 @@ environment and a secret in another.
 ## Why
 
 We started from Pulumi-ESC-style one-level inheritance (`_base → dev/staging/prod`)
-and rejected it. Inheritance forced a base file to hold secret *values* that a
-child environment would then have to resolve through a *different* provider —
+and rejected it. Inheritance forced a base file to hold secret _values_ that a
+child environment would then have to resolve through a _different_ provider —
 an ambiguity with no clean answer. Schemas dissolve it: the schema holds no
 secret values, only declarations, so every environment supplies and resolves its
 own secrets through its own provider. Inheritance is replaced by "implement this
@@ -35,7 +35,7 @@ shape," which also makes validation a real, first-class feature — the property
 that matters for an agent-first CLI.
 
 Shelves bundle a schema with its environments so the schema binding is
-*structural* (directory membership) rather than a field that can drift. This
+_structural_ (directory membership) rather than a field that can drift. This
 keeps the "multiple schemas per project" capability while removing the
 schema-reference field entirely; identity is wholly filesystem-derived.
 
@@ -49,7 +49,7 @@ secret in prod.
 
 ## Consequences
 
-We knowingly gave up the schema's ability to enforce "this key must *never*
+We knowingly gave up the schema's ability to enforce "this key must _never_
 appear in plaintext, anywhere." A key that should always be secret (a signing
 key) can be written as plaintext in some environment and validation will pass.
 We accepted this for the per-environment flexibility above; an opt-in
