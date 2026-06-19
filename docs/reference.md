@@ -1,7 +1,8 @@
 # Keyshelf — Build Reference
 
 The committed contract surface for the MVP. Rationale lives in `docs/adr/`;
-vocabulary in `../CONTEXT.md`. This file is _what_, not _why_.
+vocabulary in `../CONTEXT.md`. This file is _what_, not _why_. Coming from
+keyshelf v5? See [Migrating from v5](./migrating-from-v5.md).
 
 ## File layout
 
