@@ -1,15 +1,15 @@
-import {execFileSync} from 'node:child_process'
-import {createHash} from 'node:crypto'
-import {existsSync} from 'node:fs'
-import {chmod, copyFile, mkdir, readFile, rm, writeFile} from 'node:fs/promises'
-import path from 'node:path'
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { chmod, copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   type PlatformKey,
   type SopsManifest,
   binaryName,
   platformPackageJson,
-  repoRoot,
-} from './platforms.js'
+  repoRoot
+} from "./platforms.js";
 
 /**
  * The supply-chain-critical half of the platform build: fetch each pinned sops
@@ -21,15 +21,15 @@ import {
  */
 
 /** Directory the downloaded release assets are cached in (gitignored). */
-const cacheDir = path.join(repoRoot, '.cache', 'sops-binaries')
+const cacheDir = path.join(repoRoot, ".cache", "sops-binaries");
 /** Where the assembled platform packages are written. */
-const platformsDir = path.join(repoRoot, 'platforms')
+const platformsDir = path.join(repoRoot, "platforms");
 /** The committed sops MPL-2.0 license text, copied into every package. */
-const sopsLicensePath = path.join(repoRoot, 'scripts', 'assets', 'sops-LICENSE')
+const sopsLicensePath = path.join(repoRoot, "scripts", "assets", "sops-LICENSE");
 
 /** Lowercase hex SHA256 of a buffer. */
 export function sha256(buf: Buffer): string {
-  return createHash('sha256').update(buf).digest('hex')
+  return createHash("sha256").update(buf).digest("hex");
 }
 
 /**
@@ -37,18 +37,18 @@ export function sha256(buf: Buffer): string {
  * gate that makes a tampered/substituted binary fail the build rather than ship.
  */
 export function verifySha256(buf: Buffer, expected: string, label: string): void {
-  const actual = sha256(buf)
+  const actual = sha256(buf);
   if (actual !== expected.toLowerCase()) {
     throw new Error(
       `Integrity check failed: checksum mismatch for ${label}.\n  expected ${expected}\n  actual   ${actual}\n` +
-        `Refusing to package an unverified binary.`,
-    )
+        `Refusing to package an unverified binary.`
+    );
   }
 }
 
 /** The download URL for one platform's pinned asset. */
 function assetUrl(key: PlatformKey, manifest: SopsManifest): string {
-  return `https://github.com/getsops/sops/releases/download/${manifest.tag}/${manifest.binaries[key].asset}`
+  return `https://github.com/getsops/sops/releases/download/${manifest.tag}/${manifest.binaries[key].asset}`;
 }
 
 /**
@@ -60,34 +60,34 @@ function assetUrl(key: PlatformKey, manifest: SopsManifest): string {
 export async function downloadBinary(
   key: PlatformKey,
   manifest: SopsManifest,
-  opts: {cacheDir?: string; fetchImpl?: typeof fetch} = {},
+  opts: { cacheDir?: string; fetchImpl?: typeof fetch } = {}
 ): Promise<Buffer> {
-  const dir = opts.cacheDir ?? cacheDir
-  const entry = manifest.binaries[key]
-  const cached = path.join(dir, entry.asset)
+  const dir = opts.cacheDir ?? cacheDir;
+  const entry = manifest.binaries[key];
+  const cached = path.join(dir, entry.asset);
 
   if (existsSync(cached)) {
-    const buf = await readFile(cached)
+    const buf = await readFile(cached);
     try {
-      verifySha256(buf, entry.sha256, key)
-      return buf
+      verifySha256(buf, entry.sha256, key);
+      return buf;
     } catch {
-      await rm(cached, {force: true})
+      await rm(cached, { force: true });
     }
   }
 
-  const doFetch = opts.fetchImpl ?? fetch
-  const res = await doFetch(assetUrl(key, manifest))
+  const doFetch = opts.fetchImpl ?? fetch;
+  const res = await doFetch(assetUrl(key, manifest));
   if (!res.ok) {
-    throw new Error(`Failed to download ${assetUrl(key, manifest)}: HTTP ${res.status}`)
+    throw new Error(`Failed to download ${assetUrl(key, manifest)}: HTTP ${res.status}`);
   }
 
-  const buf = Buffer.from(await res.arrayBuffer())
-  verifySha256(buf, entry.sha256, key)
+  const buf = Buffer.from(await res.arrayBuffer());
+  verifySha256(buf, entry.sha256, key);
 
-  await mkdir(dir, {recursive: true})
-  await writeFile(cached, buf)
-  return buf
+  await mkdir(dir, { recursive: true });
+  await writeFile(cached, buf);
+  return buf;
 }
 
 /**
@@ -99,19 +99,19 @@ export async function assemblePackage(
   key: PlatformKey,
   manifest: SopsManifest,
   binary: Buffer,
-  outDir: string,
+  outDir: string
 ): Promise<void> {
-  await rm(outDir, {recursive: true, force: true})
-  await mkdir(path.join(outDir, 'bin'), {recursive: true})
+  await rm(outDir, { recursive: true, force: true });
+  await mkdir(path.join(outDir, "bin"), { recursive: true });
 
-  const binPath = path.join(outDir, 'bin', binaryName(key))
-  await writeFile(binPath, binary)
-  await chmod(binPath, 0o755)
+  const binPath = path.join(outDir, "bin", binaryName(key));
+  await writeFile(binPath, binary);
+  await chmod(binPath, 0o755);
 
-  const pkg = platformPackageJson(key, manifest)
-  await writeFile(path.join(outDir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n', 'utf8')
+  const pkg = platformPackageJson(key, manifest);
+  await writeFile(path.join(outDir, "package.json"), JSON.stringify(pkg, null, 2) + "\n", "utf8");
 
-  await copyFile(sopsLicensePath, path.join(outDir, 'LICENSE'))
+  await copyFile(sopsLicensePath, path.join(outDir, "LICENSE"));
 }
 
 /**
@@ -121,11 +121,13 @@ export async function assemblePackage(
  * `os`/`cpu` match the host (you cannot exec a foreign-arch binary).
  */
 export function smokeTest(binaryPath: string): string {
-  const out = execFileSync(binaryPath, ['--version', '--disable-version-check'], {encoding: 'utf8'})
-  return out.trim()
+  const out = execFileSync(binaryPath, ["--version", "--disable-version-check"], {
+    encoding: "utf8"
+  });
+  return out.trim();
 }
 
 /** Convenience: the assembled package directory for a platform key. */
 export function packageDir(key: PlatformKey): string {
-  return path.join(platformsDir, `sops-${key}`)
+  return path.join(platformsDir, `sops-${key}`);
 }

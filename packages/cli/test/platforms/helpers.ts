@@ -1,13 +1,18 @@
-import {execFile, execFileSync} from 'node:child_process'
-import {existsSync} from 'node:fs'
-import {mkdtemp, rm, writeFile} from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
-import {promisify} from 'node:util'
-import {packageDir} from '../../scripts/lib/build.js'
-import {hostPlatformKey, platforms, type PlatformKey, repoRoot} from '../../scripts/lib/platforms.js'
+import { execFile, execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import { packageDir } from "../../scripts/lib/build.js";
+import {
+  hostPlatformKey,
+  platforms,
+  type PlatformKey,
+  repoRoot
+} from "../../scripts/lib/platforms.js";
 
-const execFileAsync = promisify(execFile)
+const execFileAsync = promisify(execFile);
 
 /**
  * Shared scaffolding for the no-publish verification tiers. Both tiers need: a
@@ -20,34 +25,36 @@ const execFileAsync = promisify(execFile)
 /** Whether age-keygen is resolvable (needed to build the hermetic sops fixture). */
 export function ageAvailable(): boolean {
   try {
-    execFileSync(process.platform === 'win32' ? 'where' : 'which', ['age-keygen'], {stdio: 'ignore'})
-    return true
+    execFileSync(process.platform === "win32" ? "where" : "which", ["age-keygen"], {
+      stdio: "ignore"
+    });
+    return true;
   } catch {
-    return false
+    return false;
   }
 }
 
 /** The host's platform key, asserting it is one we support (it always is in CI/dev). */
 export function requireHostKey(): PlatformKey {
-  const key = hostPlatformKey()
-  if (key === undefined) throw new Error(`Unsupported host ${process.platform}-${process.arch}`)
-  return key
+  const key = hostPlatformKey();
+  if (key === undefined) throw new Error(`Unsupported host ${process.platform}-${process.arch}`);
+  return key;
 }
 
 /** True once `npm run platforms:build` has produced the host package directory. */
 function hostPackageBuilt(): boolean {
-  return existsSync(path.join(packageDir(requireHostKey()), 'package.json'))
+  return existsSync(path.join(packageDir(requireHostKey()), "package.json"));
 }
 
 /** Ensure the host platform package is built (downloads + verifies once, cached). */
 export async function ensureHostPackageBuilt(): Promise<void> {
-  if (hostPackageBuilt()) return
-  await execFileAsync('npx', ['tsx', 'scripts/build-platforms.ts', '--host'], {cwd: repoRoot})
+  if (hostPackageBuilt()) return;
+  await execFileAsync("npx", ["tsx", "scripts/build-platforms.ts", "--host"], { cwd: repoRoot });
 }
 
 /** True once all five platform package directories have been generated. */
 function allPackagesBuilt(): boolean {
-  return platforms.every((key) => existsSync(path.join(packageDir(key), 'package.json')))
+  return platforms.every((key) => existsSync(path.join(packageDir(key), "package.json")));
 }
 
 /**
@@ -56,16 +63,19 @@ function allPackagesBuilt(): boolean {
  * this fetches each ~30-50MB binary once and reuses it across runs.
  */
 export async function ensureAllPackagesBuilt(): Promise<void> {
-  if (allPackagesBuilt()) return
-  await execFileAsync('npx', ['tsx', 'scripts/build-platforms.ts'], {cwd: repoRoot, maxBuffer: 64 * 1024 * 1024})
+  if (allPackagesBuilt()) return;
+  await execFileAsync("npx", ["tsx", "scripts/build-platforms.ts"], {
+    cwd: repoRoot,
+    maxBuffer: 64 * 1024 * 1024
+  });
 }
 
 /** Whether the verdaccio CLI is installed (the Tier 2 local registry). */
 export function verdaccioInstalled(): boolean {
   return (
-    existsSync(path.join(repoRoot, 'node_modules', '.bin', 'verdaccio')) ||
-    existsSync(path.join(repoRoot, 'node_modules', 'verdaccio', 'bin', 'verdaccio'))
-  )
+    existsSync(path.join(repoRoot, "node_modules", ".bin", "verdaccio")) ||
+    existsSync(path.join(repoRoot, "node_modules", "verdaccio", "bin", "verdaccio"))
+  );
 }
 
 /**
@@ -74,48 +84,55 @@ export function verdaccioInstalled(): boolean {
  * on `--json`; instead we read the single `.tgz` filename npm emits on stdout.
  */
 export async function npmPack(srcDir: string, destDir: string): Promise<string> {
-  const {stdout} = await execFileAsync('npm', ['pack', '--pack-destination', destDir, '--silent', srcDir], {
-    cwd: repoRoot,
-    maxBuffer: 64 * 1024 * 1024,
-    // keyshelf's `prepack` runs `oclif manifest`, which records *source*
-    // (`src/**.ts`) command paths under a non-production NODE_ENV (vitest sets
-    // NODE_ENV=test in this worker). The published tarball ships only `dist`, so
-    // a src-referencing manifest makes the installed CLI fail to load commands.
-    // Pin production so the manifest references the compiled `dist/**.js` — the
-    // shape a real publish produces.
-    env: productionEnv(),
-  })
+  const { stdout } = await execFileAsync(
+    "npm",
+    ["pack", "--pack-destination", destDir, "--silent", srcDir],
+    {
+      cwd: repoRoot,
+      maxBuffer: 64 * 1024 * 1024,
+      // keyshelf's `prepack` runs `oclif manifest`, which records *source*
+      // (`src/**.ts`) command paths under a non-production NODE_ENV (vitest sets
+      // NODE_ENV=test in this worker). The published tarball ships only `dist`, so
+      // a src-referencing manifest makes the installed CLI fail to load commands.
+      // Pin production so the manifest references the compiled `dist/**.js` — the
+      // shape a real publish produces.
+      env: productionEnv()
+    }
+  );
   const file = stdout
-    .split('\n')
+    .split("\n")
     .map((l) => l.trim())
     .reverse()
-    .find((l) => l.endsWith('.tgz'))
-  if (file === undefined) throw new Error(`npm pack of ${srcDir} produced no .tgz line:\n${stdout}`)
-  return path.join(destDir, file)
+    .find((l) => l.endsWith(".tgz"));
+  if (file === undefined)
+    throw new Error(`npm pack of ${srcDir} produced no .tgz line:\n${stdout}`);
+  return path.join(destDir, file);
 }
 
 /** List a tarball's file paths (relative to its `package/` root). */
 export function tarballEntries(tarball: string): string[] {
-  const out = execFileSync('tar', ['-tzf', tarball], {encoding: 'utf8'})
+  const out = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" });
   return out
-    .split('\n')
+    .split("\n")
     .map((l) => l.trim())
     .filter(Boolean)
-    .map((l) => l.replace(/^package\//, ''))
+    .map((l) => l.replace(/^package\//, ""));
 }
 
 /** Read a JSON file inside a tarball without extracting to disk. */
 export function tarballPackageJson(tarball: string): Record<string, unknown> {
-  const out = execFileSync('tar', ['-xzO', '-f', tarball, 'package/package.json'], {encoding: 'utf8'})
-  return JSON.parse(out) as Record<string, unknown>
+  const out = execFileSync("tar", ["-xzO", "-f", tarball, "package/package.json"], {
+    encoding: "utf8"
+  });
+  return JSON.parse(out) as Record<string, unknown>;
 }
 
-export async function makeTmpDir(prefix = 'keyshelf-platforms-'): Promise<string> {
-  return mkdtemp(path.join(os.tmpdir(), prefix))
+export async function makeTmpDir(prefix = "keyshelf-platforms-"): Promise<string> {
+  return mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
 export async function removeDir(dir: string): Promise<void> {
-  await rm(dir, {recursive: true, force: true})
+  await rm(dir, { recursive: true, force: true });
 }
 
 /**
@@ -124,20 +141,20 @@ export async function removeDir(dir: string): Promise<void> {
  * environment). Returns the age key file path. The same scaffold both tiers use
  * to run a real `keyshelf run` that decrypts through the bundled binary.
  */
-export async function scaffoldSopsProject(dir: string): Promise<{ageKeyFile: string}> {
-  const ageKeyFile = path.join(dir, 'age-key.txt')
-  const {stderr} = await execFileAsync('age-keygen', ['-o', ageKeyFile])
-  const match = /public key:\s*(age1[0-9a-z]+)/i.exec(stderr)
-  if (match === null) throw new Error(`could not parse age public key: ${stderr}`)
-  const recipient = match[1]
+export async function scaffoldSopsProject(dir: string): Promise<{ ageKeyFile: string }> {
+  const ageKeyFile = path.join(dir, "age-key.txt");
+  const { stderr } = await execFileAsync("age-keygen", ["-o", ageKeyFile]);
+  const match = /public key:\s*(age1[0-9a-z]+)/i.exec(stderr);
+  if (match === null) throw new Error(`could not parse age public key: ${stderr}`);
+  const recipient = match[1];
 
   await writeFile(
-    path.join(dir, '.sops.yaml'),
+    path.join(dir, ".sops.yaml"),
     `creation_rules:\n  - path_regex: .*\\.secrets\\.yaml$\n    age: ${recipient}\n`,
-    'utf8',
-  )
+    "utf8"
+  );
 
-  return {ageKeyFile}
+  return { ageKeyFile };
 }
 
 /**
@@ -149,7 +166,7 @@ export async function scaffoldSopsProject(dir: string): Promise<{ageKeyFile: str
  * `npm i -g keyshelf` install, which is exactly what these tiers verify.
  */
 export function productionEnv(overrides: Record<string, string> = {}): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {...process.env}
+  const env: NodeJS.ProcessEnv = { ...process.env };
   for (const k of Object.keys(env)) {
     // Vitest's `DEV`/`VITEST*` flip oclif into dev mode. The `npm_*` lifecycle
     // vars (leaked because the suite is launched via npm/npx from the keyshelf
@@ -157,9 +174,8 @@ export function productionEnv(overrides: Record<string, string> = {}): NodeJS.Pr
     // repo — which has a tsconfig.json + src/ — so the installed keyshelf
     // transpiles from `src` instead of `dist`. A genuine `npm i -g keyshelf`
     // user has none of these; strip them so the child behaves like one.
-    if (k === 'DEV' || k.startsWith('VITEST') || k.startsWith('npm_')) delete env[k]
+    if (k === "DEV" || k.startsWith("VITEST") || k.startsWith("npm_")) delete env[k];
   }
-  env.NODE_ENV = 'production'
-  return {...env, ...overrides}
+  env.NODE_ENV = "production";
+  return { ...env, ...overrides };
 }
-

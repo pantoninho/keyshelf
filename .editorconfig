@@ -1,15 +1,14 @@
 root = true
 
+# Indentation matches Prettier (.prettierrc tabWidth: 2), the source of truth for
+# JS/TS/JSON/YAML formatting, so editors and `prettier --write` never disagree.
 [*]
 indent_style = space
-indent_size = 4
+indent_size = 2
 end_of_line = lf
 charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
-
-[*.{json,yml,yaml}]
-indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false

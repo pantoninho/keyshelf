@@ -9,58 +9,58 @@
  */
 
 /** The kind of presence requirement a schema declares for a key. */
-export type SchemaKeyKind = 'config' | 'required' | 'optional'
+export type SchemaKeyKind = "config" | "required" | "optional";
 
 /** One declared key in a shelf's schema — presence only, never representation. */
 export interface SchemaKey {
-  kind: SchemaKeyKind
+  kind: SchemaKeyKind;
   /** The default value, present only for `kind === 'config'`. */
-  default?: string
+  default?: string;
 }
 
 /** A shelf's closed validation contract, parsed from `schema.yaml`. */
 export interface Schema {
-  keys: Record<string, SchemaKey>
+  keys: Record<string, SchemaKey>;
 }
 
 /** How a key's value is represented in an environment file. */
-export type ValueKind = 'config' | 'secret'
+export type ValueKind = "config" | "secret";
 
 /** One key/value entry in an environment file. */
 export interface EnvironmentValue {
-  kind: ValueKind
+  kind: ValueKind;
   /** Plaintext value, present only for `kind === 'config'`. */
-  value?: string
+  value?: string;
   /** Adapter-defined `!secret` reference payload, when explicitly given. */
-  ref?: unknown
+  ref?: unknown;
 }
 
 /** An environment, parsed from `{shelf}/{env}.yaml`. */
 export interface Environment {
   /** The shelf this environment belongs to (its directory name). */
-  shelf: string
+  shelf: string;
   /** The environment name (its filename without extension). */
-  name: string
+  name: string;
   /** The provider name this environment references in `config.yaml`. */
-  provider: string
-  keys: Record<string, EnvironmentValue>
+  provider: string;
+  keys: Record<string, EnvironmentValue>;
 }
 
 /** A configured provider (an adapter plus its config) from `config.yaml`. */
 export interface Provider {
-  adapter: string
-  [field: string]: unknown
+  adapter: string;
+  [field: string]: unknown;
 }
 
 /** The project-global `config.yaml`. */
 export interface Config {
-  project: string
-  providers: Record<string, Provider>
+  project: string;
+  providers: Record<string, Provider>;
 }
 
 /** Everything needed to validate a single environment, assembled by the loader. */
 export interface LoadedEnvironment {
-  config: Config
-  schema: Schema
-  environment: Environment
+  config: Config;
+  schema: Schema;
+  environment: Environment;
 }

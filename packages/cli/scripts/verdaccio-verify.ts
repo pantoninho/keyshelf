@@ -12,81 +12,123 @@
  *
  * Usage: npm run verdaccio
  */
-import {execFile} from 'node:child_process'
-import {existsSync} from 'node:fs'
-import {mkdtemp, readdir, rm, writeFile} from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
-import process from 'node:process'
-import {promisify} from 'node:util'
-import {packageDir} from './lib/build.js'
-import {hostPlatformKey, platforms, repoRoot} from './lib/platforms.js'
-import {publishToRegistry, startVerdaccio} from './lib/verdaccio.js'
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
+import { promisify } from "node:util";
+import { packageDir } from "./lib/build.js";
+import { hostPlatformKey, platforms, repoRoot, type PlatformKey } from "./lib/platforms.js";
+import { publishToRegistry, startVerdaccio, type VerdaccioRegistry } from "./lib/verdaccio.js";
 
-const execFileAsync = promisify(execFile)
+const execFileAsync = promisify(execFile);
 
 async function ensureBuilt(): Promise<void> {
-  const missing = platforms.filter((key) => !existsSync(path.join(packageDir(key), 'package.json')))
-  if (missing.length === 0) return
-  process.stdout.write(`Building ${missing.length} missing platform package(s) …\n`)
-  await execFileAsync('npx', ['tsx', 'scripts/build-platforms.ts'], {cwd: repoRoot, maxBuffer: 64 * 1024 * 1024})
+  const missing = platforms.filter(
+    (key) => !existsSync(path.join(packageDir(key), "package.json"))
+  );
+  if (missing.length === 0) return;
+  process.stdout.write(`Building ${missing.length} missing platform package(s) …\n`);
+  await execFileAsync("npx", ["tsx", "scripts/build-platforms.ts"], {
+    cwd: repoRoot,
+    maxBuffer: 64 * 1024 * 1024
+  });
+}
+
+/** Publish all five platform packages plus keyshelf itself to the local registry. */
+async function publishAll(registry: VerdaccioRegistry): Promise<void> {
+  for (const key of platforms) {
+    process.stdout.write(`Publishing @keyshelf/sops-${key} … `);
+    await publishToRegistry(packageDir(key), registry);
+    process.stdout.write("ok\n");
+  }
+
+  process.stdout.write("Publishing keyshelf … ");
+  await publishToRegistry(repoRoot, registry);
+  process.stdout.write("ok\n");
+}
+
+/** Which `@keyshelf/sops-*` packages npm actually installed into `proj`'s node_modules. */
+async function installedSopsPackages(proj: string): Promise<string[]> {
+  const scopeDir = path.join(proj, "node_modules", "@keyshelf");
+  if (!existsSync(scopeDir)) return [];
+  return (await readdir(scopeDir)).filter((d) => d.startsWith("sops-"));
+}
+
+/**
+ * Install keyshelf from the local registry into a throwaway project and assert
+ * npm selected ONLY the host's platform package (the other four os/cpu-skipped).
+ */
+async function verifyHostOnlyInstall(
+  registry: VerdaccioRegistry,
+  host: PlatformKey
+): Promise<void> {
+  const proj = await mkdtemp(path.join(os.tmpdir(), "keyshelf-verdaccio-verify-"));
+  try {
+    await writeFile(
+      path.join(proj, "package.json"),
+      JSON.stringify({ name: "verdaccio-verify", version: "1.0.0", private: true }, null, 2),
+      "utf8"
+    );
+    process.stdout.write("Installing keyshelf from the local registry … ");
+    await execFileAsync(
+      "npm",
+      [
+        "install",
+        "keyshelf",
+        "--registry",
+        `${registry.url}/`,
+        "--userconfig",
+        registry.userconfig,
+        "--no-audit",
+        "--no-fund"
+      ],
+      { cwd: proj, env: registry.npmEnv(), maxBuffer: 64 * 1024 * 1024 }
+    );
+    process.stdout.write("ok\n");
+
+    const present = await installedSopsPackages(proj);
+    const expected = [`sops-${host}`];
+    process.stdout.write(
+      `\nInstalled @keyshelf/sops-* packages: ${present.join(", ") || "(none)"}\n`
+    );
+    process.stdout.write(`Expected exactly: ${expected.join(", ")}\n`);
+    if (present.length !== 1 || present[0] !== expected[0]) {
+      throw new Error(
+        `os/cpu selection wrong: got [${present.join(", ")}], expected [${expected.join(", ")}]`
+      );
+    }
+
+    process.stdout.write(
+      "\n✔ Tier 2 OK: only the host platform package was installed; nothing published to npmjs.com.\n"
+    );
+  } finally {
+    await rm(proj, { recursive: true, force: true });
+  }
 }
 
 async function main(): Promise<void> {
-  const host = hostPlatformKey()
-  if (host === undefined) throw new Error(`Unsupported host ${process.platform}-${process.arch}`)
+  const host = hostPlatformKey();
+  if (host === undefined) throw new Error(`Unsupported host ${process.platform}-${process.arch}`);
 
-  await ensureBuilt()
-  process.stdout.write('Starting local Verdaccio …\n')
-  const registry = await startVerdaccio()
-  process.stdout.write(`  registry: ${registry.url}\n`)
+  await ensureBuilt();
+  process.stdout.write("Starting local Verdaccio …\n");
+  const registry = await startVerdaccio();
+  process.stdout.write(`  registry: ${registry.url}\n`);
 
   try {
-    for (const key of platforms) {
-      process.stdout.write(`Publishing @keyshelf/sops-${key} … `)
-      await publishToRegistry(packageDir(key), registry)
-      process.stdout.write('ok\n')
-    }
-
-    process.stdout.write('Publishing keyshelf … ')
-    await publishToRegistry(repoRoot, registry)
-    process.stdout.write('ok\n')
-
-    const proj = await mkdtemp(path.join(os.tmpdir(), 'keyshelf-verdaccio-verify-'))
-    try {
-      await writeFile(
-        path.join(proj, 'package.json'),
-        JSON.stringify({name: 'verdaccio-verify', version: '1.0.0', private: true}, null, 2),
-        'utf8',
-      )
-      process.stdout.write('Installing keyshelf from the local registry … ')
-      await execFileAsync(
-        'npm',
-        ['install', 'keyshelf', '--registry', `${registry.url}/`, '--userconfig', registry.userconfig, '--no-audit', '--no-fund'],
-        {cwd: proj, env: registry.npmEnv(), maxBuffer: 64 * 1024 * 1024},
-      )
-      process.stdout.write('ok\n')
-
-      const scopeDir = path.join(proj, 'node_modules', '@keyshelf')
-      const present = existsSync(scopeDir) ? (await readdir(scopeDir)).filter((d) => d.startsWith('sops-')) : []
-      const expected = [`sops-${host}`]
-      const ok = present.length === 1 && present[0] === expected[0]
-      process.stdout.write(`\nInstalled @keyshelf/sops-* packages: ${present.join(', ') || '(none)'}\n`)
-      process.stdout.write(`Expected exactly: ${expected.join(', ')}\n`)
-      if (!ok) {
-        throw new Error(`os/cpu selection wrong: got [${present.join(', ')}], expected [${expected.join(', ')}]`)
-      }
-
-      process.stdout.write('\n✔ Tier 2 OK: only the host platform package was installed; nothing published to npmjs.com.\n')
-    } finally {
-      await rm(proj, {recursive: true, force: true})
-    }
+    await publishAll(registry);
+    await verifyHostOnlyInstall(registry, host);
   } finally {
-    await registry.teardown()
+    await registry.teardown();
   }
 }
 
 main().catch((error) => {
-  process.stderr.write(`\nverdaccio verify failed: ${error instanceof Error ? error.message : String(error)}\n`)
-  process.exitCode = 1
-})
+  process.stderr.write(
+    `\nverdaccio verify failed: ${error instanceof Error ? error.message : String(error)}\n`
+  );
+  process.exitCode = 1;
+});

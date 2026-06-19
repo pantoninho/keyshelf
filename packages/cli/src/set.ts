@@ -1,4 +1,4 @@
-import {type Document, isMap, Scalar, YAMLMap} from 'yaml'
+import { type Document, isMap, Scalar, YAMLMap } from "yaml";
 
 /**
  * The form a `!secret` reference takes in the environment file. The adapter's
@@ -8,7 +8,7 @@ import {type Document, isMap, Scalar, YAMLMap} from 'yaml'
  * Anything else — a foreign/explicit name, or a non-string payload — is recorded
  * verbatim as `!secret { ref: ... }` so it round-trips back through the loader.
  */
-export type SecretRefForm = {bare: true} | {bare: false; ref: unknown}
+export type SecretRefForm = { bare: true } | { bare: false; ref: unknown };
 
 /**
  * Decide how to record a written secret's reference. `adapterRef` is whatever
@@ -19,10 +19,10 @@ export type SecretRefForm = {bare: true} | {bare: false; ref: unknown}
  */
 export function secretRefForm(adapterRef: unknown, conventionRef: string): SecretRefForm {
   if (adapterRef === undefined || adapterRef === conventionRef) {
-    return {bare: true}
+    return { bare: true };
   }
 
-  return {bare: false, ref: adapterRef}
+  return { bare: false, ref: adapterRef };
 }
 
 /**
@@ -31,21 +31,21 @@ export function secretRefForm(adapterRef: unknown, conventionRef: string): Secre
  * every other key are left untouched.
  */
 function keysMap(doc: Document): YAMLMap {
-  const top = doc.contents
+  const top = doc.contents;
   if (!isMap(top)) {
     // An environment with no mapping (or only a provider that parsed oddly) is a
     // caller bug here — the loader has already accepted the file as a mapping.
-    throw new Error('environment document is not a mapping')
+    throw new Error("environment document is not a mapping");
   }
 
-  const existing = top.get('keys', true)
+  const existing = top.get("keys", true);
   if (isMap(existing)) {
-    return existing
+    return existing;
   }
 
-  const created = new YAMLMap()
-  top.set('keys', created)
-  return created
+  const created = new YAMLMap();
+  top.set("keys", created);
+  return created;
 }
 
 /**
@@ -56,7 +56,7 @@ function keysMap(doc: Document): YAMLMap {
  * (spaces, `=`, quotes, newlines) round-trip byte-exactly.
  */
 export function setConfigValue(doc: Document, key: string, value: string): void {
-  keysMap(doc).set(key, new Scalar(value))
+  keysMap(doc).set(key, new Scalar(value));
 }
 
 /**
@@ -66,16 +66,16 @@ export function setConfigValue(doc: Document, key: string, value: string): void 
  * through the loader's `!secret` handling.
  */
 export function setSecretRef(doc: Document, key: string, form: SecretRefForm): void {
-  const map = keysMap(doc)
+  const map = keysMap(doc);
 
   if (form.bare) {
-    const scalar = new Scalar(null)
-    scalar.tag = '!secret'
-    map.set(key, scalar)
-    return
+    const scalar = new Scalar(null);
+    scalar.tag = "!secret";
+    map.set(key, scalar);
+    return;
   }
 
-  const node = doc.createNode({ref: form.ref}) as YAMLMap
-  node.tag = '!secret'
-  map.set(key, node)
+  const node = doc.createNode({ ref: form.ref }) as YAMLMap;
+  node.tag = "!secret";
+  map.set(key, node);
 }

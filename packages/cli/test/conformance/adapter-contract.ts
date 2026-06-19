@@ -1,6 +1,6 @@
-import {afterEach, beforeEach, describe, expect, it} from 'vitest'
-import type {Adapter} from '../../src/adapters/adapter.js'
-import {KeyshelfError} from '../../src/errors.js'
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Adapter } from "../../src/adapters/adapter.js";
+import { captureError } from "../support/capture-error.js";
 
 /**
  * A per-adapter harness: the only thing that knows which adapter is behind the
@@ -10,34 +10,23 @@ import {KeyshelfError} from '../../src/errors.js'
  */
 export interface AdapterHarness {
   /** A label for the test report (e.g. `'fake'`). */
-  readonly name: string
+  readonly name: string;
   /** Provision a fresh backend + adapter for a single test. */
-  setup(): Promise<{adapter: Adapter}>
+  setup(): Promise<{ adapter: Adapter }>;
   /** Tear down whatever {@link setup} provisioned. */
-  teardown(): Promise<void>
+  teardown(): Promise<void>;
 }
 
 /** Adversarial values that must round-trip byte-exactly through any adapter. */
 const ADVERSARIAL_VALUES: ReadonlyArray<readonly [label: string, value: string]> = [
-  ['embedded newlines', 'line1\nline2\nline3'],
-  ['trailing/leading whitespace', '  padded value \t'],
-  ['equals signs', 'postgres://h?a=b=c&d=e'],
-  ['single and double quotes', `it's a "quoted" 'value'`],
-  ['unicode', 'café — 日本語 — 🔐 — Ω'],
-  ['multi-KB blob', 'x'.repeat(8192)],
-  ['empty string', ''],
-]
-
-async function captureError(fn: () => Promise<unknown>): Promise<KeyshelfError> {
-  try {
-    await fn()
-  } catch (error) {
-    if (error instanceof KeyshelfError) return error
-    throw new Error(`expected a KeyshelfError, got: ${String(error)}`)
-  }
-
-  throw new Error('expected a KeyshelfError, but nothing was thrown')
-}
+  ["embedded newlines", "line1\nline2\nline3"],
+  ["trailing/leading whitespace", "  padded value \t"],
+  ["equals signs", "postgres://h?a=b=c&d=e"],
+  ["single and double quotes", `it's a "quoted" 'value'`],
+  ["unicode", "café — 日本語 — 🔐 — Ω"],
+  ["multi-KB blob", "x".repeat(8192)],
+  ["empty string", ""]
+];
 
 /**
  * The shared, adapter-agnostic contract suite (ADR-0005). It exercises the
@@ -47,57 +36,59 @@ async function captureError(fn: () => Promise<unknown>): Promise<KeyshelfError> 
  */
 export function runAdapterContractSuite(harness: AdapterHarness): void {
   describe(`adapter contract: ${harness.name}`, () => {
-    let adapter: Adapter
+    let adapter: Adapter;
 
     beforeEach(async () => {
-      ;({adapter} = await harness.setup())
-    })
+      ({ adapter } = await harness.setup());
+    });
 
     afterEach(async () => {
-      await harness.teardown()
-    })
+      await harness.teardown();
+    });
 
-    describe('error-code mapping', () => {
-      it('maps a missing secret to SECRET_NOT_FOUND', async () => {
-        const error = await captureError(() => adapter.resolve('ABSENT_KEY'))
-        expect(error.code).toBe('SECRET_NOT_FOUND')
-      })
+    describe("error-code mapping", () => {
+      it("maps a missing secret to SECRET_NOT_FOUND", async () => {
+        const error = await captureError(() => adapter.resolve("ABSENT_KEY"));
+        expect(error.code).toBe("SECRET_NOT_FOUND");
+      });
 
-      it('maps a missing secret behind an explicit ref to SECRET_NOT_FOUND', async () => {
-        const error = await captureError(() => adapter.resolve('SOME_KEY', {ref: 'nonexistent-foreign-name'}))
-        expect(error.code).toBe('SECRET_NOT_FOUND')
-      })
-    })
+      it("maps a missing secret behind an explicit ref to SECRET_NOT_FOUND", async () => {
+        const error = await captureError(() =>
+          adapter.resolve("SOME_KEY", { ref: "nonexistent-foreign-name" })
+        );
+        expect(error.code).toBe("SECRET_NOT_FOUND");
+      });
+    });
 
-    describe('value fidelity (byte-exact write -> resolve round-trip)', () => {
+    describe("value fidelity (byte-exact write -> resolve round-trip)", () => {
       for (const [label, value] of ADVERSARIAL_VALUES) {
         it(`round-trips ${label}`, async () => {
-          await adapter.write('FIDELITY_KEY', value)
-          const resolved = await adapter.resolve('FIDELITY_KEY')
-          expect(resolved).toBe(value)
-        })
+          await adapter.write("FIDELITY_KEY", value);
+          const resolved = await adapter.resolve("FIDELITY_KEY");
+          expect(resolved).toBe(value);
+        });
       }
 
-      it('keeps distinct keys independent', async () => {
-        await adapter.write('KEY_A', 'value-a')
-        await adapter.write('KEY_B', 'value-b')
-        expect(await adapter.resolve('KEY_A')).toBe('value-a')
-        expect(await adapter.resolve('KEY_B')).toBe('value-b')
-      })
+      it("keeps distinct keys independent", async () => {
+        await adapter.write("KEY_A", "value-a");
+        await adapter.write("KEY_B", "value-b");
+        expect(await adapter.resolve("KEY_A")).toBe("value-a");
+        expect(await adapter.resolve("KEY_B")).toBe("value-b");
+      });
 
-      it('overwrites an existing value on a repeated write', async () => {
-        await adapter.write('KEY', 'first')
-        await adapter.write('KEY', 'second')
-        expect(await adapter.resolve('KEY')).toBe('second')
-      })
+      it("overwrites an existing value on a repeated write", async () => {
+        await adapter.write("KEY", "first");
+        await adapter.write("KEY", "second");
+        expect(await adapter.resolve("KEY")).toBe("second");
+      });
 
-      it('resolves a foreign value through an explicit ref returned by write', async () => {
+      it("resolves a foreign value through an explicit ref returned by write", async () => {
         // A write may return a reference that names the stored value; resolving
         // with that ref must locate the same value even under a different key.
-        const ref = await adapter.write('CANONICAL_KEY', 'foreign-value')
-        const resolved = await adapter.resolve('A_DIFFERENT_KEY', ref ?? 'CANONICAL_KEY')
-        expect(resolved).toBe('foreign-value')
-      })
-    })
-  })
+        const ref = await adapter.write("CANONICAL_KEY", "foreign-value");
+        const resolved = await adapter.resolve("A_DIFFERENT_KEY", ref ?? "CANONICAL_KEY");
+        expect(resolved).toBe("foreign-value");
+      });
+    });
+  });
 }

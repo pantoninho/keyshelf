@@ -1,8 +1,8 @@
-import path from 'node:path'
-import {describe, it} from 'vitest'
-import {SopsAdapter} from '../../src/adapters/sops.js'
-import {runAdapterContractSuite} from './adapter-contract.js'
-import {makeSopsFixture, sopsAvailable, type SopsFixture} from './sops-fixture.js'
+import path from "node:path";
+import { describe, it } from "vitest";
+import { SopsAdapter } from "../../src/adapters/sops.js";
+import { runAdapterContractSuite } from "./adapter-contract.js";
+import { makeSopsFixture, sopsAvailable, type SopsFixture } from "./sops-fixture.js";
 
 // The sops harness: the only sops-aware code wiring the shared contract suite to
 // the real `sops` binary. Each test gets a fresh hermetic backend — a throwaway
@@ -14,24 +14,24 @@ import {makeSopsFixture, sopsAvailable, type SopsFixture} from './sops-fixture.j
 // local `npm test` stays green; CI installs both and asserts their presence, so
 // the matrix genuinely runs there.
 if (sopsAvailable()) {
-  let fixture: SopsFixture
+  let fixture: SopsFixture;
 
   runAdapterContractSuite({
-    name: 'sops',
+    name: "sops",
     async setup() {
-      fixture = await makeSopsFixture()
+      fixture = await makeSopsFixture();
       // Decryption needs the fixture's throwaway age key in the environment.
-      process.env.SOPS_AGE_KEY_FILE = fixture.ageKeyFile
-      const storePath = path.join(fixture.dir, '.keyshelf', 'app', 'staging.secrets.yaml')
-      return {adapter: new SopsAdapter({storePath, cwd: fixture.dir})}
+      process.env.SOPS_AGE_KEY_FILE = fixture.ageKeyFile;
+      const storePath = path.join(fixture.dir, ".keyshelf", "app", "staging.secrets.yaml");
+      return { adapter: new SopsAdapter({ storePath, cwd: fixture.dir }) };
     },
     async teardown() {
-      delete process.env.SOPS_AGE_KEY_FILE
-      await fixture.teardown()
-    },
-  })
+      delete process.env.SOPS_AGE_KEY_FILE;
+      await fixture.teardown();
+    }
+  });
 } else {
-  describe('adapter contract: sops', () => {
-    it.skip('skipped: no sops/age binary resolvable on this host', () => {})
-  })
+  describe("adapter contract: sops", () => {
+    it.skip("skipped: no sops/age binary resolvable on this host", () => {});
+  });
 }

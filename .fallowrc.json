@@ -1,12 +1,16 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
-  "entry": ["packages/action/scripts/*.mjs"],
+  "entry": [
+    "packages/cli/bin/run.js",
+    "packages/cli/src/commands/*.ts",
+    "packages/cli/scripts/*.ts"
+  ],
   "ignorePatterns": ["examples/**"],
   "workspaces": {
     "packages": ["packages/*"]
   },
   "duplicates": {
-    "ignore": ["**/test/**", "packages/migrate/**"]
+    "ignore": ["**/test/**"]
   },
   "rules": {}
 }

@@ -6,7 +6,7 @@ name: gcp conformance
 # Per-PR signal rests on the hermetic `fake` + `sops` matrix in ci.yml.
 on:
   schedule:
-    - cron: '0 4 * * *' # nightly, 04:00 UTC
+    - cron: "0 4 * * *" # nightly, 04:00 UTC
   workflow_dispatch: {}
 
 jobs:

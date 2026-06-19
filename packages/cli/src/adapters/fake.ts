@@ -1,7 +1,7 @@
-import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs'
-import path from 'node:path'
-import {KeyshelfError} from '../errors.js'
-import type {Adapter} from './adapter.js'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { KeyshelfError } from "../errors.js";
+import type { Adapter } from "./adapter.js";
 
 /**
  * The store backing the {@link FakeAdapter}: a flat `storedName -> value` map.
@@ -16,19 +16,19 @@ import type {Adapter} from './adapter.js'
  * and a `resolve` in the next must see the same store.
  */
 export interface FakeStore {
-  read(name: string): string | undefined
-  put(name: string, value: string): void
+  read(name: string): string | undefined;
+  put(name: string, value: string): void;
 }
 
 /** An in-memory store; lives only as long as the process that created it. */
 export function inMemoryStore(seed: Record<string, string> = {}): FakeStore {
-  const data = new Map<string, string>(Object.entries(seed))
+  const data = new Map<string, string>(Object.entries(seed));
   return {
     read: (name) => data.get(name),
     put: (name, value) => {
-      data.set(name, value)
-    },
-  }
+      data.set(name, value);
+    }
+  };
 }
 
 /**
@@ -39,30 +39,34 @@ export function inMemoryStore(seed: Record<string, string> = {}): FakeStore {
  */
 export function fileStore(filePath: string): FakeStore {
   function load(): Record<string, string> {
-    if (!existsSync(filePath)) return {}
+    if (!existsSync(filePath)) return {};
     try {
-      const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return parsed as Record<string, string>
+      const parsed = JSON.parse(readFileSync(filePath, "utf8")) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, string>;
       }
     } catch (error) {
-      throw new KeyshelfError('ADAPTER_ERROR', `Could not read fake store '${filePath}': ${String(error)}`, {
-        file: filePath,
-      })
+      throw new KeyshelfError(
+        "ADAPTER_ERROR",
+        `Could not read fake store '${filePath}': ${String(error)}`,
+        {
+          file: filePath
+        }
+      );
     }
 
-    return {}
+    return {};
   }
 
   return {
     read: (name) => load()[name],
     put: (name, value) => {
-      const data = load()
-      data[name] = value
-      mkdirSync(path.dirname(filePath), {recursive: true})
-      writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
-    },
-  }
+      const data = load();
+      data[name] = value;
+      mkdirSync(path.dirname(filePath), { recursive: true });
+      writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+    }
+  };
 }
 
 /**
@@ -77,46 +81,58 @@ export function fileStore(filePath: string): FakeStore {
  * stored name.
  */
 export class FakeAdapter implements Adapter {
-  private readonly store: FakeStore
-  private readonly namespace: string
+  private readonly store: FakeStore;
+  private readonly namespace: string;
 
-  constructor(store: FakeStore, namespace = '') {
-    this.store = store
-    this.namespace = namespace
+  constructor(store: FakeStore, namespace = "") {
+    this.store = store;
+    this.namespace = namespace;
   }
 
   /** Compose the convention stored-name for a key: `{namespace}-{key}`. */
   private conventionName(key: string): string {
-    return this.namespace === '' ? key : `${this.namespace}-${key}`
+    return this.namespace === "" ? key : `${this.namespace}-${key}`;
   }
 
   async resolve(key: string, ref?: unknown): Promise<string> {
-    const name = ref === undefined ? this.conventionName(key) : refName(ref)
-    const value = this.store.read(name)
+    const name = ref === undefined ? this.conventionName(key) : refName(ref);
+    const value = this.store.read(name);
     if (value === undefined) {
-      throw new KeyshelfError('SECRET_NOT_FOUND', `No secret stored for '${name}'.`, {key, ref: name})
+      throw new KeyshelfError("SECRET_NOT_FOUND", `No secret stored for '${name}'.`, {
+        key,
+        ref: name
+      });
     }
 
-    return value
+    return value;
   }
 
   async write(key: string, value: string): Promise<unknown> {
-    const name = this.conventionName(key)
-    this.store.put(name, value)
+    const name = this.conventionName(key);
+    this.store.put(name, value);
     // Return the canonical stored name so a foreign environment can reference
     // this value explicitly via `!secret { ref: <name> }`.
-    return name
+    return name;
   }
 }
 
 /** Coerce an explicit `!secret` ref payload to the stored name string. */
 function refName(ref: unknown): string {
-  if (typeof ref === 'string') return ref
-  if (ref && typeof ref === 'object' && 'ref' in ref && typeof (ref as {ref: unknown}).ref === 'string') {
-    return (ref as {ref: string}).ref
+  if (typeof ref === "string") return ref;
+  if (
+    ref &&
+    typeof ref === "object" &&
+    "ref" in ref &&
+    typeof (ref as { ref: unknown }).ref === "string"
+  ) {
+    return (ref as { ref: string }).ref;
   }
 
-  throw new KeyshelfError('ADAPTER_ERROR', `fake adapter: unsupported !secret ref payload: ${JSON.stringify(ref)}`, {
-    ref,
-  })
+  throw new KeyshelfError(
+    "ADAPTER_ERROR",
+    `fake adapter: unsupported !secret ref payload: ${JSON.stringify(ref)}`,
+    {
+      ref
+    }
+  );
 }

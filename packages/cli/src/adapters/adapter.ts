@@ -1,4 +1,7 @@
-import type {KeyshelfError} from '../errors.js'
+// Imported solely so the {@link KeyshelfError} / @throws references in this
+// file's TSDoc resolve; it is not referenced in value or type position here.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { KeyshelfError } from "../errors.js";
 
 /**
  * The sole seam for backend-specific behavior (ADR-0002). An adapter is the code
@@ -34,7 +37,7 @@ export interface Adapter {
    * @throws {KeyshelfError} `SECRET_NOT_FOUND` when no value is stored; other
    *   codes per the mapping above.
    */
-  resolve(key: string, ref?: unknown): Promise<string>
+  resolve(key: string, ref?: unknown): Promise<string>;
 
   /**
    * Persist a secret's plaintext value into the store.
@@ -45,5 +48,5 @@ export interface Adapter {
    *   convention-resolvable write may return `undefined` (bare `!secret`); a
    *   foreign/explicit write returns the payload to embed under `{ ref: ... }`.
    */
-  write(key: string, value: string): Promise<unknown>
+  write(key: string, value: string): Promise<unknown>;
 }

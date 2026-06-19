@@ -1,10 +1,10 @@
-import {execFile, execFileSync} from 'node:child_process'
-import {mkdtemp, rm, writeFile} from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
-import {promisify} from 'node:util'
+import { execFile, execFileSync } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 
-const execFileAsync = promisify(execFile)
+const execFileAsync = promisify(execFile);
 
 /**
  * Whether a usable `sops` binary is resolvable on this host. The hermetic sops
@@ -14,15 +14,15 @@ const execFileAsync = promisify(execFile)
  * the matrix actually runs there rather than silently skipping.
  */
 export function sopsAvailable(): boolean {
-  return onPath('sops') && onPath('age-keygen')
+  return onPath("sops") && onPath("age-keygen");
 }
 
 function onPath(bin: string): boolean {
   try {
-    execFileSync(process.platform === 'win32' ? 'where' : 'which', [bin], {stdio: 'ignore'})
-    return true
+    execFileSync(process.platform === "win32" ? "where" : "which", [bin], { stdio: "ignore" });
+    return true;
   } catch {
-    return false
+    return false;
   }
 }
 
@@ -39,13 +39,13 @@ function onPath(bin: string): boolean {
  */
 export interface SopsFixture {
   /** The throwaway project root (where `.sops.yaml` and `.keyshelf/` live). */
-  readonly dir: string
+  readonly dir: string;
   /** Absolute path to the generated age key file. */
-  readonly ageKeyFile: string
+  readonly ageKeyFile: string;
   /** The public age recipient the fixture encrypts to. */
-  readonly recipient: string
+  readonly recipient: string;
   /** Remove the temp directory. */
-  teardown(): Promise<void>
+  teardown(): Promise<void>;
 }
 
 /**
@@ -54,34 +54,36 @@ export interface SopsFixture {
  * setting `process.env.SOPS_AGE_KEY_FILE` if it spawns sops in a child process;
  * for in-process adapter use, set it from {@link SopsFixture.ageKeyFile}.
  */
-export async function makeSopsFixture(pathRegex = String.raw`.*\.secrets\.yaml$`): Promise<SopsFixture> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'keyshelf-sops-'))
-  const ageKeyFile = path.join(dir, 'age-key.txt')
+export async function makeSopsFixture(
+  pathRegex = String.raw`.*\.secrets\.yaml$`
+): Promise<SopsFixture> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "keyshelf-sops-"));
+  const ageKeyFile = path.join(dir, "age-key.txt");
 
   // Generate a throwaway age keypair into the fixture directory.
-  const {stderr} = await execFileAsync('age-keygen', ['-o', ageKeyFile])
+  const { stderr } = await execFileAsync("age-keygen", ["-o", ageKeyFile]);
   // age-keygen prints `Public key: age1...` on stderr.
-  const match = /public key:\s*(age1[0-9a-z]+)/i.exec(stderr)
+  const match = /public key:\s*(age1[0-9a-z]+)/i.exec(stderr);
   if (match === null) {
-    throw new Error(`could not parse age public key from age-keygen output: ${stderr}`)
+    throw new Error(`could not parse age public key from age-keygen output: ${stderr}`);
   }
 
-  const recipient = match[1]
+  const recipient = match[1];
 
   // A fixture .sops.yaml the adapter never writes — recipients are the user's
   // concern; here the fixture plays that role with its own throwaway recipient.
   await writeFile(
-    path.join(dir, '.sops.yaml'),
+    path.join(dir, ".sops.yaml"),
     `creation_rules:\n  - path_regex: ${pathRegex}\n    age: ${recipient}\n`,
-    'utf8',
-  )
+    "utf8"
+  );
 
   return {
     dir,
     ageKeyFile,
     recipient,
     async teardown() {
-      await rm(dir, {recursive: true, force: true})
-    },
-  }
+      await rm(dir, { recursive: true, force: true });
+    }
+  };
 }
