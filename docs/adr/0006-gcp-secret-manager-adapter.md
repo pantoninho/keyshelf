@@ -20,14 +20,25 @@ Concrete choices:
   the lazy-load complexity.
 
 - **Naming: one secret per key, by the fixed reference convention.** A key maps to
-  a Secret Manager _secret_ whose id is `{project}-{shelf}-{env}-{key}`, in the
-  provider's `projectId`. The `{project}-{shelf}-{env}` prefix (the adapter's
-  _namespace_) keeps the same key distinct across environments and shelves in a
-  shared backend. `write` returns that id, which is exactly what `set` resolves by
-  — so a convention write records a _bare_ `!secret`. An explicit
+  a Secret Manager _secret_ whose id is `keyshelf__{project}__{shelf}__{env}__{key}`,
+  in the provider's `projectId`. The `keyshelf__{project}__{shelf}__{env}` prefix
+  (the adapter's _namespace_) keeps the same key distinct across environments and
+  shelves in a shared backend. `write` returns that id, which is exactly what `set`
+  resolves by — so a convention write records a _bare_ `!secret`. An explicit
   `!secret { ref: NAME }` resolves a differently-named secret; a `NAME` that is a
   full `projects/.../secrets/...` resource path resolves a foreign secret in any
   project.
+
+  The `keyshelf__`-prefixed, `__`-separated form echoes keyshelf v5's styling
+  (v5 was `keyshelf__{project}__{env}__{key}`, no shelf) on the v6 component
+  structure. The double-underscore separator is more parse-robust than a single
+  `-` when project/shelf/env names themselves contain hyphens. GCP secret ids
+  allow `[a-zA-Z0-9_-]`, so the underscores are valid, and v6 keys are single
+  tokens matching `^[A-Z_][A-Z0-9_]*$` (never `/`-paths), so the composed id is
+  unambiguous. This is intentionally **not byte-compatible** with secrets v5
+  wrote: v6 inserts the `shelf` component, so a v6 convention name never collides
+  with a v5 one and does not auto-resolve v5 secrets — migration is handled
+  separately (#180).
 
 - **Value encoding: JSON string, mirroring `sops`.** Secret Manager payloads are
   raw bytes, but it **rejects an empty payload** — and the contract requires an
@@ -58,7 +69,7 @@ trades a slightly larger install for simpler, branch-free code; the asymmetry wi
 the optional `sops` packages is deliberate and rooted in sops being a native
 per-platform binary, which the SDK is not.
 
-One-secret-per-key with the fixed `{project}-{shelf}-{env}-{key}` convention is the
+One-secret-per-key with the fixed `keyshelf__{project}__{shelf}__{env}__{key}` convention is the
 same model `fake` already implements and `set` already resolves by, so the gcp
 adapter slots into the existing reference-adapter behaviour with no new wiring in
 callers. Carrying values as JSON strings reuses the proven sops trick and is the

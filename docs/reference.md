@@ -37,7 +37,7 @@ providers:
 - A provider entry is a named map with an `adapter:` discriminator plus
   adapter-specific fields. Providers are project-global.
 - Reference adapters (e.g. `gcp`) name remote secrets by the **fixed** convention
-  `{project}-{shelf}-{env}-{key}`. No configurable template; the only override is
+  `keyshelf__{project}__{shelf}__{env}__{key}`. No configurable template; the only override is
   a per-key explicit reference. A missing required adapter field (e.g. `gcp`'s
   `projectId`) is a `MALFORMED_FILE`.
 

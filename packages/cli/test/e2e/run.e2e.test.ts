@@ -242,8 +242,8 @@ describe("keyshelf run <shelf>/<env> -- <cmd>", () => {
 
   it("resolves a !secret through the provider adapter by convention and injects it", async () => {
     await scaffold();
-    // Namespace mirrors the registry convention {project}-{shelf}-{env}.
-    await seedFakeStore({ "myapp-web-staging-EXTRA_SECRET": "s3cr3t-value" });
+    // Namespace mirrors the registry convention keyshelf__{project}__{shelf}__{env}.
+    await seedFakeStore({ keyshelf__myapp__web__staging__EXTRA_SECRET: "s3cr3t-value" });
     await write(
       ".keyshelf/web/staging.yaml",
       "provider: store\nkeys:\n  REGION: eu\n  EXTRA_SECRET: !secret\n"

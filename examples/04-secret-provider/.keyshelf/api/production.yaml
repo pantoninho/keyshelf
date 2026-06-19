@@ -1,8 +1,8 @@
 # DATABASE_URL is plaintext config, committed in the clear.
 #
 # DATABASE_PASSWORD is a bare `!secret`: resolved by convention. Its value lives in
-# the store under the composed name `{project}-{shelf}-{env}-{key}`
-# (example-secrets-api-production-DATABASE_PASSWORD), never in this file.
+# the store under the composed name `keyshelf__{project}__{shelf}__{env}__{key}`
+# (keyshelf__example-secrets__api__production__DATABASE_PASSWORD), never in this file.
 #
 # GITHUB_TOKEN uses an explicit reference: it points at a pre-existing/shared
 # secret by its stored name instead of the per-environment convention — useful for
