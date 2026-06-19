@@ -1,0 +1,8 @@
+# An environment implements its shelf's schema. It supplies a provider and the
+# actual values; it is implicitly bound to app/schema.yaml (no schema field).
+# Addressed as `app/dev`. Here every value is plaintext config — no secrets.
+provider: local
+keys:
+  LOG_LEVEL: debug # override the schema default
+  SERVER_PORT: "8080" # override the schema default
+  # LOG_FORMAT and SERVER_HOST are omitted, so their schema defaults apply.

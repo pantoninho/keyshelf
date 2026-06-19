@@ -1,0 +1,4 @@
+provider: local
+keys:
+  LOG_LEVEL: warn # override the schema default for production
+  DB_HOST: prod-db.internal

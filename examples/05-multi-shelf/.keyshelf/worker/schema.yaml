@@ -1,0 +1,6 @@
+# Shelf `worker`: a completely separate contract from `web-service`. Note that it
+# also declares a SESSION_SECRET key — the two shelves' keys never collide because
+# the store namespace includes the shelf name.
+keys:
+  QUEUE_URL: !required
+  SESSION_SECRET: !required

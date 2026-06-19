@@ -1,0 +1,8 @@
+# One schema, implemented by three environments (dev, staging, production). Each
+# environment overrides the parts it needs and supplies the required keys.
+keys:
+  # default; production overrides it to warn
+  LOG_LEVEL: info
+  # required: every environment must supply its own host
+  DB_HOST: !required
+  DB_PORT: "5432"

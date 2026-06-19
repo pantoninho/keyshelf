@@ -1,0 +1,9 @@
+project: example-multishelf
+
+# Providers are declared once and are project-global: both shelves below reference
+# the same `local` provider. The project name also namespaces secrets in shared
+# backends, composed as `{project}-{shelf}-{env}-{key}` — so the same key in two
+# shelves stays distinct.
+providers:
+  local:
+    adapter: fake
