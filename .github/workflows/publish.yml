@@ -2,8 +2,10 @@ name: Publish
 
 # GATED — merging a PR NEVER publishes. Two independent guards must BOTH hold for
 # the publish step to run:
-#   1. Trigger: only a pushed release tag matching `v*` (e.g. `v6.0.0`). A merge
-#      to `main`, or any pull_request, cannot start this workflow at all.
+#   1. Trigger: only a pushed release tag matching `keyshelf-v*` (e.g.
+#      `keyshelf-v6.0.0`, the scheme release-please emits via
+#      include-component-in-tag). A merge to `main`, or any pull_request, cannot
+#      start this workflow at all.
 #   2. Step guard: the publish step is skipped unless an npm credential is present
 #      (`secrets.NPM_TOKEN`). The `@keyshelf` scope has no token/OIDC trusted
 #      publisher configured yet (a human-only handoff), so even a tag push only
@@ -15,7 +17,7 @@ name: Publish
 on:
   push:
     tags:
-      - "v*"
+      - "keyshelf-v*"
   # Manual dry-run: builds + verifies the integrity gates, never publishes
   # (the publish step's secret guard is still required).
   workflow_dispatch:
@@ -76,7 +78,7 @@ jobs:
       # AND only when the npm credential exists. Both conditions are false for this
       # PR, so nothing is published on merge.
       - name: Publish platform packages + keyshelf (provenance, OIDC)
-        if: steps.gate.outputs.enabled == 'true' && startsWith(github.ref, 'refs/tags/v')
+        if: steps.gate.outputs.enabled == 'true' && startsWith(github.ref, 'refs/tags/keyshelf-v')
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
@@ -86,5 +88,9 @@ jobs:
             echo "Publishing @keyshelf/sops-${key} …"
             npm publish "packages/cli/platforms/sops-${key}" --provenance --access public
           done
-          echo "Publishing keyshelf …"
-          npm publish "packages/cli" --provenance --access public
+          echo "Publishing keyshelf (dist-tag: next) …"
+          # v6 ships under the `next` dist-tag — `latest` stays on 5.x until a
+          # deliberate promotion (`npm dist-tag add keyshelf@<ver> latest`).
+          # npm publish defaults to `latest` regardless of version, so this is
+          # explicit. Flip `--tag next` here when promoting v6 to `latest`.
+          npm publish "packages/cli" --provenance --access public --tag next
