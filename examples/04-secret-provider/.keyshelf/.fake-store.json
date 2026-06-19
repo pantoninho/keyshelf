@@ -1,4 +1,4 @@
 {
-  "example-secrets-api-production-DATABASE_PASSWORD": "s3cr3t-pw",
+  "keyshelf__example-secrets__api__production__DATABASE_PASSWORD": "s3cr3t-pw",
   "shared-github-token": "ghp_exampletoken000000000000000000000000"
 }

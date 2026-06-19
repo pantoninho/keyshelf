@@ -66,7 +66,7 @@ function adapter(
 ): GcpAdapter {
   return new GcpAdapter({
     projectId: "test-proj",
-    namespace: opts?.namespace ?? "myapp-web-staging",
+    namespace: opts?.namespace ?? "keyshelf__myapp__web__staging",
     location: opts?.location,
     client
   });
@@ -74,10 +74,10 @@ function adapter(
 
 describe("GcpAdapter", () => {
   describe("naming convention", () => {
-    it("stores under {namespace}-{key} and returns that id from write", async () => {
+    it("stores under {namespace}__{key} and returns that id from write", async () => {
       const { client } = fakeClient();
       const ref = await adapter(client).write("DATABASE_PASSWORD", "sekret");
-      expect(ref).toBe("myapp-web-staging-DATABASE_PASSWORD");
+      expect(ref).toBe("keyshelf__myapp__web__staging__DATABASE_PASSWORD");
     });
 
     it("resolves a value written by convention", async () => {
@@ -89,8 +89,8 @@ describe("GcpAdapter", () => {
 
     it("keeps the same key in different namespaces distinct", async () => {
       const { client } = fakeClient();
-      const staging = adapter(client, { namespace: "myapp-web-staging" });
-      const prod = adapter(client, { namespace: "myapp-web-prod" });
+      const staging = adapter(client, { namespace: "keyshelf__myapp__web__staging" });
+      const prod = adapter(client, { namespace: "keyshelf__myapp__web__prod" });
       await staging.write("TOKEN", "staging-token");
       await prod.write("TOKEN", "prod-token");
       expect(await staging.resolve("TOKEN")).toBe("staging-token");

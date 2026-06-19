@@ -46,9 +46,9 @@ async function scaffold(): Promise<void> {
   await write(".keyshelf/web/staging.yaml", GOOD_ENV);
   // "valid means would run": the declared secret must be resolvable.
   await seedFakeStore({
-    "myapp-web-staging-DATABASE_PASSWORD": "pw",
-    "myapp-web-prod-DATABASE_PASSWORD": "pw",
-    "myapp-api-dev-TOKEN": "tok"
+    keyshelf__myapp__web__staging__DATABASE_PASSWORD: "pw",
+    keyshelf__myapp__web__prod__DATABASE_PASSWORD: "pw",
+    keyshelf__myapp__api__dev__TOKEN: "tok"
   });
 }
 
@@ -215,7 +215,7 @@ describe("keyshelf validate (whole project)", () => {
     await write(".keyshelf/api/schema.yaml", "keys:\n  TOKEN: !required\n");
     await write(".keyshelf/api/dev.yaml", "provider: store\nkeys:\n  TOKEN: !secret\n");
     // Store seeds web/staging's secret but NOT api/dev's TOKEN.
-    await seedFakeStore({ "myapp-web-staging-DATABASE_PASSWORD": "pw" });
+    await seedFakeStore({ keyshelf__myapp__web__staging__DATABASE_PASSWORD: "pw" });
 
     const { code, stdout } = await runKeyshelf(["validate", "--json"], { cwd });
     expect(code).not.toBe(0);

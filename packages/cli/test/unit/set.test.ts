@@ -8,22 +8,24 @@ import { secretRefForm, setConfigValue, setSecretRef } from "../../src/set.js";
 
 describe("secretRefForm", () => {
   it("is bare when the adapter ref equals the convention name", () => {
-    expect(secretRefForm("myapp-web-staging-DB", "myapp-web-staging-DB")).toEqual({ bare: true });
+    expect(
+      secretRefForm("keyshelf__myapp__web__staging__DB", "keyshelf__myapp__web__staging__DB")
+    ).toEqual({ bare: true });
   });
 
   it("is bare when the adapter returns undefined (convention-resolvable)", () => {
-    expect(secretRefForm(undefined, "myapp-web-staging-DB")).toEqual({ bare: true });
+    expect(secretRefForm(undefined, "keyshelf__myapp__web__staging__DB")).toEqual({ bare: true });
   });
 
   it("carries an explicit { ref } when the adapter ref is foreign", () => {
-    expect(secretRefForm("shared-db-url", "myapp-web-staging-DB")).toEqual({
+    expect(secretRefForm("shared-db-url", "keyshelf__myapp__web__staging__DB")).toEqual({
       bare: false,
       ref: "shared-db-url"
     });
   });
 
   it("carries an explicit { ref } when the adapter returns a non-string payload", () => {
-    expect(secretRefForm({ name: "x" }, "myapp-web-staging-DB")).toEqual({
+    expect(secretRefForm({ name: "x" }, "keyshelf__myapp__web__staging__DB")).toEqual({
       bare: false,
       ref: { name: "x" }
     });

@@ -9,9 +9,9 @@ import { SopsAdapter } from "./sops.js";
 /**
  * Everything an adapter needs to bind to a concrete environment's store. The
  * reference-adapter convention composes a remote secret's name from
- * `{project}-{shelf}-{env}-{key}` (docs/reference.md), so the project, shelf, and
- * environment names are part of the construction context, not just the provider
- * config.
+ * `keyshelf__{project}__{shelf}__{env}__{key}` (docs/reference.md), so the
+ * project, shelf, and environment names are part of the construction context,
+ * not just the provider config.
  */
 export interface AdapterContext {
   /** The project root directory (where `.keyshelf/` lives). */
@@ -71,13 +71,13 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
       // Persist to a JSON file under the project so a value written in one
       // `keyshelf` process is resolvable by a separate process later (the E2E
       // suite spawns the real binary across invocations). The namespace mirrors
-      // the reference convention `{project}-{shelf}-{env}` so the same key in
-      // different environments stays distinct in the shared store.
+      // the reference convention `keyshelf__{project}__{shelf}__{env}` so the
+      // same key in different environments stays distinct in the shared store.
       const storePath =
         typeof provider.store === "string"
           ? path.resolve(ctx.projectDir, provider.store)
           : path.join(ctx.projectDir, FAKE_STORE_FILE);
-      const namespace = `${ctx.project}-${ctx.shelf}-${ctx.env}`;
+      const namespace = `keyshelf__${ctx.project}__${ctx.shelf}__${ctx.env}`;
       return new FakeAdapter(fileStore(storePath), namespace);
     }
 
@@ -90,13 +90,13 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
 
     case "gcp": {
       // One secret per key in the provider's GCP project, named by the reference
-      // convention `{project}-{shelf}-{env}-{key}`; the namespace is the
-      // `{project}-{shelf}-{env}` prefix so the same key across environments
-      // stays distinct in the shared backend. `location` is an optional
-      // replication hint (absent/`global` ⇒ automatic).
+      // convention `keyshelf__{project}__{shelf}__{env}__{key}`; the namespace is
+      // the `keyshelf__{project}__{shelf}__{env}` prefix so the same key across
+      // environments stays distinct in the shared backend. `location` is an
+      // optional replication hint (absent/`global` ⇒ automatic).
       const projectId = requireStringField(provider, "projectId", ctx);
       const location = typeof provider.location === "string" ? provider.location : undefined;
-      const namespace = `${ctx.project}-${ctx.shelf}-${ctx.env}`;
+      const namespace = `keyshelf__${ctx.project}__${ctx.shelf}__${ctx.env}`;
       return new GcpAdapter({ projectId, namespace, location });
     }
 

@@ -4,6 +4,7 @@ import path from "node:path";
 import * as readline from "node:readline/promises";
 import { parseDocument } from "yaml";
 import { createAdapter } from "../adapters/registry.js";
+import { conventionName } from "../adapters/shared.js";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
 import { loadEnvironment } from "../loader.js";
@@ -140,9 +141,13 @@ export default class Set extends BaseCommand {
     });
     const ref = await adapter.write(key, value);
 
-    // The fake/reference convention names a secret `{project}-{shelf}-{env}-{key}`;
-    // a returned ref matching that resolves by convention (bare !secret).
-    const conventionRef = `${loaded.config.project}-${shelf}-${env}-${key}`;
+    // The fake/reference convention names a secret
+    // `keyshelf__{project}__{shelf}__{env}__{key}`; a returned ref matching that
+    // resolves by convention (bare !secret).
+    const conventionRef = conventionName(
+      `keyshelf__${loaded.config.project}__${shelf}__${env}`,
+      key
+    );
     setSecretRef(doc, key, secretRefForm(ref, conventionRef));
   }
 

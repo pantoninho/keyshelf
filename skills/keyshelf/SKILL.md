@@ -127,13 +127,13 @@ Conversely, a `!required` key with no value in some environment is a `MISSING_RE
 
 Reference adapters (e.g. `gcp`) name remote secrets by the **fixed** convention:
 
-```
-{project}-{shelf}-{env}-{key}
+```text
+keyshelf__{project}__{shelf}__{env}__{key}
 ```
 
-(verified in `concierge/src/commands/set.ts` and `concierge/src/adapters/gcp.ts`). So `web/staging`'s `DATABASE_PASSWORD` in project `myapp` is stored as `myapp-web-staging-DATABASE_PASSWORD`. There is no configurable template — the only override is a per-key explicit reference (`!secret { ref: ... }`, e.g. to point at a foreign or pre-existing secret). Implications:
+(verified in `concierge/src/commands/set.ts` and `concierge/src/adapters/gcp.ts`). So `web/staging`'s `DATABASE_PASSWORD` in project `myapp` is stored as `keyshelf__myapp__web__staging__DATABASE_PASSWORD`. There is no configurable template — the only override is a per-key explicit reference (`!secret { ref: ... }`, e.g. to point at a foreign or pre-existing secret). Implications:
 
-- The same key in two environments stays distinct in a shared backend (the `{project}-{shelf}-{env}` prefix is the namespace).
+- The same key in two environments stays distinct in a shared backend (the `keyshelf__{project}__{shelf}__{env}` prefix is the namespace).
 - Renaming the project, shelf, environment, or key changes the remote secret's name — the old value is **not** automatically migrated.
 - For sops, the store is the per-environment sibling file `{shelf}/{env}.secrets.yaml`; convention resolution there is simply by key name within that file.
 
@@ -148,7 +148,7 @@ If a managed key already exists in your shell environment, keyshelf's resolved v
 ## Adapters
 
 - **`sops`** — local, file-based encrypted secrets. The store is a committed, encrypted sibling file `{shelf}/{env}.secrets.yaml`. Keyshelf owns no crypto of its own: it shells out to a `sops` binary (bundled per-platform, with any `sops` on `PATH` as a fallback). Recipients are governed entirely by the project's native `.sops.yaml`, which keyshelf never writes or mutates. Hermetic — works in CI with no external service.
-- **`gcp`** — Google Cloud Secret Manager. One secret per key, named by the `{project}-{shelf}-{env}-{key}` convention in the provider's `projectId`. Authentication is Application Default Credentials (the SDK discovers them; keyshelf holds no credentials). `location` selects replication: absent/`global` ⇒ automatic; any other value ⇒ user-managed, pinned to that region.
+- **`gcp`** — Google Cloud Secret Manager. One secret per key, named by the `keyshelf__{project}__{shelf}__{env}__{key}` convention in the provider's `projectId`. Authentication is Application Default Credentials (the SDK discovers them; keyshelf holds no credentials). `location` selects replication: absent/`global` ⇒ automatic; any other value ⇒ user-managed, pinned to that region.
 - **`fake`** — an in-memory adapter for tests only. Don't reach for it in a real project.
 
 A missing backend prerequisite (e.g. the `sops` binary) surfaces as `ADAPTER_UNAVAILABLE`; a credential/decryption failure as `PROVIDER_AUTH`; a referenced secret absent from the store as `SECRET_NOT_FOUND`.

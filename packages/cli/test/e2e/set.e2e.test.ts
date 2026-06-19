@@ -184,7 +184,7 @@ describe("keyshelf set <KEY> <shelf>/<env> --secret", () => {
 
     // The value lives in the fake store under the convention name.
     const store = JSON.parse(await read(".keyshelf/.fake-store.json"));
-    expect(store["myapp-web-staging-DATABASE_PASSWORD"]).toBe(secret);
+    expect(store["keyshelf__myapp__web__staging__DATABASE_PASSWORD"]).toBe(secret);
   });
 
   it("round-trips: set --secret then run resolves the stored value via fake", async () => {

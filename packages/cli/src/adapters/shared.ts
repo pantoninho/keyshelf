@@ -7,9 +7,9 @@ import { KeyshelfError } from "../errors.js";
  * is exactly what the adapter contract (ADR-0005) requires.
  */
 
-/** Compose the convention stored-name for a key: `{namespace}-{key}` (bare key when unnamespaced). */
+/** Compose the convention stored-name for a key: `{namespace}__{key}` (bare key when unnamespaced). */
 export function conventionName(namespace: string, key: string): string {
-  return namespace === "" ? key : `${namespace}-${key}`;
+  return namespace === "" ? key : `${namespace}__${key}`;
 }
 
 /**
