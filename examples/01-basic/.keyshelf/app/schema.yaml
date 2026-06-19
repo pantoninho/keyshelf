@@ -1,0 +1,8 @@
+# The schema is the shelf's closed contract: it declares which keys may exist and
+# each key's presence requirement. A bare value is a config default (overridable);
+# it governs presence only, never plaintext-vs-secret.
+keys:
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+  SERVER_HOST: localhost
+  SERVER_PORT: "3000"

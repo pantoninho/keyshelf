@@ -3,5 +3,8 @@ dist
 coverage
 *.tsbuildinfo
 .keyshelf
+# The examples are committed Keyshelf projects — their .keyshelf/ is the example.
+!examples/**/.keyshelf
+!examples/**/.keyshelf/**
 .claude/worktrees/
 .fallow/

@@ -1,0 +1,5 @@
+project: example-multienv
+
+providers:
+  local:
+    adapter: fake

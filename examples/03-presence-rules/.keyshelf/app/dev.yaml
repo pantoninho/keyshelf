@@ -1,0 +1,5 @@
+# dev supplies only the required key. LOG_LEVEL falls back to its default and the
+# optional SENTRY_DSN is simply absent.
+provider: local
+keys:
+  API_BASE_URL: http://localhost:4000

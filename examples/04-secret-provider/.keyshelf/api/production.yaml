@@ -1,0 +1,14 @@
+# DATABASE_URL is plaintext config, committed in the clear.
+#
+# DATABASE_PASSWORD is a bare `!secret`: resolved by convention. Its value lives in
+# the store under the composed name `{project}-{shelf}-{env}-{key}`
+# (example-secrets-api-production-DATABASE_PASSWORD), never in this file.
+#
+# GITHUB_TOKEN uses an explicit reference: it points at a pre-existing/shared
+# secret by its stored name instead of the per-environment convention — useful for
+# a token shared across environments or owned outside this project.
+provider: local
+keys:
+  DATABASE_URL: postgres://db.internal:5432/app
+  DATABASE_PASSWORD: !secret
+  GITHUB_TOKEN: !secret { ref: shared-github-token }

@@ -1,0 +1,6 @@
+# production overrides the defaulted key and opts in to the optional one.
+provider: local
+keys:
+  LOG_LEVEL: warn
+  API_BASE_URL: https://api.example.com
+  SENTRY_DSN: https://abc123@sentry.example.com/42

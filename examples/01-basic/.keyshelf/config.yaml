@@ -1,0 +1,8 @@
+project: example-basic
+
+# Providers are project-global: any environment in any shelf may reference one by
+# name. The `local` provider uses the self-contained `fake` adapter so this
+# example needs no cloud credentials. A real project would use `sops` or `gcp`.
+providers:
+  local:
+    adapter: fake

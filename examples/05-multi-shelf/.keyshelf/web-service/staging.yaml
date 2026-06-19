@@ -1,0 +1,4 @@
+# Addressed as `web-service/staging`.
+provider: local
+keys:
+  SESSION_SECRET: !secret

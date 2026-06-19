@@ -1,0 +1,5 @@
+project: example-presence
+
+providers:
+  local:
+    adapter: fake

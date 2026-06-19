@@ -26,6 +26,11 @@ jobs:
 
       - run: npm run format:check
 
+      # Build the CLI and validate every examples/ project against it so the
+      # examples can't silently rot. Uses the self-contained `fake` adapter, so
+      # no sops/cloud creds are needed — it belongs in this cheap quality lane.
+      - run: npm run validate:examples
+
   test:
     runs-on: ubuntu-latest
 

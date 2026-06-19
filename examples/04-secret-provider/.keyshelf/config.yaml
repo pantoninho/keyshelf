@@ -1,0 +1,10 @@
+project: example-secrets
+
+# This example resolves real secrets through a provider, but stays self-contained:
+# the `fake` adapter keeps secret values in a committed JSON store
+# (.keyshelf/.fake-store.json) instead of a cloud backend, so no credentials are
+# needed. A real project would point `adapter:` at `sops` or `gcp`; the
+# environment files below would not change.
+providers:
+  local:
+    adapter: fake

@@ -1,0 +1,5 @@
+# Shelf `web-service`: its own schema, its own environments. A project has one
+# shelf per schema; multiple schemas means multiple shelves.
+keys:
+  PORT: "8080"
+  SESSION_SECRET: !required

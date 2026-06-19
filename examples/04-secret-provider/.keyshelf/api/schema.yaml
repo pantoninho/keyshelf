@@ -1,0 +1,7 @@
+# The schema declares presence only. Whether a key is plaintext config or a
+# resolved secret is decided per environment, not here — so DATABASE_PASSWORD is
+# just "required", and an environment chooses to satisfy it with `!secret`.
+keys:
+  DATABASE_URL: !required
+  DATABASE_PASSWORD: !required
+  GITHUB_TOKEN: !optional

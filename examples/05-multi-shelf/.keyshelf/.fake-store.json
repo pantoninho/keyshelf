@@ -1,0 +1,4 @@
+{
+  "example-multishelf-web-service-staging-SESSION_SECRET": "web-session-secret",
+  "example-multishelf-worker-staging-SESSION_SECRET": "worker-session-secret"
+}

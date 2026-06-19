@@ -1,0 +1,5 @@
+# Addressed as `worker/staging`.
+provider: local
+keys:
+  QUEUE_URL: amqp://queue.internal:5672
+  SESSION_SECRET: !secret
