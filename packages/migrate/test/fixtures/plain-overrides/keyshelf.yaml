@@ -1,4 +1,0 @@
-name: demo-app
-keys:
-  web:
-    client-secret: !secret
