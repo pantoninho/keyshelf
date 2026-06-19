@@ -1,3 +1,0 @@
-default-provider:
-  name: gcp
-  project: dev-project

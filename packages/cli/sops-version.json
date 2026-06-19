@@ -1,0 +1,27 @@
+{
+  "_comment": "Single source of truth for the bundled sops binary. The five @keyshelf/sops-* platform packages and the main package.json optionalDependencies all derive their version from `sopsVersion`. Versioning philosophy: track the upstream sops version (clef-sh style), because the bundled binary is third-party sops, not keyshelf itself. The `tag` is the getsops/sops GitHub release the binaries are downloaded from; `binaries` maps each {platform}-{arch} to its release asset name and the SHA256 the build verifies before packaging (copied from the release's sops-<tag>.checksums.txt).",
+  "sopsVersion": "3.13.1",
+  "tag": "v3.13.1",
+  "binaries": {
+    "linux-x64": {
+      "asset": "sops-v3.13.1.linux.amd64",
+      "sha256": "620a9d7e3352ababeca6908cea24a6e8b14ce89a448ddbd3f94f1ef3398f470a"
+    },
+    "linux-arm64": {
+      "asset": "sops-v3.13.1.linux.arm64",
+      "sha256": "19576fb1734dbf8fb77eda0cf0f3a2218f99bf4d33b814318e5e10d6babb9820"
+    },
+    "darwin-x64": {
+      "asset": "sops-v3.13.1.darwin.amd64",
+      "sha256": "dad79d1b1dea767ca38ffaa50e10330a3e807dd13c853ef9c880567acef4f1ef"
+    },
+    "darwin-arm64": {
+      "asset": "sops-v3.13.1.darwin.arm64",
+      "sha256": "a2c0dd37eb031068af6ef213b78cfa67b7f1afd76c2e5cc404257f42bbc8367d"
+    },
+    "win32-x64": {
+      "asset": "sops-v3.13.1.amd64.exe",
+      "sha256": "4654e53fff6d0a1842facd3a0ed5a66a8ab6164004b0ad4ca2d5e2b1c5473b65"
+    }
+  }
+}
