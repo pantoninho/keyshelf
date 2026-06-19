@@ -9,6 +9,24 @@
   "workspaces": {
     "packages": ["packages/*"]
   },
+  "ignoreDependencies": [
+    "@keyshelf/sops-darwin-arm64",
+    "@keyshelf/sops-darwin-x64",
+    "@keyshelf/sops-linux-arm64",
+    "@keyshelf/sops-linux-x64",
+    "@keyshelf/sops-win32-x64",
+    "verdaccio"
+  ],
+  "usedClassMembers": [
+    {
+      "extends": "Command",
+      "members": ["enableJsonFlag"]
+    }
+  ],
+  "health": {
+    "maxCrap": 50,
+    "maxCognitive": 18
+  },
   "duplicates": {
     "ignore": ["**/test/**"]
   },

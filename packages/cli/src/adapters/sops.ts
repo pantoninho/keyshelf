@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { KeyshelfError } from "../errors.js";
 import type { Adapter } from "./adapter.js";
+import { firstLine, refName } from "./shared.js";
 import { resolveSopsBinary } from "./sops-binary.js";
 
 const execFileAsync = promisify(execFile);
@@ -48,7 +49,7 @@ export class SopsAdapter implements Adapter {
   }
 
   async resolve(key: string, ref?: unknown): Promise<string> {
-    const name = ref === undefined ? key : refName(ref);
+    const name = ref === undefined ? key : refName("sops", ref);
     const store = await this.decryptStore();
     if (!Object.prototype.hasOwnProperty.call(store, name)) {
       throw new KeyshelfError(
@@ -204,35 +205,6 @@ function isAuthFailure(stderr: string): boolean {
     s.includes("no master key") ||
     s.includes("master key was able to decrypt") ||
     s.includes("did not find keys")
-  );
-}
-
-/** The first non-empty line of a multi-line diagnostic, for terse messages. */
-function firstLine(text: string): string {
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.length > 0) return trimmed;
-  }
-
-  return "";
-}
-
-/** Coerce an explicit `!secret` ref payload to the stored name string. */
-function refName(ref: unknown): string {
-  if (typeof ref === "string") return ref;
-  if (
-    ref &&
-    typeof ref === "object" &&
-    "ref" in ref &&
-    typeof (ref as { ref: unknown }).ref === "string"
-  ) {
-    return (ref as { ref: string }).ref;
-  }
-
-  throw new KeyshelfError(
-    "ADAPTER_ERROR",
-    `sops adapter: unsupported !secret ref payload: ${JSON.stringify(ref)}`,
-    { ref }
   );
 }
 

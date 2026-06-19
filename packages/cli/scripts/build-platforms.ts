@@ -22,33 +22,39 @@ import {
   type PlatformKey
 } from "./lib/platforms.js";
 
+/** The host's platform key, or a hard error when this machine has no bundled sops package. */
+function requireHost(): PlatformKey {
+  const host = hostPlatformKey();
+  if (host === undefined) {
+    throw new Error(
+      `Unsupported host ${process.platform}-${process.arch}; no bundled sops package.`
+    );
+  }
+
+  return host;
+}
+
+/** Reject any key that isn't a known platform; returns the keys unchanged when all are valid. */
+function assertKnownPlatforms(keys: PlatformKey[]): PlatformKey[] {
+  for (const key of keys) {
+    if (!(platforms as readonly string[]).includes(key)) {
+      throw new Error(`Unknown platform '${key}'. Known: ${platforms.join(", ")}.`);
+    }
+  }
+
+  return keys;
+}
+
 /**
  * Resolve which platform packages this invocation should build from argv:
  * `--host` → just the host's platform; explicit names → those; nothing → all five.
  * Every resolved key is validated against the known platform set before returning.
  */
 function resolveTargets(args: string[]): PlatformKey[] {
-  let targets: PlatformKey[];
-  if (args.includes("--host")) {
-    const host = hostPlatformKey();
-    if (host === undefined) {
-      throw new Error(
-        `Unsupported host ${process.platform}-${process.arch}; no bundled sops package.`
-      );
-    }
-    targets = [host];
-  } else {
-    const named = args.filter((a) => !a.startsWith("--"));
-    targets = named.length > 0 ? (named as PlatformKey[]) : [...platforms];
-  }
+  if (args.includes("--host")) return [requireHost()];
 
-  for (const key of targets) {
-    if (!(platforms as readonly string[]).includes(key)) {
-      throw new Error(`Unknown platform '${key}'. Known: ${platforms.join(", ")}.`);
-    }
-  }
-
-  return targets;
+  const named = args.filter((a) => !a.startsWith("--"));
+  return assertKnownPlatforms(named.length > 0 ? (named as PlatformKey[]) : [...platforms]);
 }
 
 /** Smoke-test the just-assembled host binary; the only platform this machine can execute. */

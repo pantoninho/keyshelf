@@ -128,17 +128,7 @@ export default class Validate extends BaseCommand {
     }
 
     const valid = results.every((r) => r.valid);
-    const result: ProjectResult = { valid, results };
-
-    if (!this.jsonEnabled()) {
-      for (const r of results) {
-        this.log(
-          r.valid
-            ? `ok    ${r.environment}`
-            : `FAIL  ${r.environment}  [${r.error?.code}] ${r.error?.message}`
-        );
-      }
-    }
+    if (!this.jsonEnabled()) this.logResults(results);
 
     if (!valid) {
       // The whole-project outcome is an aggregate, not a single KeyshelfError,
@@ -149,6 +139,17 @@ export default class Validate extends BaseCommand {
       process.exitCode = 1;
     }
 
-    return result;
+    return { valid, results };
+  }
+
+  /** Print the human-readable per-environment lines (non-JSON mode only). */
+  private logResults(results: EnvironmentResult[]): void {
+    for (const r of results) {
+      this.log(
+        r.valid
+          ? `ok    ${r.environment}`
+          : `FAIL  ${r.environment}  [${r.error?.code}] ${r.error?.message}`
+      );
+    }
   }
 }

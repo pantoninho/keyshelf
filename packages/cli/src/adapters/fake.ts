@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { KeyshelfError } from "../errors.js";
 import type { Adapter } from "./adapter.js";
+import { conventionName, refName } from "./shared.js";
 
 /**
  * The store backing the {@link FakeAdapter}: a flat `storedName -> value` map.
@@ -89,13 +90,8 @@ export class FakeAdapter implements Adapter {
     this.namespace = namespace;
   }
 
-  /** Compose the convention stored-name for a key: `{namespace}-{key}`. */
-  private conventionName(key: string): string {
-    return this.namespace === "" ? key : `${this.namespace}-${key}`;
-  }
-
   async resolve(key: string, ref?: unknown): Promise<string> {
-    const name = ref === undefined ? this.conventionName(key) : refName(ref);
+    const name = ref === undefined ? conventionName(this.namespace, key) : refName("fake", ref);
     const value = this.store.read(name);
     if (value === undefined) {
       throw new KeyshelfError("SECRET_NOT_FOUND", `No secret stored for '${name}'.`, {
@@ -108,31 +104,10 @@ export class FakeAdapter implements Adapter {
   }
 
   async write(key: string, value: string): Promise<unknown> {
-    const name = this.conventionName(key);
+    const name = conventionName(this.namespace, key);
     this.store.put(name, value);
     // Return the canonical stored name so a foreign environment can reference
     // this value explicitly via `!secret { ref: <name> }`.
     return name;
   }
-}
-
-/** Coerce an explicit `!secret` ref payload to the stored name string. */
-function refName(ref: unknown): string {
-  if (typeof ref === "string") return ref;
-  if (
-    ref &&
-    typeof ref === "object" &&
-    "ref" in ref &&
-    typeof (ref as { ref: unknown }).ref === "string"
-  ) {
-    return (ref as { ref: string }).ref;
-  }
-
-  throw new KeyshelfError(
-    "ADAPTER_ERROR",
-    `fake adapter: unsupported !secret ref payload: ${JSON.stringify(ref)}`,
-    {
-      ref
-    }
-  );
 }

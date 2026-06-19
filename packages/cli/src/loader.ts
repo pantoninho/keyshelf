@@ -56,6 +56,31 @@ function malformed(file: string, reason: string): KeyshelfError {
   });
 }
 
+/** Parse the optional `providers:` mapping, validating each entry has an `adapter` string. */
+function parseProviders(file: string, rawProviders: unknown): Record<string, Provider> {
+  const providers: Record<string, Provider> = {};
+  if (rawProviders === undefined) return providers;
+
+  if (rawProviders === null || typeof rawProviders !== "object" || Array.isArray(rawProviders)) {
+    throw malformed(file, "'providers' must be a mapping");
+  }
+
+  for (const [name, raw] of Object.entries(rawProviders as Record<string, unknown>)) {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      throw malformed(file, `provider '${name}' must be a mapping`);
+    }
+
+    const entry = raw as Record<string, unknown>;
+    if (typeof entry.adapter !== "string") {
+      throw malformed(file, `provider '${name}' is missing an 'adapter' string`);
+    }
+
+    providers[name] = { ...entry, adapter: entry.adapter };
+  }
+
+  return providers;
+}
+
 async function loadConfig(root: string): Promise<Config> {
   const file = path.join(root, CONFIG_FILE);
   const doc = parse(await readFile(file, "utf8"), file);
@@ -70,28 +95,7 @@ async function loadConfig(root: string): Promise<Config> {
     throw malformed(file, "missing required 'project' string");
   }
 
-  const providers: Record<string, Provider> = {};
-  const rawProviders = obj.providers;
-  if (rawProviders !== undefined) {
-    if (rawProviders === null || typeof rawProviders !== "object" || Array.isArray(rawProviders)) {
-      throw malformed(file, "'providers' must be a mapping");
-    }
-
-    for (const [name, raw] of Object.entries(rawProviders as Record<string, unknown>)) {
-      if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-        throw malformed(file, `provider '${name}' must be a mapping`);
-      }
-
-      const entry = raw as Record<string, unknown>;
-      if (typeof entry.adapter !== "string") {
-        throw malformed(file, `provider '${name}' is missing an 'adapter' string`);
-      }
-
-      providers[name] = { ...entry, adapter: entry.adapter };
-    }
-  }
-
-  return { project: obj.project, providers };
+  return { project: obj.project, providers: parseProviders(file, obj.providers) };
 }
 
 /** Read a `keys:` mapping node, applying `parseValue` to each entry's value node. */
@@ -248,24 +252,29 @@ export interface EnvironmentRef {
  * `schema.yaml` nor a `*.secrets.yaml` store. Throws `NOT_INITIALIZED` when the
  * project is not initialized.
  */
+/** Whether a directory entry is an environment file (a `*.yaml` that is neither schema nor a secrets store). */
+function isEnvironmentFile(name: string): boolean {
+  if (name === SCHEMA_FILE) return false;
+  if (name.endsWith(".secrets.yaml")) return false;
+  return name.endsWith(".yaml");
+}
+
+/** The environments declared in a single shelf directory. */
+async function listShelfEnvironments(root: string, shelf: string): Promise<EnvironmentRef[]> {
+  const files = await readdir(path.join(root, shelf), { withFileTypes: true });
+  return files
+    .filter((file) => file.isFile() && isEnvironmentFile(file.name))
+    .map((file) => ({ shelf, env: file.name.slice(0, -".yaml".length) }));
+}
+
 export async function listEnvironments(projectDir: string): Promise<EnvironmentRef[]> {
   const root = keyshelfRoot(projectDir);
-  const refs: EnvironmentRef[] = [];
-
   const shelves = await readdir(root, { withFileTypes: true });
+
+  const refs: EnvironmentRef[] = [];
   for (const shelfEntry of shelves) {
     if (!shelfEntry.isDirectory()) continue;
-    const shelf = shelfEntry.name;
-
-    const files = await readdir(path.join(root, shelf), { withFileTypes: true });
-    for (const file of files) {
-      if (!file.isFile()) continue;
-      const { name } = file;
-      if (name === SCHEMA_FILE) continue;
-      if (name.endsWith(".secrets.yaml")) continue;
-      if (!name.endsWith(".yaml")) continue;
-      refs.push({ shelf, env: name.slice(0, -".yaml".length) });
-    }
+    refs.push(...(await listShelfEnvironments(root, shelfEntry.name)));
   }
 
   return refs;

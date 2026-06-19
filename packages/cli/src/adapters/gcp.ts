@@ -1,6 +1,7 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { KeyshelfError } from "../errors.js";
 import type { Adapter } from "./adapter.js";
+import { conventionName, firstLine, refName } from "./shared.js";
 
 /**
  * The gcp adapter (ADR-0002, ADR-0006). It stores each key as its own Google
@@ -92,13 +93,8 @@ export class GcpAdapter implements Adapter {
     this.client = opts.client ?? (new SecretManagerServiceClient() as unknown as SecretsClient);
   }
 
-  /** Compose the convention secret id for a key: `{namespace}-{key}`. */
-  private conventionName(key: string): string {
-    return this.namespace === "" ? key : `${this.namespace}-${key}`;
-  }
-
   async resolve(key: string, ref?: unknown): Promise<string> {
-    const name = ref === undefined ? this.conventionName(key) : refName(ref);
+    const name = ref === undefined ? conventionName(this.namespace, key) : refName("gcp", ref);
     const version = this.versionResource(name);
     let response: AccessResponse;
     try {
@@ -132,7 +128,7 @@ export class GcpAdapter implements Adapter {
   }
 
   async write(key: string, value: string): Promise<unknown> {
-    const name = this.conventionName(key);
+    const name = conventionName(this.namespace, key);
     await this.ensureSecret(name);
     try {
       await this.client.addSecretVersion({
@@ -259,34 +255,5 @@ function isCredentialFailure(message: string): boolean {
     m.includes("credential") ||
     m.includes("unauthenticated") ||
     m.includes("permission denied")
-  );
-}
-
-/** The first non-empty line of a multi-line diagnostic, for terse messages. */
-function firstLine(text: string): string {
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.length > 0) return trimmed;
-  }
-
-  return "";
-}
-
-/** Coerce an explicit `!secret` ref payload to the stored name string. */
-function refName(ref: unknown): string {
-  if (typeof ref === "string") return ref;
-  if (
-    ref &&
-    typeof ref === "object" &&
-    "ref" in ref &&
-    typeof (ref as { ref: unknown }).ref === "string"
-  ) {
-    return (ref as { ref: string }).ref;
-  }
-
-  throw new KeyshelfError(
-    "ADAPTER_ERROR",
-    `gcp adapter: unsupported !secret ref payload: ${JSON.stringify(ref)}`,
-    { ref }
   );
 }
