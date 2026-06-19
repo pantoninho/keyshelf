@@ -2,18 +2,9 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "node",
   "include-component-in-tag": true,
-  "separate-pull-requests": true,
-  "plugins": ["node-workspace"],
   "packages": {
     "packages/cli": {
       "package-name": "keyshelf"
-    },
-    "packages/action": {
-      "package-name": "keyshelf-action"
-    },
-    "packages/migrate": {
-      "package-name": "@keyshelf/migrate",
-      "component": "migrate"
     }
   }
 }
