@@ -1,20 +1,20 @@
-import {Args, Flags} from '@oclif/core'
-import {readFile, writeFile} from 'node:fs/promises'
-import path from 'node:path'
-import * as readline from 'node:readline/promises'
-import {parseDocument} from 'yaml'
-import {createAdapter} from '../adapters/registry.js'
-import {BaseCommand} from '../base-command.js'
-import {KeyshelfError} from '../errors.js'
-import {loadEnvironment} from '../loader.js'
-import {secretRefForm, setConfigValue, setSecretRef} from '../set.js'
-import {parseTarget} from '../target.js'
+import { Args, Flags } from "@oclif/core";
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import * as readline from "node:readline/promises";
+import { parseDocument } from "yaml";
+import { createAdapter } from "../adapters/registry.js";
+import { BaseCommand } from "../base-command.js";
+import { KeyshelfError } from "../errors.js";
+import { loadEnvironment } from "../loader.js";
+import { secretRefForm, setConfigValue, setSecretRef } from "../set.js";
+import { parseTarget } from "../target.js";
 
 /** The structured result of a successful `set`. */
 interface SetResult {
-  key: string
-  environment: string
-  secret: boolean
+  key: string;
+  environment: string;
+  secret: boolean;
 }
 
 /**
@@ -33,73 +33,78 @@ interface SetResult {
  * lands in the environment file.
  */
 export default class Set extends BaseCommand {
-  static description = "Write a value into a shelf/env. The value is read from stdin (or a prompt), never argv."
+  static description =
+    "Write a value into a shelf/env. The value is read from stdin (or a prompt), never argv.";
 
   static examples = [
-    'echo my-region | <%= config.bin %> set REGION web/staging',
-    'printf "%s" "$PW" | <%= config.bin %> set DATABASE_PASSWORD web/staging --secret',
-  ]
+    "echo my-region | <%= config.bin %> set REGION web/staging",
+    'printf "%s" "$PW" | <%= config.bin %> set DATABASE_PASSWORD web/staging --secret'
+  ];
 
   static args = {
     key: Args.string({
-      description: 'The schema-declared key to set.',
-      required: true,
+      description: "The schema-declared key to set.",
+      required: true
     }),
     target: Args.string({
-      description: 'The environment to write to, as <shelf>/<env>.',
-      required: true,
-    }),
-  }
+      description: "The environment to write to, as <shelf>/<env>.",
+      required: true
+    })
+  };
 
   static flags = {
     secret: Flags.boolean({
-      description: 'Store the value via the provider and record only a !secret reference.',
-      default: false,
-    }),
-  }
+      description: "Store the value via the provider and record only a !secret reference.",
+      default: false
+    })
+  };
 
   async run(): Promise<SetResult> {
-    const {args, flags} = await this.parse(Set)
-    const {shelf, env} = parseTarget(args.target)
-    const {key} = args
+    const { args, flags } = await this.parse(Set);
+    const { shelf, env } = parseTarget(args.target);
+    const { key } = args;
 
     // The value is never taken from argv. A TTY prompts; otherwise stdin is read
     // raw (byte-exact), and an empty stdin is NO_INPUT.
-    const value = await this.readValue(key)
+    const value = await this.readValue(key);
 
-    const projectDir = process.cwd()
+    const projectDir = process.cwd();
     // Loads config + schema + environment, surfacing NOT_INITIALIZED /
     // SHELF_NOT_FOUND / SCHEMA_NOT_FOUND / ENVIRONMENT_NOT_FOUND / MALFORMED_FILE.
-    const loaded = await loadEnvironment(projectDir, shelf, env)
+    const loaded = await loadEnvironment(projectDir, shelf, env);
 
     // The key must already exist in the shelf's schema — set never declares keys.
     if (!Object.prototype.hasOwnProperty.call(loaded.schema.keys, key)) {
-      throw new KeyshelfError('UNKNOWN_KEY', `Key '${key}' is not declared in the schema for shelf '${shelf}'.`, {
-        key,
-        shelf,
-        environment: `${shelf}/${env}`,
-      })
+      throw new KeyshelfError(
+        "UNKNOWN_KEY",
+        `Key '${key}' is not declared in the schema for shelf '${shelf}'.`,
+        {
+          key,
+          shelf,
+          environment: `${shelf}/${env}`
+        }
+      );
     }
 
     // Edit the existing environment file in place, preserving every other key,
     // the provider line, and comments.
-    const file = path.join(projectDir, '.keyshelf', shelf, `${env}.yaml`)
-    const doc = parseDocument(await readFile(file, 'utf8'))
+    const file = path.join(projectDir, ".keyshelf", shelf, `${env}.yaml`);
+    const doc = parseDocument(await readFile(file, "utf8"));
 
     if (flags.secret) {
-      await this.writeSecret(loaded, projectDir, shelf, env, key, value, doc)
+      await this.writeSecret(loaded, projectDir, shelf, env, key, value, doc);
     } else {
-      setConfigValue(doc, key, value)
+      setConfigValue(doc, key, value);
     }
 
-    await writeFile(file, doc.toString(), 'utf8')
+    await writeFile(file, doc.toString(), "utf8");
 
-    const result: SetResult = {key, environment: `${shelf}/${env}`, secret: flags.secret}
+    const result: SetResult = { key, environment: `${shelf}/${env}`, secret: flags.secret };
     if (!this.jsonEnabled()) {
-      this.log(`Set ${result.environment} ${key}${flags.secret ? ' (secret)' : ''}.`)
+      this.log(`Set ${result.environment} ${key}${flags.secret ? " (secret)" : ""}.`);
     }
 
-    return result
+    return result;
   }
 
   /**
@@ -116,24 +121,29 @@ export default class Set extends BaseCommand {
     env: string,
     key: string,
     value: string,
-    doc: ReturnType<typeof parseDocument>,
+    doc: ReturnType<typeof parseDocument>
   ): Promise<void> {
-    const provider = loaded.config.providers[loaded.environment.provider]
+    const provider = loaded.config.providers[loaded.environment.provider];
     if (provider === undefined) {
       throw new KeyshelfError(
-        'PROVIDER_NOT_FOUND',
+        "PROVIDER_NOT_FOUND",
         `Environment '${shelf}/${env}' references undefined provider '${loaded.environment.provider}'.`,
-        {shelf, environment: `${shelf}/${env}`, provider: loaded.environment.provider},
-      )
+        { shelf, environment: `${shelf}/${env}`, provider: loaded.environment.provider }
+      );
     }
 
-    const adapter = createAdapter(provider, {projectDir, project: loaded.config.project, shelf, env})
-    const ref = await adapter.write(key, value)
+    const adapter = createAdapter(provider, {
+      projectDir,
+      project: loaded.config.project,
+      shelf,
+      env
+    });
+    const ref = await adapter.write(key, value);
 
     // The fake/reference convention names a secret `{project}-{shelf}-{env}-{key}`;
     // a returned ref matching that resolves by convention (bare !secret).
-    const conventionRef = `${loaded.config.project}-${shelf}-${env}-${key}`
-    setSecretRef(doc, key, secretRefForm(ref, conventionRef))
+    const conventionRef = `${loaded.config.project}-${shelf}-${env}-${key}`;
+    setSecretRef(doc, key, secretRefForm(ref, conventionRef));
   }
 
   /**
@@ -143,38 +153,38 @@ export default class Set extends BaseCommand {
    */
   private async readValue(key: string): Promise<string> {
     if (process.stdin.isTTY) {
-      const rl = readline.createInterface({input: process.stdin, output: process.stderr})
+      const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
       try {
-        const entered = await rl.question(`Value for ${key}: `)
-        if (entered === '') {
-          throw noInput(key)
+        const entered = await rl.question(`Value for ${key}: `);
+        if (entered === "") {
+          throw noInput(key);
         }
 
-        return entered
+        return entered;
       } finally {
-        rl.close()
+        rl.close();
       }
     }
 
-    const value = await readStdin()
+    const value = await readStdin();
     if (value.length === 0) {
-      throw noInput(key)
+      throw noInput(key);
     }
 
-    return value
+    return value;
   }
 }
 
 function noInput(key: string): KeyshelfError {
-  return new KeyshelfError('NO_INPUT', `No value provided on stdin for '${key}'.`, {key})
+  return new KeyshelfError("NO_INPUT", `No value provided on stdin for '${key}'.`, { key });
 }
 
 /** Read all of stdin to EOF as a UTF-8 string, byte-exact. */
 async function readStdin(): Promise<string> {
-  const chunks: Buffer[] = []
+  const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
-    chunks.push(Buffer.from(chunk))
+    chunks.push(Buffer.from(chunk));
   }
 
-  return Buffer.concat(chunks).toString('utf8')
+  return Buffer.concat(chunks).toString("utf8");
 }

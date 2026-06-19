@@ -1,9 +1,9 @@
-import {execFileSync} from 'node:child_process'
-import {existsSync} from 'node:fs'
-import {createRequire} from 'node:module'
-import path from 'node:path'
-import process from 'node:process'
-import {KeyshelfError} from '../errors.js'
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
+import process from "node:process";
+import { KeyshelfError } from "../errors.js";
 
 /**
  * Resolve the `sops` binary to shell out to (ADR-0003). The distribution model is
@@ -29,30 +29,30 @@ import {KeyshelfError} from '../errors.js'
  * but until they ship the PATH fallback is what is actually exercised.
  */
 export function resolveSopsBinary(): string {
-  const override = process.env.KEYSHELF_SOPS_BIN
+  const override = process.env.KEYSHELF_SOPS_BIN;
   if (override !== undefined && override.length > 0) {
     if (!existsSync(override)) {
-      throw unavailable(`KEYSHELF_SOPS_BIN points at '${override}', which does not exist.`)
+      throw unavailable(`KEYSHELF_SOPS_BIN points at '${override}', which does not exist.`);
     }
 
-    return override
+    return override;
   }
 
-  const bundled = bundledBinaryPath()
-  if (bundled !== undefined) return bundled
+  const bundled = bundledBinaryPath();
+  if (bundled !== undefined) return bundled;
 
-  const onPath = sopsOnPath()
-  if (onPath !== undefined) return onPath
+  const onPath = sopsOnPath();
+  if (onPath !== undefined) return onPath;
 
   throw unavailable(
     `No usable 'sops' binary found. Keyshelf bundles one as the optional dependency ` +
-      `'${platformPackage()}'; install it (or any 'sops' on your PATH) to use the sops adapter.`,
-  )
+      `'${platformPackage()}'; install it (or any 'sops' on your PATH) to use the sops adapter.`
+  );
 }
 
 /** The optional-dependency package name carrying this host's bundled binary. */
 export function platformPackage(): string {
-  return `@keyshelf/sops-${process.platform}-${process.arch}`
+  return `@keyshelf/sops-${process.platform}-${process.arch}`;
 }
 
 /**
@@ -62,30 +62,34 @@ export function platformPackage(): string {
  * lookup works regardless of where the dependency was hoisted.
  */
 function bundledBinaryPath(): string | undefined {
-  const pkg = platformPackage()
-  const require = createRequire(import.meta.url)
-  let pkgJson: string
+  const pkg = platformPackage();
+  const require = createRequire(import.meta.url);
+  let pkgJson: string;
   try {
-    pkgJson = require.resolve(`${pkg}/package.json`)
+    pkgJson = require.resolve(`${pkg}/package.json`);
   } catch {
-    return undefined
+    return undefined;
   }
 
-  const binary = path.join(path.dirname(pkgJson), 'bin', process.platform === 'win32' ? 'sops.exe' : 'sops')
-  return existsSync(binary) ? binary : undefined
+  const binary = path.join(
+    path.dirname(pkgJson),
+    "bin",
+    process.platform === "win32" ? "sops.exe" : "sops"
+  );
+  return existsSync(binary) ? binary : undefined;
 }
 
 /** Find a `sops` on `PATH`, or `undefined` if none is discoverable/usable. */
 function sopsOnPath(): string | undefined {
-  const lookup = process.platform === 'win32' ? 'where' : 'which'
+  const lookup = process.platform === "win32" ? "where" : "which";
   try {
-    const found = execFileSync(lookup, ['sops'], {encoding: 'utf8'}).split('\n')[0]?.trim()
-    return found && found.length > 0 && existsSync(found) ? found : undefined
+    const found = execFileSync(lookup, ["sops"], { encoding: "utf8" }).split("\n")[0]?.trim();
+    return found && found.length > 0 && existsSync(found) ? found : undefined;
   } catch {
-    return undefined
+    return undefined;
   }
 }
 
 function unavailable(message: string): KeyshelfError {
-  return new KeyshelfError('ADAPTER_UNAVAILABLE', message)
+  return new KeyshelfError("ADAPTER_UNAVAILABLE", message);
 }

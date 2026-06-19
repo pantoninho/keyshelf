@@ -1,13 +1,14 @@
-import {execFile} from 'node:child_process'
-import {existsSync} from 'node:fs'
-import {mkdir, writeFile} from 'node:fs/promises'
-import path from 'node:path'
-import {promisify} from 'node:util'
-import {KeyshelfError} from '../errors.js'
-import type {Adapter} from './adapter.js'
-import {resolveSopsBinary} from './sops-binary.js'
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { promisify } from "node:util";
+import { KeyshelfError } from "../errors.js";
+import type { Adapter } from "./adapter.js";
+import { firstLine, refName } from "./shared.js";
+import { resolveSopsBinary } from "./sops-binary.js";
 
-const execFileAsync = promisify(execFile)
+const execFileAsync = promisify(execFile);
 
 /**
  * The sops adapter (ADR-0002, ADR-0003). It owns no cryptography of its own —
@@ -38,41 +39,45 @@ const execFileAsync = promisify(execFile)
  */
 export class SopsAdapter implements Adapter {
   /** Absolute path to the per-environment encrypted store. */
-  private readonly storePath: string
+  private readonly storePath: string;
   /** Directory sops runs in, so it discovers the project's `.sops.yaml`. */
-  private readonly cwd: string
+  private readonly cwd: string;
 
-  constructor(opts: {storePath: string; cwd: string}) {
-    this.storePath = opts.storePath
-    this.cwd = opts.cwd
+  constructor(opts: { storePath: string; cwd: string }) {
+    this.storePath = opts.storePath;
+    this.cwd = opts.cwd;
   }
 
   async resolve(key: string, ref?: unknown): Promise<string> {
-    const name = ref === undefined ? key : refName(ref)
-    const store = await this.decryptStore()
+    const name = ref === undefined ? key : refName("sops", ref);
+    const store = await this.decryptStore();
     if (!Object.prototype.hasOwnProperty.call(store, name)) {
-      throw new KeyshelfError('SECRET_NOT_FOUND', `No secret stored for '${name}' in '${this.storePath}'.`, {
-        key,
-        ref: name,
-        file: this.storePath,
-      })
+      throw new KeyshelfError(
+        "SECRET_NOT_FOUND",
+        `No secret stored for '${name}' in '${this.storePath}'.`,
+        {
+          key,
+          ref: name,
+          file: this.storePath
+        }
+      );
     }
 
-    return store[name]
+    return store[name];
   }
 
   async write(key: string, value: string): Promise<unknown> {
-    await this.ensureStore()
+    await this.ensureStore();
     // `sops set` mutates the encrypted file in place, re-encrypting under the
     // recipients its `.sops.yaml` creation rules define. The value is carried as
     // a JSON string so it survives the YAML round-trip byte-exactly.
-    await this.sops(['set', this.storePath, `["${jsonPathSegment(key)}"]`, JSON.stringify(value)])
+    await this.sops(["set", this.storePath, `["${jsonPathSegment(key)}"]`, JSON.stringify(value)]);
     // The value is stored under the key itself, which is exactly how `resolve`
     // finds it by convention — so a convention write records a *bare* `!secret`
     // (the contract lets `write` return `undefined` for this). A foreign
     // environment can still reference the value explicitly via
     // `!secret { ref: <key> }`, which `resolve` honours.
-    return undefined
+    return undefined;
   }
 
   /**
@@ -81,29 +86,35 @@ export class SopsAdapter implements Adapter {
    * represented here as an empty map (the caller raises the structured error).
    */
   private async decryptStore(): Promise<Record<string, string>> {
-    if (!existsSync(this.storePath)) return {}
-    const {stdout} = await this.sops(['decrypt', '--output-type', 'json', this.storePath])
-    let parsed: unknown
+    if (!existsSync(this.storePath)) return {};
+    const { stdout } = await this.sops(["decrypt", "--output-type", "json", this.storePath]);
+    let parsed: unknown;
     try {
-      parsed = JSON.parse(stdout)
+      parsed = JSON.parse(stdout);
     } catch (error) {
-      throw new KeyshelfError('ADAPTER_ERROR', `sops produced unparseable output for '${this.storePath}': ${String(error)}`, {
-        file: this.storePath,
-      })
+      throw new KeyshelfError(
+        "ADAPTER_ERROR",
+        `sops produced unparseable output for '${this.storePath}': ${String(error)}`,
+        {
+          file: this.storePath
+        }
+      );
     }
 
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new KeyshelfError('ADAPTER_ERROR', `sops store '${this.storePath}' is not a mapping.`, {file: this.storePath})
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new KeyshelfError("ADAPTER_ERROR", `sops store '${this.storePath}' is not a mapping.`, {
+        file: this.storePath
+      });
     }
 
     // Every value was stored via JSON.stringify, so it decrypts back to a JSON
     // string; coerce non-string scalars defensively.
-    const out: Record<string, string> = {}
+    const out: Record<string, string> = {};
     for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-      out[k] = typeof v === 'string' ? v : String(v)
+      out[k] = typeof v === "string" ? v : String(v);
     }
 
-    return out
+    return out;
   }
 
   /**
@@ -112,34 +123,34 @@ export class SopsAdapter implements Adapter {
    * applies the project's `.sops.yaml` creation rules (recipients) to it.
    */
   private async ensureStore(): Promise<void> {
-    if (existsSync(this.storePath)) return
-    await mkdir(path.dirname(this.storePath), {recursive: true})
+    if (existsSync(this.storePath)) return;
+    await mkdir(path.dirname(this.storePath), { recursive: true });
     // An empty JSON object is a valid empty YAML mapping; sops encrypts it in
     // place under the recipients its creation rules resolve for this path.
-    await writeFile(this.storePath, '{}\n', 'utf8')
-    await this.sops(['encrypt', '--in-place', '--input-type', 'yaml', this.storePath])
+    await writeFile(this.storePath, "{}\n", "utf8");
+    await this.sops(["encrypt", "--in-place", "--input-type", "yaml", this.storePath]);
   }
 
   /** Run sops, translating spawn/exit failures into the structured error codes. */
-  private async sops(args: string[]): Promise<{stdout: string; stderr: string}> {
-    const bin = resolveSopsBinary()
+  private async sops(args: string[]): Promise<{ stdout: string; stderr: string }> {
+    const bin = resolveSopsBinary();
     try {
-      const {stdout, stderr} = await execFileAsync(bin, args, {
+      const { stdout, stderr } = await execFileAsync(bin, args, {
         cwd: this.cwd,
-        maxBuffer: 64 * 1024 * 1024,
-      })
-      return {stdout, stderr}
+        maxBuffer: 64 * 1024 * 1024
+      });
+      return { stdout, stderr };
     } catch (error) {
-      throw mapSopsError(error, this.storePath)
+      throw mapSopsError(error, this.storePath);
     }
   }
 }
 
 /** A failed `execFile`, narrowed to the fields we map on. */
 interface ExecError {
-  code?: number | string
-  stderr?: string | Buffer
-  message?: string
+  code?: number | string;
+  stderr?: string | Buffer;
+  message?: string;
 }
 
 /**
@@ -151,61 +162,53 @@ interface ExecError {
  * fall back to `ADAPTER_ERROR`.
  */
 function mapSopsError(error: unknown, file: string): KeyshelfError {
-  const e = error as ExecError
-  const stderr = e.stderr === undefined ? '' : e.stderr.toString()
+  const e = error as ExecError;
+  const stderr = e.stderr === undefined ? "" : e.stderr.toString();
 
-  if (e.code === 'ENOENT') {
-    return new KeyshelfError('ADAPTER_UNAVAILABLE', `The 'sops' binary could not be executed: ${e.message ?? 'ENOENT'}.`, {
-      file,
-    })
+  if (e.code === "ENOENT") {
+    return new KeyshelfError(
+      "ADAPTER_UNAVAILABLE",
+      `The 'sops' binary could not be executed: ${e.message ?? "ENOENT"}.`,
+      {
+        file
+      }
+    );
   }
 
   // sops reports a decryption-key/credential failure when no configured key can
   // recover the data key. These are the user's credential problem → PROVIDER_AUTH.
   if (isAuthFailure(stderr)) {
-    return new KeyshelfError('PROVIDER_AUTH', `sops could not decrypt '${file}': no usable decryption key. ${firstLine(stderr)}`, {
-      file,
-    })
+    return new KeyshelfError(
+      "PROVIDER_AUTH",
+      `sops could not decrypt '${file}': no usable decryption key. ${firstLine(stderr)}`,
+      {
+        file
+      }
+    );
   }
 
-  return new KeyshelfError('ADAPTER_ERROR', `sops failed on '${file}': ${firstLine(stderr) || e.message || 'unknown error'}`, {
-    file,
-  })
+  return new KeyshelfError(
+    "ADAPTER_ERROR",
+    `sops failed on '${file}': ${firstLine(stderr) || e.message || "unknown error"}`,
+    {
+      file
+    }
+  );
 }
 
 /** Heuristic over sops stderr identifying a missing/wrong decryption key. */
 function isAuthFailure(stderr: string): boolean {
-  const s = stderr.toLowerCase()
+  const s = stderr.toLowerCase();
   return (
-    s.includes('data key') ||
-    s.includes('no identity matched') ||
-    s.includes('no master key') ||
-    s.includes('master key was able to decrypt') ||
-    s.includes('did not find keys')
-  )
-}
-
-/** The first non-empty line of a multi-line diagnostic, for terse messages. */
-function firstLine(text: string): string {
-  for (const line of text.split('\n')) {
-    const trimmed = line.trim()
-    if (trimmed.length > 0) return trimmed
-  }
-
-  return ''
-}
-
-/** Coerce an explicit `!secret` ref payload to the stored name string. */
-function refName(ref: unknown): string {
-  if (typeof ref === 'string') return ref
-  if (ref && typeof ref === 'object' && 'ref' in ref && typeof (ref as {ref: unknown}).ref === 'string') {
-    return (ref as {ref: string}).ref
-  }
-
-  throw new KeyshelfError('ADAPTER_ERROR', `sops adapter: unsupported !secret ref payload: ${JSON.stringify(ref)}`, {ref})
+    s.includes("data key") ||
+    s.includes("no identity matched") ||
+    s.includes("no master key") ||
+    s.includes("master key was able to decrypt") ||
+    s.includes("did not find keys")
+  );
 }
 
 /** Escape a key for embedding inside the `["KEY"]` JSON path sops set expects. */
 function jsonPathSegment(key: string): string {
-  return key.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  return key.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }

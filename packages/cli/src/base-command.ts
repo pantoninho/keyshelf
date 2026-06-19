@@ -1,5 +1,5 @@
-import {Command} from '@oclif/core'
-import {KeyshelfError} from './errors.js'
+import { Command } from "@oclif/core";
+import { KeyshelfError } from "./errors.js";
 
 /**
  * Base for every Keyshelf command.
@@ -12,19 +12,19 @@ import {KeyshelfError} from './errors.js'
  *   Framework errors (bad flags, `--help`) fall through to oclif's defaults.
  */
 export abstract class BaseCommand extends Command {
-  static enableJsonFlag = true
+  static enableJsonFlag = true;
 
-  protected async catch(err: Error & {exitCode?: number}): Promise<unknown> {
+  protected async catch(err: Error & { exitCode?: number }): Promise<unknown> {
     if (err instanceof KeyshelfError) {
       if (this.jsonEnabled()) {
-        process.stdout.write(`${JSON.stringify({error: err.toJSON()})}\n`)
+        process.stdout.write(`${JSON.stringify({ error: err.toJSON() })}\n`);
       } else {
-        process.stderr.write(`error[${err.code}]: ${err.message}\n`)
+        process.stderr.write(`error[${err.code}]: ${err.message}\n`);
       }
 
-      return this.exit(1)
+      return this.exit(1);
     }
 
-    return super.catch(err)
+    return super.catch(err);
   }
 }

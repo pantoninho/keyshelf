@@ -1,3 +1,11 @@
 exclude_paths:
   - ".claude/plans/**"
   - "*CHANGELOG.md"
+  # Generated build artifacts (mirrored in .gitignore) — not hand-authored source.
+  - "**/dist/**"
+  - "**/oclif.manifest.json"
+  - "packages/cli/platforms/**"
+  - "packages/cli/.cache/**"
+  # Stale v5 examples; rewritten under #179. Exclude until then so they don't
+  # gate this tooling reconciliation on code owned by another issue.
+  - "examples/**"

@@ -7,6 +7,25 @@ on:
     branches: [main]
 
 jobs:
+  # Cheap, sops-free quality gate: eslint + prettier. Runs in parallel with the
+  # heavier test job so lint/format failures surface fast and gate every PR.
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run format:check
+
   test:
     runs-on: ubuntu-latest
 
