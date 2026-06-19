@@ -1,0 +1,90 @@
+name: Publish
+
+# GATED — merging a PR NEVER publishes. Two independent guards must BOTH hold for
+# the publish step to run:
+#   1. Trigger: only a pushed release tag matching `v*` (e.g. `v6.0.0`). A merge
+#      to `main`, or any pull_request, cannot start this workflow at all.
+#   2. Step guard: the publish step is skipped unless an npm credential is present
+#      (`secrets.NPM_TOKEN`). The `@keyshelf` scope has no token/OIDC trusted
+#      publisher configured yet (a human-only handoff), so even a tag push only
+#      builds + verifies and then no-ops the publish.
+# A reviewer can confirm by inspection that nothing is published by this PR: there
+# is no `push: branches` / `pull_request` trigger, and the publish step's `if`
+# cannot be true without a secret that does not exist.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Manual dry-run: builds + verifies the integrity gates, never publishes
+  # (the publish step's secret guard is still required).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required for npm provenance via OIDC once a trusted publisher is configured.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm ci
+
+      - run: npm run build -w keyshelf
+
+      # Build all five platform packages from sops-version.json: download each
+      # pinned binary, SHA256-verify it against the committed manifest, assemble
+      # the package, and smoke-test `sops --version` on the host's binary. A
+      # tampered/mismatched binary fails here, before anything is published.
+      - name: Build + integrity-verify platform packages
+        run: npm run platforms:build -w keyshelf
+
+      # Re-run the integrity assertions (os/cpu match, MPL-2.0, checksum, tarball
+      # contents) as an explicit gate independent of the build script.
+      - name: Verify platform packages (checksums, os/cpu, tarball contents)
+        run: npm run platforms:verify -w keyshelf
+
+      - name: Verify the integrity of provenance attestations and registry signatures
+        run: npm audit signatures
+        working-directory: packages/cli
+
+      # Decide whether a real publish may proceed. The @keyshelf scope's npm
+      # trusted-publisher/NPM_TOKEN is NOT configured yet (human-only handoff), so
+      # this is empty on every current run and the publish steps below are skipped.
+      - name: Determine whether publishing is configured
+        id: gate
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "${NPM_TOKEN}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No NPM_TOKEN configured for the @keyshelf scope — skipping publish. This run only built and verified the packages."
+          fi
+
+      # Publish the five platform packages, then keyshelf. `--provenance` attaches
+      # a signed provenance statement via OIDC. GUARDED: only runs on a `v*` tag
+      # AND only when the npm credential exists. Both conditions are false for this
+      # PR, so nothing is published on merge.
+      - name: Publish platform packages + keyshelf (provenance, OIDC)
+        if: steps.gate.outputs.enabled == 'true' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+        run: |
+          set -euo pipefail
+          for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
+            echo "Publishing @keyshelf/sops-${key} …"
+            npm publish "packages/cli/platforms/sops-${key}" --provenance --access public
+          done
+          echo "Publishing keyshelf …"
+          npm publish "packages/cli" --provenance --access public

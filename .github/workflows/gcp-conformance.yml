@@ -1,0 +1,52 @@
+name: gcp conformance
+
+# The gcp adapter cannot be proven hermetically — there is no faithful local
+# Secret Manager emulator (ADR-0005) — so its conformance suite runs *gated*
+# against real Google Cloud infrastructure on a nightly cadence, not per-PR.
+# Per-PR signal rests on the hermetic `fake` + `sops` matrix in ci.yml.
+on:
+  schedule:
+    - cron: '0 4 * * *' # nightly, 04:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  # Resolve whether credentials are configured. A repo without the GCP secrets
+  # (e.g. a fork) skips the real-infra job instead of failing red.
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          HAS_CREDS: ${{ secrets.GCP_SA_KEY != '' && vars.GCP_TEST_PROJECT != '' }}
+        run: echo "enabled=$HAS_CREDS" >> "$GITHUB_OUTPUT"
+
+  gcp-conformance:
+    needs: guard
+    if: needs.guard.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+      # Authenticate to Google Cloud via a service-account key. The key is the
+      # only credential the test needs; the SDK picks it up through ADC
+      # (GOOGLE_APPLICATION_CREDENTIALS, set by this action). Workload Identity
+      # Federation is the preferred hardening once a provider is configured.
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - run: npm ci
+      - run: npm run build -w keyshelf
+      # Provision into a real project; the harness namespaces every secret by a
+      # unique per-run prefix and deletes them on teardown.
+      - name: gcp adapter conformance (real Secret Manager)
+        working-directory: packages/cli
+        env:
+          KEYSHELF_GCP_TEST_PROJECT: ${{ vars.GCP_TEST_PROJECT }}
+          KEYSHELF_GCP_TEST_LOCATION: ${{ vars.GCP_TEST_LOCATION }}
+        run: npx vitest run test/conformance/gcp.contract.test.ts

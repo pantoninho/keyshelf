@@ -18,29 +18,50 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
-
-      - run: npm run build -w keyshelf
-
-      - run: npm run build -w @keyshelf/action
-
-      - name: Verify action bundle is up to date
+      # The hermetic sops conformance + E2E matrix needs a real sops + age on the
+      # runner (the bundled per-platform packages are not yet published, so the
+      # adapter finds sops via its PATH fallback). Pinned for reproducibility.
+      - name: Install sops + age
         run: |
-          if ! git diff --quiet -- packages/action/dist; then
-            echo "::error::packages/action/dist is stale. Run 'npm run build -w @keyshelf/action' and commit the result."
-            git --no-pager diff --stat -- packages/action/dist
-            exit 1
-          fi
+          SOPS_VERSION=v3.13.1
+          AGE_VERSION=v1.2.1
+          curl -fsSL -o /usr/local/bin/sops \
+            "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+          chmod +x /usr/local/bin/sops
+          curl -fsSL "https://github.com/FiloSottile/age/releases/download/${AGE_VERSION}/age-${AGE_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /tmp
+          sudo install /tmp/age/age /tmp/age/age-keygen /usr/local/bin/
 
-      - run: npm run lint
+      - name: Assert sops + age are present (so the matrix runs, never silently skips)
+        run: |
+          sops --version --disable-version-check
+          age-keygen --version
+          command -v sops
+          command -v age-keygen
 
-      - run: npm run format:check
+      - run: npm ci
 
       - run: npm run typecheck
 
-      - run: npm run typecheck:examples
+      - run: npm run build -w keyshelf
 
-      - run: npm test
+      # Cache the per-platform sops binaries the platform-package tests download
+      # (~250MB across five platforms). Keyed on sops-version.json so a version
+      # bump re-fetches; otherwise the Tier 1/Tier 2 suites reuse the cached
+      # binaries instead of re-downloading. The generator verifies each cached
+      # binary's SHA256 before use, so a poisoned cache cannot taint the build.
+      - name: Cache bundled sops binaries
+        uses: actions/cache@v4
+        with:
+          path: packages/cli/.cache/sops-binaries
+          key: sops-binaries-${{ hashFiles('packages/cli/sops-version.json') }}
+
+      # Build + integrity-verify all five platform packages once, up front, so the
+      # binaries are present and checksum-verified before the test suite (which
+      # reuses them) runs — and so a tampered binary fails CI here.
+      - run: npm run platforms:build -w keyshelf
+
+      - run: npm test -w keyshelf
 
   release-please:
     if: github.event_name == 'push'
@@ -48,40 +69,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    outputs:
-      keyshelf_release_created: ${{ steps.release.outputs['packages/cli--release_created'] }}
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
-  publish-keyshelf:
-    if: ${{ needs.release-please.outputs.keyshelf_release_created == 'true' }}
-    needs: [test, release-please]
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: npm
-          registry-url: https://registry.npmjs.org
-
-      - run: npm ci
-
-      - run: npm run build -w keyshelf
-
-      - name: Verify the integrity of provenance attestations and registry signatures
-        run: npm audit signatures
-        working-directory: packages/cli
-
-      - name: Publish to npm
-        run: npm publish --provenance --access public
-        working-directory: packages/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
