@@ -56,26 +56,35 @@ function malformed(file: string, reason: string): KeyshelfError {
   });
 }
 
+/** A non-null, non-array object — i.e. a YAML mapping once parsed to JS. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Validate and normalize one provider entry into a {@link Provider}. */
+function parseProvider(file: string, name: string, raw: unknown): Provider {
+  if (!isPlainObject(raw)) {
+    throw malformed(file, `provider '${name}' must be a mapping`);
+  }
+
+  if (typeof raw.adapter !== "string") {
+    throw malformed(file, `provider '${name}' is missing an 'adapter' string`);
+  }
+
+  return { ...raw, adapter: raw.adapter };
+}
+
 /** Parse the optional `providers:` mapping, validating each entry has an `adapter` string. */
 function parseProviders(file: string, rawProviders: unknown): Record<string, Provider> {
-  const providers: Record<string, Provider> = {};
-  if (rawProviders === undefined) return providers;
+  if (rawProviders === undefined) return {};
 
-  if (rawProviders === null || typeof rawProviders !== "object" || Array.isArray(rawProviders)) {
+  if (!isPlainObject(rawProviders)) {
     throw malformed(file, "'providers' must be a mapping");
   }
 
-  for (const [name, raw] of Object.entries(rawProviders as Record<string, unknown>)) {
-    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-      throw malformed(file, `provider '${name}' must be a mapping`);
-    }
-
-    const entry = raw as Record<string, unknown>;
-    if (typeof entry.adapter !== "string") {
-      throw malformed(file, `provider '${name}' is missing an 'adapter' string`);
-    }
-
-    providers[name] = { ...entry, adapter: entry.adapter };
+  const providers: Record<string, Provider> = {};
+  for (const [name, raw] of Object.entries(rawProviders)) {
+    providers[name] = parseProvider(file, name, raw);
   }
 
   return providers;
@@ -84,13 +93,12 @@ function parseProviders(file: string, rawProviders: unknown): Record<string, Pro
 async function loadConfig(root: string): Promise<Config> {
   const file = path.join(root, CONFIG_FILE);
   const doc = parse(await readFile(file, "utf8"), file);
-  const value = doc.toJS() as unknown;
+  const obj = doc.toJS() as unknown;
 
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+  if (!isPlainObject(obj)) {
     throw malformed(file, "expected a mapping at the top level");
   }
 
-  const obj = value as Record<string, unknown>;
   if (typeof obj.project !== "string" || obj.project.length === 0) {
     throw malformed(file, "missing required 'project' string");
   }
