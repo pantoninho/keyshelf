@@ -21,7 +21,9 @@ describe("KeyshelfError", () => {
     expect(ERROR_CODES).toContain("ALREADY_INITIALIZED");
     expect(ERROR_CODES).toContain("SECRET_NOT_FOUND");
     expect(ERROR_CODES).toContain("MALFORMED_FILE");
+    expect(ERROR_CODES).toContain("REFERENCE_NOT_FOUND");
+    expect(ERROR_CODES).toContain("INVALID_REFERENCE");
     // The committed enum size — bump deliberately when adding a code.
-    expect(ERROR_CODES).toHaveLength(16);
+    expect(ERROR_CODES).toHaveLength(18);
   });
 });

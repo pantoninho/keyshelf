@@ -24,7 +24,22 @@ export interface Schema {
 }
 
 /** How a key's value is represented in an environment file. */
-export type ValueKind = "config" | "secret";
+export type ValueKind = "config" | "secret" | "ref";
+
+/**
+ * A `!ref` key reference: a pointer at another key in keyshelf coordinates
+ * (ADR-0007). `shelf` is required; `key` defaults to the consuming key's own
+ * name and `stage` to the current stage — both defaults are applied at
+ * resolution, so they are absent here when the author omitted them.
+ */
+export interface KeyReference {
+  /** The shelf the target key lives in (required). */
+  shelf: string;
+  /** The target key name; defaults to the consuming key's own name. */
+  key?: string;
+  /** The target stage; defaults to the current stage. */
+  stage?: string;
+}
 
 /** One key/value entry in an environment file. */
 export interface EnvironmentValue {
@@ -33,6 +48,8 @@ export interface EnvironmentValue {
   value?: string;
   /** Adapter-defined `!secret` reference payload, when explicitly given. */
   ref?: unknown;
+  /** The key reference, present only for `kind === 'ref'`. */
+  reference?: KeyReference;
 }
 
 /** An environment, parsed from `{shelf}/{stage}.yaml`. */

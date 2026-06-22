@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { Args, Flags } from "@oclif/core";
-import { createAdapter } from "../adapters/registry.js";
+import { resolveDepsFor } from "../adapters/registry.js";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
 import { loadEnvironment } from "../loader.js";
@@ -74,12 +74,10 @@ export default class Run extends BaseCommand {
     validateEnvironment(loaded);
 
     // Secrets resolve through the environment's provider's adapter, built lazily
-    // (only if the environment declares a !secret). The provider is known to
-    // exist (validateEnvironment checked PROVIDER_NOT_FOUND).
-    const managed = await resolveEnvironment(loaded, () => {
-      const provider = loaded.config.providers[loaded.environment.provider];
-      return createAdapter(provider, { projectDir, project: loaded.config.project, shelf, stage });
-    });
+    // (only if the environment declares a !secret). A !ref resolves one hop
+    // through the *target* environment's provider — resolveDepsFor builds each
+    // environment's adapter from its own provider and loads target shelves.
+    const managed = await resolveEnvironment(loaded, resolveDepsFor(projectDir));
 
     const childEnv = buildChildEnv({ ambient: process.env, managed, sets });
 

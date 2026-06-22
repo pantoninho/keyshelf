@@ -83,6 +83,51 @@ keys:
 - `!secret` payload shape is adapter-defined; bare = convention, optional explicit
   `{ ref: ... }` overrides.
 
+## Key references (`!ref`)
+
+A key's **third representation**, alongside plaintext config and `!secret`. Instead
+of supplying a value, a key reference points at another key — letting a value be
+**declared once** in a canonical shelf and pulled into any environment that needs
+it. Written as a mapping under the `!ref` tag:
+
+```yaml
+provider: local # optional: an environment of only config + !ref needs no provider
+keys:
+  DATABASE_URL: !ref { shelf: shared } # same key name, current stage
+  API_TOKEN: !ref { shelf: shared, key: SHARED_API_TOKEN } # rename the target key
+  AUDIT_KEY: !ref { shelf: shared, stage: production } # cross a stage
+```
+
+Fields:
+
+- `shelf` — **required**. The shelf the target key lives in.
+- `key` — optional; defaults to the **consuming key's own name** (same-name is the
+  common case; supply it to map a differently-named target key).
+- `stage` — optional; defaults to the **current stage** (the stage being run;
+  supply it to resolve the target at a different stage).
+
+Resolution (at `run`/`validate`, in `resolve.ts`, above the adapter seam):
+
+- **Lazy, single-key.** The target shelf's `schema.yaml` and `{shelf}/{stage}.yaml`
+  are loaded and **only** the referenced key is resolved — never the whole target
+  environment.
+- **Through the target's own provider.** The value lives in the target
+  environment's store, so a `!secret` target resolves via the **target**
+  environment's provider — this is what makes a value shared across two different
+  backends (a sops shelf can reference into a fake/gcp shelf and vice versa).
+- **Representation-transparent.** A reference lands on whatever the target key is —
+  plaintext config or a `!secret` — and yields its resolved value.
+- **One hop only.** A key reference must land on a config or a secret. Landing on
+  another `!ref` is a runtime `INVALID_REFERENCE` (resolution never recurses or
+  chains, so cycles are impossible by construction).
+- **Missing target.** If the target shelf, stage, or key does not exist (or the key
+  exists in the schema but the target environment supplies no value for it), the
+  reference fails with `REFERENCE_NOT_FOUND`.
+
+The principal running `keyshelf run` must have read access to every referenced
+environment's store (e.g. the ability to decrypt the canonical sops file), since
+the value resolves through the target's provider.
+
 ## CLI surface (MVP)
 
 Built on **oclif**. The qualified environment `{shelf}/{stage}` is a positional
@@ -132,6 +177,8 @@ Closed code set (additive growth OK; renames are breaking):
 | `ADAPTER_UNAVAILABLE`   | Backend prerequisite missing (e.g. sops not found)                     |
 | `PROVIDER_AUTH`         | Backend authentication/credential failure                              |
 | `SECRET_NOT_FOUND`      | Referenced secret absent from the store                                |
+| `REFERENCE_NOT_FOUND`   | A `!ref` target shelf/stage/key does not exist or supplies no value    |
+| `INVALID_REFERENCE`     | A `!ref` is malformed, or its target is itself a `!ref` (one hop only) |
 | `NO_INPUT`              | `set` received no value on stdin                                       |
 | `MALFORMED_FILE`        | Unparseable/invalid config, schema, or environment (`file` + `reason`) |
 | `ADAPTER_ERROR`         | Other backend op failure (decrypt, network, write)                     |

@@ -1,5 +1,5 @@
 import { Args } from "@oclif/core";
-import { createAdapter } from "../adapters/registry.js";
+import { resolveDepsFor } from "../adapters/registry.js";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
 import { listEnvironments, loadEnvironment } from "../loader.js";
@@ -36,16 +36,7 @@ interface ProjectResult {
 async function verify(projectDir: string, loaded: LoadedEnvironment): Promise<void> {
   validateEnvironment(loaded);
 
-  const { shelf, name } = loaded.environment;
-  await resolveEnvironment(loaded, () => {
-    const provider = loaded.config.providers[loaded.environment.provider];
-    return createAdapter(provider, {
-      projectDir,
-      project: loaded.config.project,
-      shelf,
-      stage: name
-    });
-  });
+  await resolveEnvironment(loaded, resolveDepsFor(projectDir));
 }
 
 /** Verify one environment, returning the structured error if any. */

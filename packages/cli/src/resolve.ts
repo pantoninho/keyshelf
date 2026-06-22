@@ -1,9 +1,24 @@
 import type { Adapter } from "./adapters/adapter.js";
 import { KeyshelfError } from "./errors.js";
-import type { LoadedEnvironment } from "./model.js";
+import type { EnvironmentValue, KeyReference, LoadedEnvironment } from "./model.js";
 
 /** The canonical env-var identifier rule (docs/reference.md). */
 const KEY_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
+
+/**
+ * The dependencies resolution needs to reach beyond the environment being run.
+ * Both stay **above the adapter seam** (ADR-0002): `loadEnvironment` wraps the
+ * pure loader and `adapterFor` builds the provider's adapter for any
+ * environment — never an adapter itself. A `!ref` uses them to load the target
+ * shelf's environment and resolve the referenced key through the *target's* own
+ * provider, which is what makes a value shared across different backends.
+ */
+export interface ResolveDeps {
+  /** Build the adapter for the given (consuming or referenced) environment. */
+  adapterFor(loaded: LoadedEnvironment): Adapter;
+  /** Load a referenced `{shelf}/{stage}` environment, mapping the same load errors. */
+  loadEnvironment(shelf: string, stage: string): Promise<LoadedEnvironment>;
+}
 
 /**
  * Resolve a structurally-valid environment into the flat `string→string` map of
@@ -16,19 +31,25 @@ const KEY_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
  * 2. Every `!secret` resolves through the environment's provider's `adapter` —
  *    by convention on the key name, or via the explicit `{ ref: ... }` override.
  *
- * The adapter is supplied as a factory and is built **lazily**, only when the
- * environment actually declares a `!secret`. This keeps a config-only
- * environment resolvable without constructing (or even being able to construct)
- * its provider's adapter.
+ * The consuming environment's adapter is built **lazily**, only when it
+ * actually declares a local `!secret`. This keeps a config-only (or all-`!ref`)
+ * environment resolvable without constructing its provider's adapter.
  *
- * Resolution is fail-fast: if any secret is unresolvable the adapter throws a
- * {@link KeyshelfError} (e.g. `SECRET_NOT_FOUND`) and no map is returned, so a
- * caller never launches a half-populated environment. The config-merge step is
- * pure; only secret resolution touches the backend (through the adapter seam).
+ * A `!ref` key reference resolves **one hop** through the *target* environment
+ * (ADR-0007): `deps.loadEnvironment` loads the target shelf's schema and
+ * `{shelf}/{stage}.yaml`, only the referenced key is resolved, and a `!secret`
+ * target resolves through the **target's** own provider (`deps.adapterFor`).
+ * Landing on another `!ref` is `INVALID_REFERENCE`; a missing target shelf,
+ * stage, or key is `REFERENCE_NOT_FOUND`.
+ *
+ * Resolution is fail-fast: if anything is unresolvable a {@link KeyshelfError}
+ * is thrown and no map is returned, so a caller never launches a half-populated
+ * environment. The config-merge step is pure; only secret resolution touches the
+ * backend (through the adapter seam).
  */
 export async function resolveEnvironment(
   loaded: LoadedEnvironment,
-  adapterFor: () => Adapter
+  deps: ResolveDeps
 ): Promise<Record<string, string>> {
   const { schema, environment } = loaded;
   const map: Record<string, string> = {};
@@ -40,21 +61,127 @@ export async function resolveEnvironment(
     }
   }
 
-  // Build the adapter once, on first secret only.
+  // Build the consuming environment's adapter once, on first local secret only.
   let adapter: Adapter | undefined;
 
   // Environment values overlay the defaults: plaintext wins directly; a !secret
-  // resolves through the provider's adapter (convention, or explicit ref).
+  // resolves through this environment's provider; a !ref resolves through the
+  // target environment's provider.
   for (const [key, value] of Object.entries(environment.keys)) {
     if (value.kind === "secret") {
-      adapter ??= adapterFor();
+      adapter ??= deps.adapterFor(loaded);
       map[key] = await resolveSecret(adapter, key, value.ref);
+    } else if (value.kind === "ref") {
+      // The loader never produces a ref-kind value without a reference; guard anyway.
+      if (value.reference === undefined) {
+        throw new KeyshelfError("INVALID_REFERENCE", `Key '${key}' has a malformed !ref.`, { key });
+      }
+      map[key] = await resolveReference(key, value.reference, environment.name, deps);
     } else {
       map[key] = value.value ?? "";
     }
   }
 
   return map;
+}
+
+/**
+ * Resolve a `!ref` one hop: load the target `{shelf}/{stage}`, locate the
+ * referenced key, and yield its value — config directly, secret through the
+ * target's own provider. The defaults are applied here: `key` falls back to the
+ * consuming key's name, `stage` to the current stage.
+ */
+async function resolveReference(
+  consumingKey: string,
+  reference: KeyReference,
+  currentStage: string,
+  deps: ResolveDeps
+): Promise<string> {
+  const targetKey = reference.key ?? consumingKey;
+  const { target, value } = await loadReferenceTarget(
+    consumingKey,
+    reference.shelf,
+    targetKey,
+    reference.stage ?? currentStage,
+    deps
+  );
+
+  // A secret target resolves through the TARGET's own provider; config is direct.
+  return value.kind === "secret"
+    ? resolveSecret(deps.adapterFor(target), targetKey, value.ref)
+    : (value.value ?? "");
+}
+
+/**
+ * Load the target `{shelf}/{stage}` and return the non-`!ref` {@link
+ * EnvironmentValue} the referenced key supplies. A missing target shelf/stage/key
+ * is `REFERENCE_NOT_FOUND`; landing on another `!ref` is `INVALID_REFERENCE` (one
+ * hop only — resolution never recurses).
+ */
+async function loadReferenceTarget(
+  consumingKey: string,
+  targetShelf: string,
+  targetKey: string,
+  targetStage: string,
+  deps: ResolveDeps
+): Promise<{ target: LoadedEnvironment; value: EnvironmentValue }> {
+  const targetId = `${targetShelf}/${targetStage}`;
+  const where = { key: consumingKey, target: `${targetId}#${targetKey}` };
+
+  let target: LoadedEnvironment;
+  try {
+    target = await deps.loadEnvironment(targetShelf, targetStage);
+  } catch (error) {
+    // A missing target shelf/stage (or its schema/env file) is a dangling
+    // reference, surfaced uniformly as REFERENCE_NOT_FOUND.
+    if (error instanceof KeyshelfError) {
+      throw new KeyshelfError(
+        "REFERENCE_NOT_FOUND",
+        `Key '${consumingKey}' references '${where.target}', but ${targetId} could not be loaded: ${error.message}`,
+        { ...where, cause: error.code }
+      );
+    }
+    throw error;
+  }
+
+  const value = targetEnvironmentValue(target, targetKey);
+  if (value === undefined) {
+    throw new KeyshelfError(
+      "REFERENCE_NOT_FOUND",
+      `Key '${consumingKey}' references '${where.target}', but that key supplies no value.`,
+      where
+    );
+  }
+
+  if (value.kind === "ref") {
+    throw new KeyshelfError(
+      "INVALID_REFERENCE",
+      `Key '${consumingKey}' references '${where.target}', which is itself a !ref (one hop only).`,
+      where
+    );
+  }
+
+  return { target, value };
+}
+
+/**
+ * The effective value a target environment supplies for a key: its environment
+ * entry if present, otherwise the shelf schema's config default for that key.
+ * `undefined` when the key is neither — a dangling reference.
+ */
+function targetEnvironmentValue(
+  target: LoadedEnvironment,
+  key: string
+): EnvironmentValue | undefined {
+  const declared = target.environment.keys[key];
+  if (declared !== undefined) return declared;
+
+  const schemaKey = target.schema.keys[key];
+  if (schemaKey?.kind === "config" && schemaKey.default !== undefined) {
+    return { kind: "config", value: schemaKey.default };
+  }
+
+  return undefined;
 }
 
 /** Resolve one secret through the adapter, normalising non-Keyshelf throws. */
