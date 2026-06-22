@@ -123,7 +123,12 @@ function adapterForEnvironment(projectDir: string, loaded: LoadedEnvironment): A
       { shelf, environment: `${shelf}/${name}`, provider: providerName }
     );
   }
-  return createAdapter(provider, { projectDir, project: loaded.config.project, shelf, stage: name });
+  return createAdapter(provider, {
+    projectDir,
+    project: loaded.config.project,
+    shelf,
+    stage: name
+  });
 }
 
 /**

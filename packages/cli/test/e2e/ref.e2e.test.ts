@@ -13,11 +13,7 @@ import { makeTmpDir, removeDir, runKeyshelf } from "./helpers.js";
  * (fake ↔ sops) showing the value resolves through the *target's* provider.
  */
 
-const PRINT = (name: string) => [
-  "node",
-  "-e",
-  `process.stdout.write(String(process.env.${name}))`
-];
+const PRINT = (name: string) => ["node", "-e", `process.stdout.write(String(process.env.${name}))`];
 
 /** Write `{shelf}/schema.yaml` + `{shelf}/{stage}.yaml` under the project root. */
 async function writeShelf(
@@ -72,10 +68,9 @@ describe("key references E2E (fake): declare once, consume elsewhere", () => {
     });
     expect(set.code, set.stderr).toBe(0);
 
-    const run = await runKeyshelf(
-      ["run", "web/staging", "--", ...PRINT("DATABASE_PASSWORD")],
-      { cwd }
-    );
+    const run = await runKeyshelf(["run", "web/staging", "--", ...PRINT("DATABASE_PASSWORD")], {
+      cwd
+    });
     expect(run.code, run.stderr).toBe(0);
     expect(run.stdout).toBe("declared-once");
   });
@@ -95,10 +90,9 @@ describe("key references E2E (fake): declare once, consume elsewhere", () => {
     });
     expect(set.code, set.stderr).toBe(0);
 
-    const run = await runKeyshelf(
-      ["run", "web/staging", "--", ...PRINT("DATABASE_PASSWORD")],
-      { cwd }
-    );
+    const run = await runKeyshelf(["run", "web/staging", "--", ...PRINT("DATABASE_PASSWORD")], {
+      cwd
+    });
     expect(run.code, run.stderr).toBe(0);
     expect(run.stdout).toBe("renamed-secret");
   });
@@ -108,8 +102,7 @@ describe("key references E2E (fake): declare once, consume elsewhere", () => {
       production: "provider: local\nkeys:\n  AUDIT_KEY: !secret\n"
     });
     await writeShelf(cwd, "web", "keys:\n  AUDIT_KEY: !required\n", {
-      staging:
-        "provider: local\nkeys:\n  AUDIT_KEY: !ref { shelf: shared, stage: production }\n"
+      staging: "provider: local\nkeys:\n  AUDIT_KEY: !ref { shelf: shared, stage: production }\n"
     });
 
     const set = await runKeyshelf(["set", "AUDIT_KEY", "shared/production", "--secret"], {
@@ -201,10 +194,10 @@ if (sopsAvailable()) {
       });
       expect(set.code, set.stderr).toBe(0);
 
-      const run = await runKeyshelf(
-        ["run", "web/staging", "--", ...PRINT("DATABASE_PASSWORD")],
-        { cwd, env: env() }
-      );
+      const run = await runKeyshelf(["run", "web/staging", "--", ...PRINT("DATABASE_PASSWORD")], {
+        cwd,
+        env: env()
+      });
       expect(run.code, run.stderr).toBe(0);
       expect(run.stdout).toBe("in-the-vault");
     });
