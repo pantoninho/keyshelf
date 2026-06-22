@@ -4,7 +4,7 @@ import path from "node:path";
 import { parseDocument } from "yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadEnvironment } from "../../src/loader.js";
-import { secretRefForm, setConfigValue, setSecretRef } from "../../src/set.js";
+import { secretRefForm, setConfigValue, setKeyReference, setSecretRef } from "../../src/set.js";
 
 describe("secretRefForm", () => {
   it("is bare when the adapter ref equals the convention name", () => {
@@ -88,6 +88,53 @@ describe("setSecretRef", () => {
   });
 });
 
+describe("setKeyReference", () => {
+  it("writes a bare !ref { shelf } for a same-name, current-stage reference", () => {
+    const doc = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setKeyReference(doc, "DB", { shelf: "shared" });
+    const text = doc.toString();
+    expect(text).toContain("REGION: eu");
+    expect(text).toContain("!ref");
+    // The reparsed node carries only the shelf — no key:, no stage:.
+    const reparsed = parseDocument(text).get("keys", true) as {
+      get(k: string, keep: boolean): { toJSON(): unknown };
+    };
+    expect(reparsed.get("DB", true).toJSON()).toEqual({ shelf: "shared" });
+  });
+
+  it("writes an explicit stage: when the reference crosses a stage", () => {
+    const doc = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setKeyReference(doc, "AUDIT_KEY", { shelf: "shared", stage: "production" });
+    const node = (
+      parseDocument(doc.toString()).get("keys", true) as {
+        get(k: string, keep: boolean): { toJSON(): unknown };
+      }
+    ).get("AUDIT_KEY", true);
+    expect(node.toJSON()).toEqual({ shelf: "shared", stage: "production" });
+  });
+
+  it("writes a key: for a rename target", () => {
+    const doc = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setKeyReference(doc, "DB_PASSWORD", { shelf: "supabase", key: "SERVICE_ROLE_KEY" });
+    const node = (
+      parseDocument(doc.toString()).get("keys", true) as {
+        get(k: string, keep: boolean): { toJSON(): unknown };
+      }
+    ).get("DB_PASSWORD", true);
+    expect(node.toJSON()).toEqual({ shelf: "supabase", key: "SERVICE_ROLE_KEY" });
+  });
+
+  it("overwrites a prior !secret tag, preserving other keys and the provider", () => {
+    const doc = parseDocument("provider: local\nkeys:\n  REGION: eu\n  DB: !secret\n");
+    setKeyReference(doc, "DB", { shelf: "shared" });
+    const text = doc.toString();
+    expect(text).toContain("provider: local");
+    expect(text).toContain("REGION: eu");
+    expect(text).not.toContain("!secret");
+    expect(text).toContain("!ref");
+  });
+});
+
 // The written environment file must read back through the real loader into the
 // expected EnvironmentValue: plaintext config, bare secret, and explicit ref.
 describe("set output round-trips through loadEnvironment", () => {
@@ -138,5 +185,22 @@ describe("set output round-trips through loadEnvironment", () => {
     const loaded = await loadEnvironment(root, "web", "staging");
     expect(loaded.environment.keys.DB.kind).toBe("secret");
     expect(loaded.environment.keys.DB.ref).toMatchObject({ ref: "shared-db-url" });
+  });
+
+  it("yields a ref EnvironmentValue for a same-name key reference", async () => {
+    await writeEnvVia((doc) => setKeyReference(doc, "DB", { shelf: "shared" }));
+    const loaded = await loadEnvironment(root, "web", "staging");
+    expect(loaded.environment.keys.DB).toEqual({ kind: "ref", reference: { shelf: "shared" } });
+  });
+
+  it("yields a ref EnvironmentValue carrying key: and stage: when authored", async () => {
+    await writeEnvVia((doc) =>
+      setKeyReference(doc, "DB", { shelf: "shared", key: "SHARED_DB", stage: "production" })
+    );
+    const loaded = await loadEnvironment(root, "web", "staging");
+    expect(loaded.environment.keys.DB).toEqual({
+      kind: "ref",
+      reference: { shelf: "shared", key: "SHARED_DB", stage: "production" }
+    });
   });
 });

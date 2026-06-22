@@ -1,4 +1,5 @@
 import { type Document, isMap, Scalar, YAMLMap } from "yaml";
+import type { KeyReference } from "./model.js";
 
 /**
  * The form a `!secret` reference takes in the environment file. The adapter's
@@ -78,4 +79,26 @@ export function setSecretRef(doc: Document, key: string, form: SecretRefForm): v
   const node = doc.createNode({ ref: form.ref }) as YAMLMap;
   node.tag = "!secret";
   map.set(key, node);
+}
+
+/**
+ * Record `KEY` as a `!ref` key reference under `keys:`, in place (ADR-0007) —
+ * never a value. Writes a tagged mapping `KEY: !ref { shelf, [key], [stage] }`
+ * that parses back through the loader's `!ref` handling. `shelf` is always
+ * written; `key` and `stage` are written only when present on `reference`, so the
+ * caller is responsible for omitting `key` when the target name equals the
+ * consuming key (same-name is the loader's default) and `stage` for the current
+ * stage. Overwrites any prior value, including a `!secret`, and preserves every
+ * other key and the `provider:` line.
+ */
+export function setKeyReference(doc: Document, key: string, reference: KeyReference): void {
+  // Build the payload in field order shelf → key → stage, omitting absent
+  // optionals so the written node carries only what the author specified.
+  const payload: Record<string, string> = { shelf: reference.shelf };
+  if (reference.key !== undefined) payload.key = reference.key;
+  if (reference.stage !== undefined) payload.stage = reference.stage;
+
+  const node = doc.createNode(payload) as YAMLMap;
+  node.tag = "!ref";
+  keysMap(doc).set(key, node);
 }

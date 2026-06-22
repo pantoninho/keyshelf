@@ -8,14 +8,17 @@ import { conventionName } from "../adapters/shared.js";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
 import { loadEnvironment } from "../loader.js";
-import { secretRefForm, setConfigValue, setSecretRef } from "../set.js";
+import { secretRefForm, setConfigValue, setKeyReference, setSecretRef } from "../set.js";
 import { parseTarget } from "../target.js";
+import type { KeyReference } from "../model.js";
 
 /** The structured result of a successful `set`. */
 interface SetResult {
   key: string;
   environment: string;
   secret: boolean;
+  /** Whether a `!ref` key reference was authored (vs a value/secret written). */
+  ref: boolean;
 }
 
 /**
@@ -56,7 +59,17 @@ export default class Set extends BaseCommand {
   static flags = {
     secret: Flags.boolean({
       description: "Store the value via the provider and record only a !secret reference.",
-      default: false
+      default: false,
+      exclusive: ["ref"]
+    }),
+    ref: Flags.string({
+      description:
+        "Author a !ref key reference to <shelf>[/<stage>] (offline file edit; no value, no provider).",
+      exclusive: ["secret"]
+    }),
+    "ref-key": Flags.string({
+      description: "The target key name for a rename; omitted from the node when equal to <KEY>.",
+      dependsOn: ["ref"]
     })
   };
 
@@ -65,17 +78,116 @@ export default class Set extends BaseCommand {
     const { shelf, stage } = parseTarget(args.target);
     const { key } = args;
 
+    if (flags.ref !== undefined) {
+      return this.authorReference(shelf, stage, key, flags.ref, flags["ref-key"]);
+    }
+
     // The value is never taken from argv. A TTY prompts; otherwise stdin is read
     // raw (byte-exact), and an empty stdin is NO_INPUT.
     const value = await this.readValue(key);
 
-    const projectDir = process.cwd();
-    // Loads config + schema + environment, surfacing NOT_INITIALIZED /
-    // SHELF_NOT_FOUND / SCHEMA_NOT_FOUND / ENVIRONMENT_NOT_FOUND / MALFORMED_FILE.
-    const loaded = await loadEnvironment(projectDir, shelf, stage);
+    const { loaded, projectDir, file, doc } = await this.loadForEdit(shelf, stage, key);
 
-    // The key must already exist in the shelf's schema — set never declares keys.
-    if (!Object.prototype.hasOwnProperty.call(loaded.schema.keys, key)) {
+    if (flags.secret) {
+      await this.writeSecret(loaded, projectDir, shelf, stage, key, value, doc);
+    } else {
+      setConfigValue(doc, key, value);
+    }
+
+    await writeFile(file, doc.toString(), "utf8");
+
+    const result: SetResult = {
+      key,
+      environment: `${shelf}/${stage}`,
+      secret: flags.secret,
+      ref: false
+    };
+    if (!this.jsonEnabled()) {
+      this.log(`Set ${result.environment} ${key}${flags.secret ? " (secret)" : ""}.`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Author a `!ref` key reference into the consuming environment file — a pure
+   * offline mutation (ADR-0007). No value is read from stdin and no provider's
+   * adapter is touched: a key reference points at where the value lives, it does
+   * not store one. The consuming key must still be declared in the consuming
+   * shelf's schema (set never declares keys), and the environment file must exist;
+   * both are checked by {@link loadEnvironment} + {@link assertDeclared}.
+   *
+   * `refSpec` is `<shelf>` or `<shelf>/<stage>`: a trailing `/<stage>` records an
+   * explicit `stage:`, otherwise the target resolves at the current stage. A
+   * `refKey` records a `key:` rename, except when it equals the consuming key (a
+   * same-name "rename" is the loader's default, so it is not written).
+   */
+  private async authorReference(
+    shelf: string,
+    stage: string,
+    key: string,
+    refSpec: string,
+    refKey: string | undefined
+  ): Promise<SetResult> {
+    const reference = parseRefSpec(refSpec);
+    if (refKey !== undefined && refKey !== key) {
+      reference.key = refKey;
+    }
+
+    // No provider/config beyond what loadForEdit reads — no adapter is created.
+    const { file, doc } = await this.loadForEdit(shelf, stage, key);
+    setKeyReference(doc, key, reference);
+    await writeFile(file, doc.toString(), "utf8");
+
+    const result: SetResult = {
+      key,
+      environment: `${shelf}/${stage}`,
+      secret: false,
+      ref: true
+    };
+    if (!this.jsonEnabled()) {
+      this.log(`Set ${result.environment} ${key} (ref -> ${refSpec}).`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Prepare an in-place edit of `{shelf}/{stage}.yaml`: load config + schema +
+   * environment (surfacing NOT_INITIALIZED / SHELF_NOT_FOUND / SCHEMA_NOT_FOUND /
+   * ENVIRONMENT_NOT_FOUND / MALFORMED_FILE), assert the key is schema-declared
+   * (set never declares keys), and open the environment document for surgical
+   * mutation. Returns the loaded model plus the file path and parsed document so
+   * the caller can mutate and write it back, preserving every other key, the
+   * provider line, and comments.
+   */
+  private async loadForEdit(
+    shelf: string,
+    stage: string,
+    key: string
+  ): Promise<{
+    loaded: Awaited<ReturnType<typeof loadEnvironment>>;
+    projectDir: string;
+    file: string;
+    doc: ReturnType<typeof parseDocument>;
+  }> {
+    const projectDir = process.cwd();
+    const loaded = await loadEnvironment(projectDir, shelf, stage);
+    this.assertDeclared(loaded.schema.keys, key, shelf, stage);
+
+    const file = path.join(projectDir, ".keyshelf", shelf, `${stage}.yaml`);
+    const doc = parseDocument(await readFile(file, "utf8"));
+    return { loaded, projectDir, file, doc };
+  }
+
+  /** Reject a key not declared in the consuming shelf's schema — set never declares keys. */
+  private assertDeclared(
+    schemaKeys: Record<string, unknown>,
+    key: string,
+    shelf: string,
+    stage: string
+  ): void {
+    if (!Object.prototype.hasOwnProperty.call(schemaKeys, key)) {
       throw new KeyshelfError(
         "UNKNOWN_KEY",
         `Key '${key}' is not declared in the schema for shelf '${shelf}'.`,
@@ -86,26 +198,6 @@ export default class Set extends BaseCommand {
         }
       );
     }
-
-    // Edit the existing environment file in place, preserving every other key,
-    // the provider line, and comments.
-    const file = path.join(projectDir, ".keyshelf", shelf, `${stage}.yaml`);
-    const doc = parseDocument(await readFile(file, "utf8"));
-
-    if (flags.secret) {
-      await this.writeSecret(loaded, projectDir, shelf, stage, key, value, doc);
-    } else {
-      setConfigValue(doc, key, value);
-    }
-
-    await writeFile(file, doc.toString(), "utf8");
-
-    const result: SetResult = { key, environment: `${shelf}/${stage}`, secret: flags.secret };
-    if (!this.jsonEnabled()) {
-      this.log(`Set ${result.environment} ${key}${flags.secret ? " (secret)" : ""}.`);
-    }
-
-    return result;
   }
 
   /**
@@ -179,6 +271,35 @@ export default class Set extends BaseCommand {
 
     return value;
   }
+}
+
+/**
+ * Parse a `--ref` spec into a {@link KeyReference}: `<shelf>` (current stage) or
+ * `<shelf>/<stage>` (explicit stage). A malformed spec — empty shelf, empty
+ * stage, or more than one `/` — is a `MALFORMED_FILE`, matching how
+ * {@link parseTarget} rejects a bad environment address. The `key` field is added
+ * by the caller for a rename; it is never derived from the spec.
+ */
+function parseRefSpec(spec: string): KeyReference {
+  const slash = spec.indexOf("/");
+  if (slash === -1) {
+    if (spec.length === 0) throw malformedRef(spec);
+    return { shelf: spec };
+  }
+
+  if (slash === 0 || slash === spec.length - 1 || spec.indexOf("/", slash + 1) !== -1) {
+    throw malformedRef(spec);
+  }
+
+  return { shelf: spec.slice(0, slash), stage: spec.slice(slash + 1) };
+}
+
+function malformedRef(spec: string): KeyshelfError {
+  return new KeyshelfError(
+    "MALFORMED_FILE",
+    `'${spec}' is not a valid --ref target; expected '<shelf>' or '<shelf>/<stage>'.`,
+    { reason: "expected '<shelf>' or '<shelf>/<stage>'", target: spec }
+  );
 }
 
 function noInput(key: string): KeyshelfError {
