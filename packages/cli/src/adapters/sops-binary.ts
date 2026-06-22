@@ -11,8 +11,7 @@ import { KeyshelfError } from "../errors.js";
  * per `{platform}-{arch}` (`@keyshelf/sops-linux-x64`, `@keyshelf/sops-darwin-arm64`,
  * …) carrying just that platform's binary — so a single `npm i -g keyshelf`
  * brings a working sops with nothing else to install. Any `sops` on `PATH` is the
- * fallback, which also makes a hermetic CI runner (where a pinned real sops is
- * installed) Just Work without publishing the platform packages.
+ * fallback, which covers hosts/contexts without the bundled package installed.
  *
  * Resolution order:
  *   1. an explicit override (`KEYSHELF_SOPS_BIN`) — used by tests to point at a
@@ -24,9 +23,10 @@ import { KeyshelfError } from "../errors.js";
  * structured `ADAPTER_UNAVAILABLE` with a message that names the platform package
  * and the PATH fallback.
  *
- * NB: publishing the `@keyshelf/sops-*` platform packages to the registry is out
- * of scope for the MVP — the lookup logic and `optionalDependencies` wiring exist,
- * but until they ship the PATH fallback is what is actually exercised.
+ * The `@keyshelf/sops-*` platform packages are published to the registry (since
+ * keyshelf 6.0.0), so the bundled package (step 2) is the primary path for a
+ * normal install; the PATH fallback (step 3) covers hosts without it and is
+ * exercised directly by the Tier-1 "PATH fallback" test.
  */
 export function resolveSopsBinary(): string {
   const override = process.env.KEYSHELF_SOPS_BIN;

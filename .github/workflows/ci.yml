@@ -42,9 +42,12 @@ jobs:
           node-version: 20
           cache: npm
 
-      # The hermetic sops conformance + E2E matrix needs a real sops + age on the
-      # runner (the bundled per-platform packages are not yet published, so the
-      # adapter finds sops via its PATH fallback). Pinned for reproducibility.
+      # age is needed by the sops fixtures (they generate age keys; the bundled
+      # @keyshelf/sops-* packages ship only sops, not age). sops is installed for
+      # the Tier-1 "PATH fallback" test, which deliberately runs with no bundled
+      # package and asserts the resolver falls back to a PATH sops. The
+      # conformance + E2E matrix itself now resolves the bundled per-platform
+      # binary that `npm ci` installs for this host. Pinned for reproducibility.
       - name: Install sops + age
         run: |
           SOPS_VERSION=v3.13.1
