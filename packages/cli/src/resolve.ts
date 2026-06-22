@@ -72,6 +72,10 @@ export async function resolveEnvironment(
       adapter ??= deps.adapterFor(loaded);
       map[key] = await resolveSecret(adapter, key, value.ref);
     } else if (value.kind === "ref") {
+      // The loader never produces a ref-kind value without a reference; guard anyway.
+      if (value.reference === undefined) {
+        throw new KeyshelfError("INVALID_REFERENCE", `Key '${key}' has a malformed !ref.`, { key });
+      }
       map[key] = await resolveReference(key, value.reference, environment.name, deps);
     } else {
       map[key] = value.value ?? "";
@@ -89,32 +93,23 @@ export async function resolveEnvironment(
  */
 async function resolveReference(
   consumingKey: string,
-  reference: KeyReference | undefined,
+  reference: KeyReference,
   currentStage: string,
   deps: ResolveDeps
 ): Promise<string> {
-  if (reference === undefined) {
-    // The loader never produces a ref-kind value without a reference; guard anyway.
-    throw new KeyshelfError("INVALID_REFERENCE", `Key '${consumingKey}' has a malformed !ref.`, {
-      key: consumingKey
-    });
-  }
-
   const targetKey = reference.key ?? consumingKey;
-  const targetStage = reference.stage ?? currentStage;
   const { target, value } = await loadReferenceTarget(
     consumingKey,
     reference.shelf,
     targetKey,
-    targetStage,
+    reference.stage ?? currentStage,
     deps
   );
 
   // A secret target resolves through the TARGET's own provider; config is direct.
-  if (value.kind === "secret") {
-    return resolveSecret(deps.adapterFor(target), targetKey, value.ref);
-  }
-  return value.value ?? "";
+  return value.kind === "secret"
+    ? resolveSecret(deps.adapterFor(target), targetKey, value.ref)
+    : (value.value ?? "");
 }
 
 /**
