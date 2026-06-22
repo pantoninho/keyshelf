@@ -2,13 +2,29 @@ import { describe, expect, it } from "vitest";
 import { FakeAdapter, inMemoryStore } from "../../src/adapters/fake.js";
 import { KeyshelfError } from "../../src/errors.js";
 import type { Config, Environment, LoadedEnvironment, Schema } from "../../src/model.js";
-import { buildChildEnv, parseSet, resolveEnvironment } from "../../src/resolve.js";
+import {
+  buildChildEnv,
+  parseSet,
+  resolveEnvironment,
+  type ResolveDeps
+} from "../../src/resolve.js";
 
-/** A factory yielding an empty adapter for config-only cases (never invoked). */
-const noSecrets = () => new FakeAdapter(inMemoryStore());
+/** Deps whose adapter is never invoked (config-only cases) and that load no
+ * referenced environments. */
+const noSecrets: ResolveDeps = {
+  adapterFor: () => new FakeAdapter(inMemoryStore()),
+  loadEnvironment: () => {
+    throw new Error("loadEnvironment should not be called");
+  }
+};
 
-/** Wrap a concrete adapter as the lazy factory resolveEnvironment expects. */
-const using = (a: FakeAdapter) => () => a;
+/** Wrap a concrete adapter as deps whose adapterFor yields it. */
+const using = (a: FakeAdapter): ResolveDeps => ({
+  adapterFor: () => a,
+  loadEnvironment: () => {
+    throw new Error("loadEnvironment should not be called");
+  }
+});
 
 const config: Config = {
   project: "myapp",
@@ -119,6 +135,185 @@ describe("resolveEnvironment (secret resolution)", () => {
     expect(thrown).toBeInstanceOf(KeyshelfError);
     expect((thrown as KeyshelfError).code).toBe("SECRET_NOT_FOUND");
     expect((thrown as KeyshelfError).fields).toMatchObject({ key: "DATABASE_PASSWORD" });
+  });
+});
+
+describe("resolveEnvironment (key references)", () => {
+  /** A target shelf 'shared' with its own schema, environment, and provider. */
+  function sharedEnv(keys: Environment["keys"], stage = "staging"): LoadedEnvironment {
+    return {
+      config,
+      schema: {
+        keys: {
+          DATABASE_PASSWORD: { kind: "required" },
+          SHARED_DB: { kind: "required" },
+          AUDIT_KEY: { kind: "required" },
+          LOG_LEVEL: { kind: "config", default: "shared-default" }
+        }
+      },
+      environment: { shelf: "shared", name: stage, provider: "shared-provider", keys }
+    };
+  }
+
+  /** Deps that route each adapter request to a per-shelf adapter, and serve a
+   * fixed set of target environments by `{shelf}/{stage}`. */
+  function deps(opts: {
+    adapters: Record<string, FakeAdapter>;
+    targets: Record<string, LoadedEnvironment>;
+  }): ResolveDeps {
+    return {
+      adapterFor: (loaded) => {
+        const a = opts.adapters[loaded.environment.shelf];
+        if (a === undefined) throw new Error(`no adapter for shelf ${loaded.environment.shelf}`);
+        return a;
+      },
+      loadEnvironment: async (shelf, stage) => {
+        const target = opts.targets[`${shelf}/${stage}`];
+        if (target === undefined) {
+          throw new KeyshelfError("ENVIRONMENT_NOT_FOUND", `missing ${shelf}/${stage}`, {
+            shelf,
+            environment: `${shelf}/${stage}`
+          });
+        }
+        return target;
+      }
+    };
+  }
+
+  it("resolves a !ref to a plaintext config in the target shelf, same key name", async () => {
+    const map = await resolveEnvironment(
+      env({
+        REGION: { kind: "config", value: "eu" },
+        DATABASE_PASSWORD: { kind: "ref", reference: { shelf: "shared" } }
+      }),
+      deps({
+        adapters: {},
+        targets: {
+          "shared/staging": sharedEnv({ DATABASE_PASSWORD: { kind: "config", value: "shared-pw" } })
+        }
+      })
+    );
+    expect(map.DATABASE_PASSWORD).toBe("shared-pw");
+  });
+
+  it("resolves a !ref to a secret through the TARGET environment's provider", async () => {
+    const sharedAdapter = new FakeAdapter(inMemoryStore());
+    await sharedAdapter.write("DATABASE_PASSWORD", "from-shared-store");
+    const consumingAdapter = new FakeAdapter(inMemoryStore()); // must NOT be used
+
+    const map = await resolveEnvironment(
+      env({
+        DATABASE_PASSWORD: { kind: "ref", reference: { shelf: "shared" } }
+      }),
+      deps({
+        adapters: { shared: sharedAdapter, web: consumingAdapter },
+        targets: {
+          "shared/staging": sharedEnv({ DATABASE_PASSWORD: { kind: "secret" } })
+        }
+      })
+    );
+    expect(map.DATABASE_PASSWORD).toBe("from-shared-store");
+  });
+
+  it("renames: a consuming key resolves a differently-named target key via key:", async () => {
+    const sharedAdapter = new FakeAdapter(inMemoryStore());
+    await sharedAdapter.write("SHARED_DB", "renamed-value");
+
+    const map = await resolveEnvironment(
+      env({
+        DATABASE_PASSWORD: { kind: "ref", reference: { shelf: "shared", key: "SHARED_DB" } }
+      }),
+      deps({
+        adapters: { shared: sharedAdapter },
+        targets: {
+          "shared/staging": sharedEnv({ SHARED_DB: { kind: "secret" } })
+        }
+      })
+    );
+    expect(map.DATABASE_PASSWORD).toBe("renamed-value");
+  });
+
+  it("crosses stages: stage: resolves the target at a different stage", async () => {
+    const map = await resolveEnvironment(
+      env({
+        AUDIT_KEY: { kind: "ref", reference: { shelf: "shared", stage: "production" } }
+      }),
+      deps({
+        adapters: {},
+        targets: {
+          "shared/production": sharedEnv(
+            { AUDIT_KEY: { kind: "config", value: "prod-audit" } },
+            "production"
+          )
+        }
+      })
+    );
+    expect(map.AUDIT_KEY).toBe("prod-audit");
+  });
+
+  it("resolves a !ref onto a target schema config default (no env override)", async () => {
+    const map = await resolveEnvironment(
+      env({
+        LOG_LEVEL: { kind: "ref", reference: { shelf: "shared" } }
+      }),
+      deps({
+        adapters: {},
+        targets: { "shared/staging": sharedEnv({}) }
+      })
+    );
+    expect(map.LOG_LEVEL).toBe("shared-default");
+  });
+
+  it("fails INVALID_REFERENCE when the target is itself a !ref (one hop only)", async () => {
+    let thrown: unknown;
+    try {
+      await resolveEnvironment(
+        env({ DATABASE_PASSWORD: { kind: "ref", reference: { shelf: "shared" } } }),
+        deps({
+          adapters: {},
+          targets: {
+            "shared/staging": sharedEnv({
+              DATABASE_PASSWORD: { kind: "ref", reference: { shelf: "other" } }
+            })
+          }
+        })
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(KeyshelfError);
+    expect((thrown as KeyshelfError).code).toBe("INVALID_REFERENCE");
+  });
+
+  it("fails REFERENCE_NOT_FOUND when the target key is absent from the target environment", async () => {
+    let thrown: unknown;
+    try {
+      await resolveEnvironment(
+        env({ DATABASE_PASSWORD: { kind: "ref", reference: { shelf: "shared" } } }),
+        deps({
+          adapters: {},
+          targets: { "shared/staging": sharedEnv({}) }
+        })
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(KeyshelfError);
+    expect((thrown as KeyshelfError).code).toBe("REFERENCE_NOT_FOUND");
+  });
+
+  it("fails REFERENCE_NOT_FOUND when the target shelf/stage does not exist", async () => {
+    let thrown: unknown;
+    try {
+      await resolveEnvironment(
+        env({ DATABASE_PASSWORD: { kind: "ref", reference: { shelf: "nope" } } }),
+        deps({ adapters: {}, targets: {} })
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(KeyshelfError);
+    expect((thrown as KeyshelfError).code).toBe("REFERENCE_NOT_FOUND");
   });
 });
 

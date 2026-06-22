@@ -1,6 +1,8 @@
 import path from "node:path";
 import { KeyshelfError } from "../errors.js";
-import type { Provider } from "../model.js";
+import { loadEnvironment } from "../loader.js";
+import type { LoadedEnvironment, Provider } from "../model.js";
+import type { ResolveDeps } from "../resolve.js";
 import type { Adapter } from "./adapter.js";
 import { FakeAdapter, fileStore } from "./fake.js";
 import { GcpAdapter } from "./gcp.js";
@@ -108,4 +110,31 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
       );
     }
   }
+}
+
+/** Build the adapter for an environment, looking its provider up in its own config. */
+function adapterForEnvironment(projectDir: string, loaded: LoadedEnvironment): Adapter {
+  const { shelf, name, provider: providerName } = loaded.environment;
+  const provider = loaded.config.providers[providerName];
+  if (provider === undefined) {
+    throw new KeyshelfError(
+      "PROVIDER_NOT_FOUND",
+      `Environment '${shelf}/${name}' references undefined provider '${providerName}'.`,
+      { shelf, environment: `${shelf}/${name}`, provider: providerName }
+    );
+  }
+  return createAdapter(provider, { projectDir, project: loaded.config.project, shelf, stage: name });
+}
+
+/**
+ * Assemble the {@link ResolveDeps} a `run`/`validate` needs for a project: build
+ * each environment's adapter from its own provider config, and load referenced
+ * `{shelf}/{stage}` environments from the same project root. A `!ref` therefore
+ * resolves through the *target* environment's provider, not the consumer's.
+ */
+export function resolveDepsFor(projectDir: string): ResolveDeps {
+  return {
+    adapterFor: (loaded) => adapterForEnvironment(projectDir, loaded),
+    loadEnvironment: (shelf, stage) => loadEnvironment(projectDir, shelf, stage)
+  };
 }
