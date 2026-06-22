@@ -4,8 +4,7 @@
   "include-component-in-tag": true,
   "packages": {
     "packages/cli": {
-      "package-name": "keyshelf",
-      "release-as": "6.0.0"
+      "package-name": "keyshelf"
     }
   }
 }
