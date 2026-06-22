@@ -114,5 +114,169 @@ The gcp secret-naming convention gained a `shelf` component:
 or auto-resolves a v5 one, so existing gcp (and sops) secrets must be re-seeded
 under the new names with `keyshelf set <KEY> <shelf>/<stage> --secret` (value on
 stdin). There is no automated migrator.
+
+## Shared values
+
+In v5 a single secret was often mapped into many workspaces — the same
+`SUPABASE_*` keys reached backend, mobile, website, and ci; `SUNSAY_BASE_URL` and
+the `backend/*` keys reached both the backend and the infra-\* deploy stacks. The
+naive v6 translation re-seeds that value under every consuming shelf, leaving you
+with N copies to rotate in lockstep. v6 has a better tool: a **key reference**
+(`!ref`, see [ADR-0007](./adr/0007-key-references-for-shared-values.md)). Declare
+the value **once** in a canonical shelf and point at it from every consumer. The
+underlying principle: **the value lives where it conceptually belongs, and a
+`!ref` expresses "I consume this, I don't own it."**
+
+Migrate a shared v5 value in five steps.
+
+### 1. Identify the shared set
+
+List the keys that appear in more than one v5 map-file / workspace. Those are the
+ones worth a reference; keys used by a single workspace just become ordinary keys
+on that one shelf. Examples of shared sets:
+
+- `SUPABASE_*` — used by backend, mobile, website, and ci.
+- `SUNSAY_BASE_URL` and the `backend/*` keys — used by backend plus the infra-\*
+  deploy stacks.
+
+### 2. Choose the canonical shelf — the shelf that owns the secret's domain
+
+The canonical shelf is wherever the value **conceptually belongs**, decided in
+this order:
+
+1. **It is already one shelf's own value, and the others merely consume it** →
+   that shelf is canonical; leave the value there. `SUNSAY_BASE_URL` and
+   `backend/*` are the backend's own values, so they stay in `backend` and the
+   infra-\* environments reference them.
+2. **It belongs to an external service/provider with no natural owner among the
+   consumers** → put it in a shelf named for that service, creating a holding
+   shelf if one does not exist. `SUPABASE_*` belongs to Supabase, not to backend
+   or mobile, so it goes in a `supabase` shelf.
+3. **Tie-break** — prefer an existing owning shelf over inventing a new one; only
+   create a dedicated holding shelf when no existing shelf is the natural owner.
+
+**Avoid a catch-all `shared` junk-drawer.** A `shared` shelf discards the
+ownership signal that makes a reference meaningful — the whole point of `!ref` is
+that the target shelf names who owns the value. A holding shelf (like `supabase`)
+**may never be `run` directly**, and that is fine: it exists purely as the
+canonical home for its keys.
+
+### 3. Re-seed the value once under the v6 name
+
+Declare the key in the canonical shelf's `schema.yaml`, then seed its value
+**once** with `keyshelf set` (v6 shelf-qualified names never auto-resolve v5
+names — see [Re-seeding secrets](#re-seeding-secrets)). Keep the canonical key
+name identical to the v5 name where possible:
+
+```
+keyshelf set SUPABASE_URL          supabase/production            # plaintext, value on stdin
+keyshelf set SUPABASE_SERVICE_ROLE_KEY supabase/production --secret  # secret, value on stdin
+```
+
+### 4. Author `!ref`s in the consuming shelves
+
+In each consumer, declare the key in its `schema.yaml`, then point it at the
+canonical shelf with `keyshelf set --ref`:
+
+```
+keyshelf set <KEY> <shelf>/<stage> --ref <target-shelf>[/<target-stage>] [--ref-key <target-key>]
+```
+
+`set --ref` is a pure offline file edit — it reads no value from stdin and calls
+no provider. Lean on the defaults:
+
+- **Same-name default** — `--ref <shelf>` writes `!ref { shelf }`, resolving the
+  target key under the **same name**. Only pass `--ref-key` where v5 actually
+  renamed the key.
+- **Same-stage default** — the target resolves at the **current stage**, so the
+  consumer line is identical across stages (`production` references `production`,
+  `staging` references `staging`) with no `stage:` to maintain.
+
+### Side by side: `SUPABASE_*` shared across four shelves
+
+In v5, every workspace's map-file repeated the Supabase keys (and ci renamed the
+service-role key):
+
+```ts
+// keyshelf.config.ts — the Supabase keys duplicated per workspace
+export default defineConfig({
+  name: "sunsay",
+  envs: ["production"],
+  keys: {
+    backend: { SUPABASE_URL: secret(), SUPABASE_SERVICE_ROLE_KEY: secret() },
+    mobile: { SUPABASE_URL: secret(), SUPABASE_SERVICE_ROLE_KEY: secret() },
+    website: { SUPABASE_URL: secret(), SUPABASE_SERVICE_ROLE_KEY: secret() },
+    ci: { SUPABASE_URL: secret(), SUPABASE_KEY: secret() } // ci used a different name
+  }
+});
+```
+
+In v6, the value lives once on a canonical `supabase` shelf and each consumer
+references it. First the canonical home:
+
+```yaml
+# .keyshelf/supabase/schema.yaml — the canonical owner; never `run` directly
+keys:
+  SUPABASE_URL: !required
+  SUPABASE_SERVICE_ROLE_KEY: !required
+```
+
+```yaml
+# .keyshelf/supabase/production.yaml — seeded once (step 3)
+provider: local
+keys:
+  SUPABASE_URL: https://xyz.supabase.co # plaintext config
+  SUPABASE_SERVICE_ROLE_KEY: !secret # value lives in the store
+
+```
+
+Then each consumer references it. `backend`, `mobile`, and `website` keep the
+same key names, so they need no `--ref-key`:
+
+```
+keyshelf set SUPABASE_URL              backend/production --ref supabase
+keyshelf set SUPABASE_SERVICE_ROLE_KEY backend/production --ref supabase
+keyshelf set SUPABASE_URL              mobile/production  --ref supabase
+keyshelf set SUPABASE_SERVICE_ROLE_KEY mobile/production  --ref supabase
+keyshelf set SUPABASE_URL              website/production --ref supabase
+keyshelf set SUPABASE_SERVICE_ROLE_KEY website/production --ref supabase
+```
+
+```yaml
+# .keyshelf/backend/production.yaml — a mapping environment; no provider needed
+keys:
+  SUPABASE_URL: !ref { shelf: supabase } # same name, current stage
+  SUPABASE_SERVICE_ROLE_KEY: !ref { shelf: supabase } # same name, current stage
+```
+
+`ci` consumed the service-role key under a renamed key (`SUPABASE_KEY`), so it is
+the one place that needs `--ref-key`:
+
+```
+keyshelf set SUPABASE_URL ci/production --ref supabase
+keyshelf set SUPABASE_KEY ci/production --ref supabase --ref-key SUPABASE_SERVICE_ROLE_KEY
+```
+
+```yaml
+# .keyshelf/ci/production.yaml
+keys:
+  SUPABASE_URL: !ref { shelf: supabase } # same-name default
+  SUPABASE_KEY: !ref { shelf: supabase, key: SUPABASE_SERVICE_ROLE_KEY } # renamed target
+```
+
+Each `!ref` resolves through the **target** shelf's provider, so the consumers
+above are mapping environments and may omit `provider:` entirely. Rotating the
+Supabase service-role key is now one `keyshelf set SUPABASE_SERVICE_ROLE_KEY
+supabase/production --secret` — every consumer picks up the new value on its next
+`run`.
+
+### 5. Duplicate vs. reference
+
+Re-seeding the same value under every shelf is simpler to read in isolation but
+leaves you N copies to keep in sync — every rotation is N writes, and a missed
+one is a silent drift. A `!ref` is one canonical value with cheap, offline
+pointers. **Prefer references for genuinely shared secrets**; reach for a
+duplicate only when two shelves coincidentally hold the same string today but own
+it independently and may legitimately diverge later.
 </content>
 </invoke>
