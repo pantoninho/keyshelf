@@ -78,6 +78,23 @@ describe("keyshelf validate: static key references (no backend)", () => {
     expect(JSON.parse(stdout).valid).toBe(true);
   });
 
+  it("validates a !ref-only mapping environment that omits its own provider", async () => {
+    // The consuming environment is all !ref — no local secret, so it may omit
+    // provider: entirely (ADR-0007 / #208). The target secret is never fetched
+    // (store left empty), so this stays fully offline at validate time.
+    await shelf("shared", "keys:\n  DATABASE_PASSWORD: !required\n", {
+      staging: "provider: local\nkeys:\n  DATABASE_PASSWORD: !secret\n"
+    });
+    await shelf("web", "keys:\n  DATABASE_PASSWORD: !required\n", {
+      staging: "keys:\n  DATABASE_PASSWORD: !ref { shelf: shared }\n"
+    });
+    await seedFakeStore({});
+
+    const { code, stdout } = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
+    expect(code, stdout).toBe(0);
+    expect(JSON.parse(stdout).valid).toBe(true);
+  });
+
   it("REFERENCE_NOT_FOUND when the target shelf does not exist", async () => {
     await shelf("web", "keys:\n  DATABASE_PASSWORD: !required\n", {
       staging: "provider: local\nkeys:\n  DATABASE_PASSWORD: !ref { shelf: ghost }\n"
