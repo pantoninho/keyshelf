@@ -89,7 +89,7 @@ jobs:
           # and tries to git-fetch it. `./` forces local-folder resolution.
           # Each publish is idempotent (skip if the version is already on npm) so
           # a partial publish can be safely re-run without 403s.
-          SOPS_VERSION="$(node -p "require('./sops-version.json').sopsVersion")"
+          SOPS_VERSION="$(node -p "require('./packages/cli/sops-version.json').sopsVersion")"
           for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
             pkg="@keyshelf/sops-${key}"
             if npm view "${pkg}@${SOPS_VERSION}" version >/dev/null 2>&1; then
