@@ -139,6 +139,65 @@ describe("loadEnvironment", () => {
   });
 });
 
+describe("loadEnvironment: !ref key references", () => {
+  it("parses !ref { shelf } into a key reference with shelf only (key/stage default later)", async () => {
+    await scaffold();
+    await write(
+      ".keyshelf/web/staging.yaml",
+      `provider: local
+keys:
+  REGION: eu-west-1
+  DATABASE_PASSWORD: !ref { shelf: shared }
+`
+    );
+    const loaded = await loadEnvironment(root, "web", "staging");
+    expect(loaded.environment.keys.DATABASE_PASSWORD).toEqual({
+      kind: "ref",
+      reference: { shelf: "shared" }
+    });
+  });
+
+  it("captures explicit key and stage on a !ref", async () => {
+    await scaffold();
+    await write(
+      ".keyshelf/web/staging.yaml",
+      `provider: local
+keys:
+  DATABASE_PASSWORD: !ref { shelf: shared, key: SHARED_DB, stage: production }
+`
+    );
+    const loaded = await loadEnvironment(root, "web", "staging");
+    expect(loaded.environment.keys.DATABASE_PASSWORD).toEqual({
+      kind: "ref",
+      reference: { shelf: "shared", key: "SHARED_DB", stage: "production" }
+    });
+  });
+
+  it("throws MALFORMED_FILE for a !ref missing the required shelf field", async () => {
+    await scaffold();
+    await write(
+      ".keyshelf/web/staging.yaml",
+      `provider: local
+keys:
+  DATABASE_PASSWORD: !ref { key: SHARED_DB }
+`
+    );
+    await expectCode(loadEnvironment(root, "web", "staging"), "MALFORMED_FILE", {});
+  });
+
+  it("throws MALFORMED_FILE for a scalar !ref (it must be a mapping)", async () => {
+    await scaffold();
+    await write(
+      ".keyshelf/web/staging.yaml",
+      `provider: local
+keys:
+  DATABASE_PASSWORD: !ref shared
+`
+    );
+    await expectCode(loadEnvironment(root, "web", "staging"), "MALFORMED_FILE", {});
+  });
+});
+
 describe("listEnvironments", () => {
   it("throws NOT_INITIALIZED when no .keyshelf exists", async () => {
     await expectCode(listEnvironments(root), "NOT_INITIALIZED");

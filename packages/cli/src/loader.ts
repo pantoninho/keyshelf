@@ -7,6 +7,7 @@ import type {
   Config,
   Environment,
   EnvironmentValue,
+  KeyReference,
   LoadedEnvironment,
   Provider,
   Schema,
@@ -164,6 +165,38 @@ async function loadSchema(root: string, shelf: string): Promise<Schema> {
   return { keys };
 }
 
+/**
+ * Validate a `!ref` mapping payload into a {@link KeyReference}. `shelf` is
+ * required; `key` and `stage` are optional (their defaults are applied at
+ * resolution, not here). A scalar `!ref` or a missing/empty `shelf` is a
+ * `MALFORMED_FILE`.
+ */
+function parseKeyReference(file: string, key: string, raw: unknown): KeyReference {
+  if (!isPlainObject(raw)) {
+    throw malformed(file, `key '${key}' has an invalid !ref (expected a mapping with a 'shelf')`);
+  }
+
+  if (typeof raw.shelf !== "string" || raw.shelf.length === 0) {
+    throw malformed(file, `key '${key}' has a !ref missing the required 'shelf' field`);
+  }
+
+  const reference: KeyReference = { shelf: raw.shelf };
+  if (raw.key !== undefined) {
+    if (typeof raw.key !== "string" || raw.key.length === 0) {
+      throw malformed(file, `key '${key}' has a !ref with a non-string 'key'`);
+    }
+    reference.key = raw.key;
+  }
+  if (raw.stage !== undefined) {
+    if (typeof raw.stage !== "string" || raw.stage.length === 0) {
+      throw malformed(file, `key '${key}' has a !ref with a non-string 'stage'`);
+    }
+    reference.stage = raw.stage;
+  }
+
+  return reference;
+}
+
 async function loadEnvironmentFile(
   root: string,
   shelf: string,
@@ -188,6 +221,11 @@ async function loadEnvironmentFile(
         return { kind: "secret" };
       }
 
+      // A scalar `!ref` is malformed: a key reference is always a mapping.
+      if (node.tag === "!ref") {
+        throw malformed(file, `key '${key}' has a scalar !ref (expected a mapping with a 'shelf')`);
+      }
+
       return { kind: "config", value: node.value === null ? "" : String(node.value) };
     }
 
@@ -195,11 +233,18 @@ async function loadEnvironmentFile(
       return { kind: "secret", ref: (node as YAMLMap).toJSON() };
     }
 
+    if (isMap(node) && (node as YAMLMap).tag === "!ref") {
+      return { kind: "ref", reference: parseKeyReference(file, key, (node as YAMLMap).toJSON()) };
+    }
+
     if (node === null || node === undefined) {
       return { kind: "config", value: "" };
     }
 
-    throw malformed(file, `key '${key}' has an unsupported value (expected a string or !secret)`);
+    throw malformed(
+      file,
+      `key '${key}' has an unsupported value (expected a string, !secret, or !ref)`
+    );
   });
 
   return { shelf, name, provider: providerNode, keys };
