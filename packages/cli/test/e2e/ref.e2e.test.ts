@@ -150,6 +150,57 @@ describe("key references E2E (fake): declare once, consume elsewhere", () => {
     expect(run.code).not.toBe(0);
     expect(JSON.parse(run.stdout).error.code).toBe("REFERENCE_NOT_FOUND");
   });
+
+  it("validates and runs a !ref-only mapping environment with no provider", async () => {
+    // The consuming environment is a pure mapping: only a key reference, no local
+    // secret, no provider. It resolves through the target shelf's provider.
+    await writeShelf(cwd, "shared", "keys:\n  DATABASE_PASSWORD: !required\n", {
+      staging: "provider: local\nkeys:\n  DATABASE_PASSWORD: !secret\n"
+    });
+    await writeShelf(cwd, "web", "keys:\n  DATABASE_PASSWORD: !required\n", {
+      staging: "keys:\n  DATABASE_PASSWORD: !ref { shelf: shared }\n"
+    });
+
+    const set = await runKeyshelf(["set", "DATABASE_PASSWORD", "shared/staging", "--secret"], {
+      cwd,
+      input: "mapped-no-provider"
+    });
+    expect(set.code, set.stderr).toBe(0);
+
+    const validate = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
+    expect(validate.code, validate.stderr).toBe(0);
+
+    const run = await runKeyshelf(["run", "web/staging", "--", ...PRINT("DATABASE_PASSWORD")], {
+      cwd
+    });
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toBe("mapped-no-provider");
+  });
+
+  it("validates and runs a config-only environment with no provider", async () => {
+    // No local secret and no !ref — just plaintext config, so no provider needed.
+    await writeShelf(cwd, "web", "keys:\n  REGION: !required\n", {
+      staging: "keys:\n  REGION: eu-west-1\n"
+    });
+
+    const validate = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
+    expect(validate.code, validate.stderr).toBe(0);
+
+    const run = await runKeyshelf(["run", "web/staging", "--", ...PRINT("REGION")], { cwd });
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toBe("eu-west-1");
+  });
+
+  it("fails PROVIDER_NOT_FOUND when a local !secret is declared with no provider", async () => {
+    // A local secret has nowhere to resolve from without a provider.
+    await writeShelf(cwd, "web", "keys:\n  DATABASE_PASSWORD: !required\n", {
+      staging: "keys:\n  DATABASE_PASSWORD: !secret\n"
+    });
+
+    const validate = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
+    expect(validate.code).not.toBe(0);
+    expect(JSON.parse(validate.stdout).error.code).toBe("PROVIDER_NOT_FOUND");
+  });
 });
 
 /**
