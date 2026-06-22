@@ -58,8 +58,13 @@ export interface Environment {
   shelf: string;
   /** The stage (its filename without extension). */
   name: string;
-  /** The provider name this environment references in `config.yaml`. */
-  provider: string;
+  /**
+   * The provider name this environment references in `config.yaml`. Required iff
+   * the environment declares at least one local `!secret`; a config-only or
+   * `!ref`-only mapping environment holds no local secret and may omit it
+   * (ADR-0007).
+   */
+  provider?: string;
   keys: Record<string, EnvironmentValue>;
 }
 

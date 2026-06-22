@@ -223,9 +223,18 @@ async function loadEnvironmentFile(
     throw malformed(file, "expected a mapping at the top level");
   }
 
-  const providerNode = (top as YAMLMap).get("provider");
-  if (typeof providerNode !== "string" || providerNode.length === 0) {
-    throw malformed(file, "missing required 'provider' string");
+  // `provider:` is optional (ADR-0007): a config-only or `!ref`-only mapping
+  // environment may omit it. When present it must be a non-empty string; when
+  // absent it stays undefined and the conditional rule is enforced in validate.
+  const map = top as YAMLMap;
+  const hasProvider = map.has("provider");
+  const providerNode = map.get("provider");
+  let provider: string | undefined;
+  if (hasProvider) {
+    if (typeof providerNode !== "string" || providerNode.length === 0) {
+      throw malformed(file, "'provider' must be a non-empty string when present");
+    }
+    provider = providerNode;
   }
 
   const keys = readKeysMap<EnvironmentValue>(doc, file, (node, key) => {
@@ -260,7 +269,7 @@ async function loadEnvironmentFile(
     );
   });
 
-  return { shelf, name, provider: providerNode, keys };
+  return { shelf, name, provider, keys };
 }
 
 /**

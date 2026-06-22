@@ -126,9 +126,20 @@ describe("loadEnvironment", () => {
     await expectCode(loadEnvironment(root, "web", "staging"), "MALFORMED_FILE", {});
   });
 
-  it("throws MALFORMED_FILE for an environment missing the provider field", async () => {
+  it("loads an environment with no provider field (provider is undefined)", async () => {
+    // provider: is optional at load time; the conditional rule (required iff a
+    // local !secret) is enforced in validate, not the loader.
     await scaffold();
     await write(".keyshelf/web/staging.yaml", "keys:\n  REGION: eu\n");
+    const loaded = await loadEnvironment(root, "web", "staging");
+    expect(loaded.environment.provider).toBeUndefined();
+    expect(loaded.environment.keys.REGION).toEqual({ kind: "config", value: "eu" });
+  });
+
+  it("throws MALFORMED_FILE for a present-but-empty provider field", async () => {
+    // A provider key that is present but not a non-empty string is still malformed.
+    await scaffold();
+    await write(".keyshelf/web/staging.yaml", "provider:\nkeys:\n  REGION: eu\n");
     await expectCode(loadEnvironment(root, "web", "staging"), "MALFORMED_FILE", {});
   });
 
