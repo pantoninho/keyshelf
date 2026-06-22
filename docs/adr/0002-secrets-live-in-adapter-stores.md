@@ -9,7 +9,7 @@ adapter-defined, and resolves by convention by default (the key name locates the
 value) with an optional explicit reference for foreign/pre-existing secrets.
 
 - **sops adapter:** the store is a per-environment sibling encrypted file
-  (`{shelf}/{env}.secrets.yaml`); recipients are governed by the project's
+  (`{shelf}/{stage}.secrets.yaml`); recipients are governed by the project's
   native `.sops.yaml`, not by keyshelf.
 - **reference adapters (gcp, aws):** the store is the remote backend; the
   reference is a pointer (ARN / resource path).
@@ -24,7 +24,7 @@ The original design put encrypted/secret material inline in the environment file
 Separating the _reference_ (committed, readable manifest) from the _value_
 (in the store) keeps environment files clean, diffable, and free of sensitive
 material, and unifies the two adapter archetypes — inline-encrypted (sops) and
-remote (gcp) — behind one model: the env file always references, the store always
+remote (gcp) — behind one model: the environment file always references, the store always
 holds the value.
 
 Recipients are delegated to `.sops.yaml` rather than reinvented in keyshelf

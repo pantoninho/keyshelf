@@ -74,7 +74,7 @@ _Avoid_: credential, password
 **Store**:
 Where an adapter physically persists secret values, always outside the
 environment file. For the sops adapter, a sibling encrypted file
-(`{shelf}/{env}.secrets.yaml`); for a remote adapter (gcp), the backend itself.
+(`{shelf}/{stage}.secrets.yaml`); for a remote adapter (gcp), the backend itself.
 The environment file holds `!secret` references _into_ the store, never the values.
 _Avoid_: vault, backend, storage
 

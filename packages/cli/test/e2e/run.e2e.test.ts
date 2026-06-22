@@ -95,7 +95,7 @@ function printEnv(name: string): string[] {
   ];
 }
 
-describe("keyshelf run <shelf>/<env> -- <cmd>", () => {
+describe("keyshelf run <shelf>/<stage> -- <cmd>", () => {
   it("injects all resolved config keys as env vars with verbatim names", async () => {
     await scaffold();
     const { code, stdout } = await runWrapped([
@@ -242,7 +242,7 @@ describe("keyshelf run <shelf>/<env> -- <cmd>", () => {
 
   it("resolves a !secret through the provider adapter by convention and injects it", async () => {
     await scaffold();
-    // Namespace mirrors the registry convention keyshelf__{project}__{shelf}__{env}.
+    // Namespace mirrors the registry convention keyshelf__{project}__{shelf}__{stage}.
     await seedFakeStore({ keyshelf__myapp__web__staging__EXTRA_SECRET: "s3cr3t-value" });
     await write(
       ".keyshelf/web/staging.yaml",
@@ -320,7 +320,7 @@ describe("keyshelf run <shelf>/<env> -- <cmd>", () => {
     expect(JSON.parse(stdout).error.code).toBe("EXEC_FAILED");
   });
 
-  it("rejects a malformed <shelf>/<env> argument with MALFORMED_FILE", async () => {
+  it("rejects a malformed <shelf>/<stage> argument with MALFORMED_FILE", async () => {
     await scaffold();
     const { code, stdout } = await runKeyshelf(
       ["run", "webstaging", "--json", "--", "node", "-e", "0"],

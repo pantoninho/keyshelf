@@ -28,7 +28,7 @@ export interface Adapter {
    * Fetch a secret's plaintext value from the store.
    *
    * @param key  the environment key name. By convention it locates the value in
-   *   the store (the reference adapters compose it as `keyshelf__{project}__{shelf}__{env}__{key}`).
+   *   the store (the reference adapters compose it as `keyshelf__{project}__{shelf}__{stage}__{key}`).
    * @param ref  the optional explicit reference payload from a
    *   `!secret { ref: ... }`, which overrides the convention to resolve a
    *   differently-named or foreign stored value. `undefined` means

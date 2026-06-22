@@ -11,8 +11,8 @@ import { conventionName, firstLine, refName } from "./shared.js";
  * the metadata server — so Keyshelf owns no credentials of its own.
  *
  * **Store.** One secret per key in the configured `projectId`, named by the fixed
- * reference convention `keyshelf__{project}__{shelf}__{env}__{key}`
- * (docs/reference.md). The `keyshelf__{project}__{shelf}__{env}` prefix is the
+ * reference convention `keyshelf__{project}__{shelf}__{stage}__{key}`
+ * (docs/reference.md). The `keyshelf__{project}__{shelf}__{stage}` prefix is the
  * adapter's `namespace`, so the same key in two environments stays distinct in
  * the shared backend. `location` selects
  * the replication policy: absent or `global` ⇒ automatic replication; any other

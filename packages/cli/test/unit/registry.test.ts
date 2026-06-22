@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe("createAdapter", () => {
   it("builds a fake adapter that round-trips through a persisted store", async () => {
-    const ctx = { projectDir: dir, project: "myapp", shelf: "web", env: "staging" };
+    const ctx = { projectDir: dir, project: "myapp", shelf: "web", stage: "staging" };
     const a = createAdapter({ adapter: "fake" }, ctx);
     await a.write("DATABASE_PASSWORD", "sekret");
 
@@ -26,14 +26,14 @@ describe("createAdapter", () => {
     expect(await b.resolve("DATABASE_PASSWORD")).toBe("sekret");
   });
 
-  it("namespaces by project+env so the same key in two environments is distinct", async () => {
+  it("namespaces by project+stage so the same key in two environments is distinct", async () => {
     const staging = createAdapter(
       { adapter: "fake" },
-      { projectDir: dir, project: "myapp", shelf: "web", env: "staging" }
+      { projectDir: dir, project: "myapp", shelf: "web", stage: "staging" }
     );
     const prod = createAdapter(
       { adapter: "fake" },
-      { projectDir: dir, project: "myapp", shelf: "web", env: "prod" }
+      { projectDir: dir, project: "myapp", shelf: "web", stage: "prod" }
     );
     await staging.write("TOKEN", "staging-token");
     await prod.write("TOKEN", "prod-token");
@@ -46,7 +46,7 @@ describe("createAdapter", () => {
     try {
       createAdapter(
         { adapter: "no-such-adapter" },
-        { projectDir: dir, project: "myapp", shelf: "web", env: "staging" }
+        { projectDir: dir, project: "myapp", shelf: "web", stage: "staging" }
       );
     } catch (error) {
       thrown = error;

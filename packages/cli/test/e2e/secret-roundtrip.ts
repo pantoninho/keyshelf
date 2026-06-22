@@ -114,7 +114,7 @@ export function runSecretRoundtripSuite(harness: E2EHarness): void {
     });
 
     it("run surfaces SECRET_NOT_FOUND when a !secret reference has no stored value", async () => {
-      // Declare the env as referencing a secret that was never written.
+      // Declare the environment as referencing a secret that was never written.
       await writeEnv(
         cwd,
         `provider: ${harness.providerName}\nkeys:\n  REGION: eu-west-1\n  DATABASE_PASSWORD: !secret\n`

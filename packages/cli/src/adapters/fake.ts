@@ -75,8 +75,8 @@ export function fileStore(filePath: string): FakeStore {
  * implements the two-method contract against a {@link FakeStore}.
  *
  * Naming faithfully mirrors the reference-adapter convention
- * (`keyshelf__{project}__{shelf}__{env}__{key}`, docs/reference.md): the
- * `namespace` is the `keyshelf__{project}__{shelf}__{env}` prefix, so the same
+ * (`keyshelf__{project}__{shelf}__{stage}__{key}`, docs/reference.md): the
+ * `namespace` is the `keyshelf__{project}__{shelf}__{stage}` prefix, so the same
  * key in two environments stays
  * distinct in a shared store. A `!secret` resolves by convention (under the key's
  * composed name) unless an explicit `ref` string overrides it with a foreign

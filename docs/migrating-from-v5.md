@@ -11,17 +11,17 @@ and want to know how the old concepts map onto the new model.
 
 ## How the model changed
 
-| v5                                                        | v6                                                                                     |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `keyshelf.config.ts` / `keyshelf.yaml` (`defineConfig`)   | `.keyshelf/config.yaml` (project + providers) — no TypeScript, no code                 |
-| One config declaring every key                            | One **shelf** per schema: `.keyshelf/{shelf}/schema.yaml`                              |
-| `envs` list                                               | One file per environment: `.keyshelf/{shelf}/{env}.yaml`, addressed as `{shelf}/{env}` |
-| `config(...)` / `secret(...)` records                     | Keys declared in `schema.yaml`; plaintext-vs-`!secret` chosen per environment          |
-| `value` / `default`                                       | A schema default (a bare value in `schema.yaml`)                                       |
-| per-env `values`                                          | Per-environment overrides in `{env}.yaml`                                              |
-| Object-literal **namespaces** flattening to `/`-paths     | Flat keys matching `^[A-Z_][A-Z0-9_]*$` (UPPER_SNAKE)                                  |
-| `.env.keyshelf` (`ENV_VAR=key/path`)                      | Gone — keys are env-var names already (see [Keys](#keys))                              |
-| Providers: `age`, `aws-sm`, `gcp-sm`, `sops`, `plaintext` | Adapters: `gcp`, `sops` (plus the self-contained `fake` for examples/tests)            |
+| v5                                                        | v6                                                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `keyshelf.config.ts` / `keyshelf.yaml` (`defineConfig`)   | `.keyshelf/config.yaml` (project + providers) — no TypeScript, no code                     |
+| One config declaring every key                            | One **shelf** per schema: `.keyshelf/{shelf}/schema.yaml`                                  |
+| `envs` list                                               | One file per environment: `.keyshelf/{shelf}/{stage}.yaml`, addressed as `{shelf}/{stage}` |
+| `config(...)` / `secret(...)` records                     | Keys declared in `schema.yaml`; plaintext-vs-`!secret` chosen per environment              |
+| `value` / `default`                                       | A schema default (a bare value in `schema.yaml`)                                           |
+| per-env `values`                                          | Per-environment overrides in `{stage}.yaml`                                                |
+| Object-literal **namespaces** flattening to `/`-paths     | Flat keys matching `^[A-Z_][A-Z0-9_]*$` (UPPER_SNAKE)                                      |
+| `.env.keyshelf` (`ENV_VAR=key/path`)                      | Gone — keys are env-var names already (see [Keys](#keys))                                  |
+| Providers: `age`, `aws-sm`, `gcp-sm`, `sops`, `plaintext` | Adapters: `gcp`, `sops` (plus the self-contained `fake` for examples/tests)                |
 
 Identity in v6 is **filesystem-derived**: the shelf is its directory name, the
 environment is its filename, the schema is the shelf's `schema.yaml`. There are
@@ -82,7 +82,7 @@ arbitrary casing. v6 keys are flat and must be valid environment-variable
 identifiers: `^[A-Z_][A-Z0-9_]*$` (UPPER_SNAKE). Flatten any nested namespace by
 hand — `server/db/password` → `DB_PASSWORD`.
 
-Because keys are already env-var names, v6 has no separate mapping file. `keyshelf run {shelf}/{env} -- <cmd>` resolves the environment to a flat
+Because keys are already env-var names, v6 has no separate mapping file. `keyshelf run {shelf}/{stage} -- <cmd>` resolves the environment to a flat
 `string → string` map (schema defaults overlaid with environment values, every
 `!secret` resolved through the provider), overlays that onto the inherited
 process environment, and execs the command — so a key named `DB_PASSWORD` is
@@ -110,9 +110,9 @@ v6 is intentionally the smaller tool. These v5 features have no v6 equivalent:
 
 The gcp secret-naming convention gained a `shelf` component:
 `keyshelf__{project}__{env}__{key}` (v5) →
-`keyshelf__{project}__{shelf}__{env}__{key}` (v6). A v6 name never collides with
+`keyshelf__{project}__{shelf}__{stage}__{key}` (v6). A v6 name never collides with
 or auto-resolves a v5 one, so existing gcp (and sops) secrets must be re-seeded
-under the new names with `keyshelf set <KEY> <shelf>/<env> --secret` (value on
+under the new names with `keyshelf set <KEY> <shelf>/<stage> --secret` (value on
 stdin). There is no automated migrator.
 </content>
 </invoke>

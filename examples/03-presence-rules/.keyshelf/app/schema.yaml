@@ -1,12 +1,12 @@
 # A schema governs presence only. There are exactly three ways to declare a key:
 #
-#   KEY: value     -> config default; overridable, applies when an env omits it
+#   KEY: value     -> config default; overridable, applies when an environment omits it
 #   KEY: !required -> must be supplied by every environment
 #   KEY: !optional -> may be supplied; absence is fine, no default applied
 #
 # None of these decide plaintext-vs-secret — that is the environment's call.
-# LOG_LEVEL is defaulted (envs may omit it), API_BASE_URL is required (every env
-# must supply it), and SENTRY_DSN is optional (envs may supply it or leave it out).
+# LOG_LEVEL is defaulted (environments may omit it), API_BASE_URL is required (every
+# environment must supply it), and SENTRY_DSN is optional (environments may supply it or leave it out).
 keys:
   LOG_LEVEL: info
   API_BASE_URL: !required
