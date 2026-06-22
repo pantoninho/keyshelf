@@ -86,17 +86,7 @@ export default class Set extends BaseCommand {
     // raw (byte-exact), and an empty stdin is NO_INPUT.
     const value = await this.readValue(key);
 
-    const projectDir = process.cwd();
-    // Loads config + schema + environment, surfacing NOT_INITIALIZED /
-    // SHELF_NOT_FOUND / SCHEMA_NOT_FOUND / ENVIRONMENT_NOT_FOUND / MALFORMED_FILE.
-    const loaded = await loadEnvironment(projectDir, shelf, stage);
-
-    this.assertDeclared(loaded.schema.keys, key, shelf, stage);
-
-    // Edit the existing environment file in place, preserving every other key,
-    // the provider line, and comments.
-    const file = path.join(projectDir, ".keyshelf", shelf, `${stage}.yaml`);
-    const doc = parseDocument(await readFile(file, "utf8"));
+    const { loaded, projectDir, file, doc } = await this.loadForEdit(shelf, stage, key);
 
     if (flags.secret) {
       await this.writeSecret(loaded, projectDir, shelf, stage, key, value, doc);
@@ -144,13 +134,8 @@ export default class Set extends BaseCommand {
       reference.key = refKey;
     }
 
-    const projectDir = process.cwd();
-    // No provider/config beyond what loadEnvironment reads — no adapter is created.
-    const loaded = await loadEnvironment(projectDir, shelf, stage);
-    this.assertDeclared(loaded.schema.keys, key, shelf, stage);
-
-    const file = path.join(projectDir, ".keyshelf", shelf, `${stage}.yaml`);
-    const doc = parseDocument(await readFile(file, "utf8"));
+    // No provider/config beyond what loadForEdit reads — no adapter is created.
+    const { file, doc } = await this.loadForEdit(shelf, stage, key);
     setKeyReference(doc, key, reference);
     await writeFile(file, doc.toString(), "utf8");
 
@@ -165,6 +150,34 @@ export default class Set extends BaseCommand {
     }
 
     return result;
+  }
+
+  /**
+   * Prepare an in-place edit of `{shelf}/{stage}.yaml`: load config + schema +
+   * environment (surfacing NOT_INITIALIZED / SHELF_NOT_FOUND / SCHEMA_NOT_FOUND /
+   * ENVIRONMENT_NOT_FOUND / MALFORMED_FILE), assert the key is schema-declared
+   * (set never declares keys), and open the environment document for surgical
+   * mutation. Returns the loaded model plus the file path and parsed document so
+   * the caller can mutate and write it back, preserving every other key, the
+   * provider line, and comments.
+   */
+  private async loadForEdit(
+    shelf: string,
+    stage: string,
+    key: string
+  ): Promise<{
+    loaded: Awaited<ReturnType<typeof loadEnvironment>>;
+    projectDir: string;
+    file: string;
+    doc: ReturnType<typeof parseDocument>;
+  }> {
+    const projectDir = process.cwd();
+    const loaded = await loadEnvironment(projectDir, shelf, stage);
+    this.assertDeclared(loaded.schema.keys, key, shelf, stage);
+
+    const file = path.join(projectDir, ".keyshelf", shelf, `${stage}.yaml`);
+    const doc = parseDocument(await readFile(file, "utf8"));
+    return { loaded, projectDir, file, doc };
   }
 
   /** Reject a key not declared in the consuming shelf's schema — set never declares keys. */
