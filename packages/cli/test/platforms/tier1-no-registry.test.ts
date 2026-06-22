@@ -97,8 +97,12 @@ e2e("Tier 1: file:-installed bundled binary drives a real keyshelf run", () => {
       ),
       "utf8"
     );
-    // Install only the file: tarballs; never reach the public registry for these.
-    await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], {
+    // Install only the file: tarballs; never reach the public registry for
+    // these. `--omit=optional` keeps keyshelf's now-published `@keyshelf/sops-*`
+    // optionalDependencies out of the install, so each leg sees exactly the sops
+    // sources it sets up (the file: platform tarball and/or PATH) and nothing
+    // leaks in from the registry.
+    await execFileAsync("npm", ["install", "--no-audit", "--no-fund", "--omit=optional"], {
       cwd: dir,
       maxBuffer: 64 * 1024 * 1024
     });
