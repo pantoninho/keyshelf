@@ -1,13 +1,13 @@
 ---
 name: keyshelf
-description: Use when working in a repository that contains a `.keyshelf/` directory (a `.keyshelf/config.yaml`, a shelf's `schema.yaml`, or a `{shelf}/{env}.yaml` environment file), or when the user mentions keyshelf, `keyshelf init/set/run/validate`, a keyshelf project/shelf/schema/provider/adapter, or asks to add, set, inject, or validate a config value or secret in such a repo. Keyshelf is a CLI that manages config and secrets through YAML files plus pluggable adapters; the rules below are easy to misapply from intuition alone.
+description: Use when working in a repository that contains a `.keyshelf/` directory (a `.keyshelf/config.yaml`, a shelf's `schema.yaml`, or a `{shelf}/{stage}.yaml` environment file), or when the user mentions keyshelf, `keyshelf init/set/run/validate`, a keyshelf project/shelf/schema/provider/adapter, or asks to add, set, inject, or validate a config value or secret in such a repo. Keyshelf is a CLI that manages config and secrets through YAML files plus pluggable adapters; the rules below are easy to misapply from intuition alone.
 ---
 
 # Keyshelf
 
 Keyshelf manages config and secrets through a `.keyshelf/` directory of YAML files. A project-global `config.yaml` declares the project name and its providers; each **shelf** (a subdirectory) holds one `schema.yaml` (the closed contract of which keys may exist) and one YAML file per **environment** that implements it. The CLI merges schema defaults with environment values, resolves every `!secret` through its provider's adapter, and exposes the result as environment variables to a wrapped command.
 
-**Before doing anything in a keyshelf repo, read `.keyshelf/config.yaml`, the relevant shelf's `schema.yaml`, and the `{env}.yaml` you intend to touch.** Almost every mistake below comes from skipping that step and guessing — especially guessing whether a key is config or secret, or assuming a key exists that the schema does not declare.
+**Before doing anything in a keyshelf repo, read `.keyshelf/config.yaml`, the relevant shelf's `schema.yaml`, and the `{stage}.yaml` you intend to touch.** Almost every mistake below comes from skipping that step and guessing — especially guessing whether a key is config or secret, or assuming a key exists that the schema does not declare.
 
 ## Mental model
 
@@ -18,7 +18,7 @@ The vocabulary is load-bearing; use it precisely.
 - **Adapter** — the implementation that talks to one kind of backend: `sops`, `gcp`, or the in-memory `fake` (test-only). It defines _how_ secret values are stored and fetched.
 - **Shelf** — a named bundle of exactly one `schema.yaml` plus the environments that implement it, living in its own directory under `.keyshelf/`. A shelf's name **is its directory name**. Multiple schemas means multiple shelves.
 - **Schema** — the declared shape of a shelf's environments, in `{shelf}/schema.yaml`. It governs **presence only** (which keys may exist, and whether each is defaulted / `!required` / `!optional`). It is a **closed contract**: an environment may only use keys the schema declares. It does **not** decide plaintext vs. secret. Exactly one per shelf.
-- **Environment** — an implementation of its shelf's schema, in `{shelf}/{env}.yaml`. It names a `provider:` and supplies the actual `keys:`. It is _implicitly_ bound to its shelf's schema — there is no `schema:` field. Addressed everywhere as `{shelf}/{env}` (e.g. `web-service/staging`).
+- **Environment** — an implementation of its shelf's schema, in `{shelf}/{stage}.yaml`. It names a `provider:` and supplies the actual `keys:`. It is _implicitly_ bound to its shelf's schema — there is no `schema:` field. Addressed everywhere as `{shelf}/{stage}` (e.g. `web-service/staging`).
 - **Key** — a single named entry, declared in the schema and given a value in an environment. A key's _representation_ (plaintext config vs. `!secret`) is chosen **per environment**, not by the schema. The same key may be plaintext in one environment and a secret in another.
 
 Identity is **filesystem-derived**. The shelf is its directory name, the environment is its filename, the schema is the shelf's `schema.yaml`. There are no `name:` or `schema:` fields anywhere.
@@ -30,8 +30,8 @@ Identity is **filesystem-derived**. The shelf is its directory name, the environ
 ├── config.yaml                    # project + providers (required)
 └── {shelf}/                       # one shelf per schema (directory name == shelf name)
     ├── schema.yaml                # the shelf's closed validation contract
-    ├── {env}.yaml                 # an environment implementing that schema
-    └── {env}.secrets.yaml         # sops store for that env (encrypted; committed)
+    ├── {stage}.yaml                 # an environment implementing that schema
+    └── {stage}.secrets.yaml         # sops store for that environment (encrypted; committed)
 ```
 
 ### `config.yaml`
@@ -59,7 +59,7 @@ keys:
 
 Presence only: a default value, `!required`, or `!optional`. The schema never decides plaintext vs. secret, and environments may only use keys it declares.
 
-### `{shelf}/{env}.yaml`
+### `{shelf}/{stage}.yaml`
 
 ```text
 provider: gcp-staging           # references a provider declared in config.yaml
@@ -73,25 +73,25 @@ keys:
 - No `schema:` field — the environment is implicitly bound to its shelf's schema.
 - Each value's representation (plaintext vs. `!secret`) is chosen **here**, per environment.
 - Values are **strings** only.
-- Secret _values_ never appear in this file — only `!secret` references. The actual values live in the adapter's store (sops: `{shelf}/{env}.secrets.yaml`; gcp: the backend).
+- Secret _values_ never appear in this file — only `!secret` references. The actual values live in the adapter's store (sops: `{shelf}/{stage}.secrets.yaml`; gcp: the backend).
 - Key names must be valid env-var identifiers: `^[A-Z_][A-Z0-9_]*$`.
 
 ## Commands (when to use what)
 
-| Goal                                         | Command                                                    |
-| -------------------------------------------- | ---------------------------------------------------------- |
-| Scaffold a new project                       | `keyshelf init [--project <name>] [--shelf <name>]`        |
-| Write a plaintext config value into an env   | `keyshelf set <KEY> <shelf>/<env>`                         |
-| Write a secret value into an env             | `keyshelf set <KEY> <shelf>/<env> --secret`                |
-| Run a command with the env's values injected | `keyshelf run <shelf>/<env> [--set KEY=VALUE]... -- <cmd>` |
-| Validate one env (or the whole project)      | `keyshelf validate [<shelf>/<env>]`                        |
+| Goal                                                 | Command                                                      |
+| ---------------------------------------------------- | ------------------------------------------------------------ |
+| Scaffold a new project                               | `keyshelf init [--project <name>] [--shelf <name>]`          |
+| Write a plaintext config value into an environment   | `keyshelf set <KEY> <shelf>/<stage>`                         |
+| Write a secret value into an environment             | `keyshelf set <KEY> <shelf>/<stage> --secret`                |
+| Run a command with the environment's values injected | `keyshelf run <shelf>/<stage> [--set KEY=VALUE]... -- <cmd>` |
+| Validate one environment (or the whole project)      | `keyshelf validate [<shelf>/<stage>]`                        |
 
 Every command supports `--json` (output _and_ errors). `--help` on each command is the agent-facing discovery surface. Exit status is success/failure only; granularity lives in `error.code`.
 
 - **`init`** is non-interactive. The project defaults to the cwd name; it creates `config.yaml` with a default `local` sops provider and a starter shelf (`--shelf`, default `app`) holding an empty `schema.yaml`. It refuses to clobber an existing project without `--force`.
 - **`set`** reads the value from **stdin or an interactive prompt — never from argv** (so a secret never lands in your shell history or `ps` output). Pipe it: `printf '%s' "$PW" | keyshelf set DATABASE_PASSWORD web/staging --secret`. Empty stdin is a `NO_INPUT` error. The key **must already be declared in the shelf's schema**; `set` never mutates the schema.
 - **`run`** resolves config + secrets, overlays them on the inherited environment, and execs everything after `--` verbatim. It is **fail-fast**: it loads, validates, and resolves _before_ exec, so it never launches a half-populated environment. The wrapped command's exit code becomes keyshelf's exit status.
-- **`validate`** runs the same closed-contract and resolution checks as `run` but executes nothing. With no argument it validates the **whole project** and exits non-zero if any environment fails; with `<shelf>/<env>` it validates that one. "Valid means would run" — every `!secret` is actually resolved through its provider to confirm it exists.
+- **`validate`** runs the same closed-contract and resolution checks as `run` but executes nothing. With no argument it validates the **whole project** and exits non-zero if any environment fails; with `<shelf>/<stage>` it validates that one. "Valid means would run" — every `!secret` is actually resolved through its provider to confirm it exists.
 
 ## How resolution works
 
@@ -113,7 +113,7 @@ Precedence in the child process, **highest to lowest**:
 
 Whether a key is plaintext or secret is decided **in the environment file, per environment**, not in the schema. The schema only says a key may exist. Consequences:
 
-- `keyshelf set <KEY> <shelf>/<env>` writes **plaintext** into the environment file. `keyshelf set <KEY> <shelf>/<env> --secret` hands the value to the provider's adapter and records only a `!secret` reference. Pick the flag deliberately — a credential written without `--secret` lands in the committed plaintext environment file.
+- `keyshelf set <KEY> <shelf>/<stage>` writes **plaintext** into the environment file. `keyshelf set <KEY> <shelf>/<stage> --secret` hands the value to the provider's adapter and records only a `!secret` reference. Pick the flag deliberately — a credential written without `--secret` lands in the committed plaintext environment file.
 - A non-sensitive value (`LOG_LEVEL`, `REGION`) should be plaintext config, not a secret. Reserve `--secret` for actual secrets.
 - The same key can legitimately be `!secret` in `production` and plaintext in `dev`. Don't "fix" that to match.
 
@@ -123,19 +123,19 @@ An environment may only use keys the schema declares. Adding a key to an environ
 
 Conversely, a `!required` key with no value in some environment is a `MISSING_REQUIRED` failure at `validate`/`run` time.
 
-### 3. Project/env namespacing of remote secrets
+### 3. Project/shelf/stage namespacing of remote secrets
 
 Reference adapters (e.g. `gcp`) name remote secrets by the **fixed** convention:
 
 ```text
-keyshelf__{project}__{shelf}__{env}__{key}
+keyshelf__{project}__{shelf}__{stage}__{key}
 ```
 
 (verified in `concierge/src/commands/set.ts` and `concierge/src/adapters/gcp.ts`). So `web/staging`'s `DATABASE_PASSWORD` in project `myapp` is stored as `keyshelf__myapp__web__staging__DATABASE_PASSWORD`. There is no configurable template — the only override is a per-key explicit reference (`!secret { ref: ... }`, e.g. to point at a foreign or pre-existing secret). Implications:
 
-- The same key in two environments stays distinct in a shared backend (the `keyshelf__{project}__{shelf}__{env}` prefix is the namespace).
+- The same key in two environments stays distinct in a shared backend (the `keyshelf__{project}__{shelf}__{stage}` prefix is the namespace).
 - Renaming the project, shelf, environment, or key changes the remote secret's name — the old value is **not** automatically migrated.
-- For sops, the store is the per-environment sibling file `{shelf}/{env}.secrets.yaml`; convention resolution there is simply by key name within that file.
+- For sops, the store is the per-environment sibling file `{shelf}/{stage}.secrets.yaml`; convention resolution there is simply by key name within that file.
 
 ### 4. `set` won't touch the schema, and reads only from stdin
 
@@ -147,8 +147,8 @@ If a managed key already exists in your shell environment, keyshelf's resolved v
 
 ## Adapters
 
-- **`sops`** — local, file-based encrypted secrets. The store is a committed, encrypted sibling file `{shelf}/{env}.secrets.yaml`. Keyshelf owns no crypto of its own: it shells out to a `sops` binary (bundled per-platform, with any `sops` on `PATH` as a fallback). Recipients are governed entirely by the project's native `.sops.yaml`, which keyshelf never writes or mutates. Hermetic — works in CI with no external service.
-- **`gcp`** — Google Cloud Secret Manager. One secret per key, named by the `keyshelf__{project}__{shelf}__{env}__{key}` convention in the provider's `projectId`. Authentication is Application Default Credentials (the SDK discovers them; keyshelf holds no credentials). `location` selects replication: absent/`global` ⇒ automatic; any other value ⇒ user-managed, pinned to that region.
+- **`sops`** — local, file-based encrypted secrets. The store is a committed, encrypted sibling file `{shelf}/{stage}.secrets.yaml`. Keyshelf owns no crypto of its own: it shells out to a `sops` binary (bundled per-platform, with any `sops` on `PATH` as a fallback). Recipients are governed entirely by the project's native `.sops.yaml`, which keyshelf never writes or mutates. Hermetic — works in CI with no external service.
+- **`gcp`** — Google Cloud Secret Manager. One secret per key, named by the `keyshelf__{project}__{shelf}__{stage}__{key}` convention in the provider's `projectId`. Authentication is Application Default Credentials (the SDK discovers them; keyshelf holds no credentials). `location` selects replication: absent/`global` ⇒ automatic; any other value ⇒ user-managed, pinned to that region.
 - **`fake`** — an in-memory adapter for tests only. Don't reach for it in a real project.
 
 A missing backend prerequisite (e.g. the `sops` binary) surfaces as `ADAPTER_UNAVAILABLE`; a credential/decryption failure as `PROVIDER_AUTH`; a referenced secret absent from the store as `SECRET_NOT_FOUND`.
@@ -171,7 +171,7 @@ A missing backend prerequisite (e.g. the `sops` binary) surfaces as `ADAPTER_UNA
 
 ### Change a config default
 
-Edit `schema.yaml` (to change the default for all environments) or the specific `{env}.yaml` (to override it for one). `set` writes per-environment values; it does not touch the schema.
+Edit `schema.yaml` (to change the default for all environments) or the specific `{stage}.yaml` (to override it for one). `set` writes per-environment values; it does not touch the schema.
 
 ### Set a plaintext value for one environment
 
@@ -195,6 +195,6 @@ keyshelf validate web/staging  # a single environment
 
 ## When in doubt
 
-- Read `.keyshelf/config.yaml`, the shelf's `schema.yaml`, and the `{env}.yaml` first.
-- Run `keyshelf validate <shelf>/<env>` to see what keyshelf thinks is wrong before guessing.
+- Read `.keyshelf/config.yaml`, the shelf's `schema.yaml`, and the `{stage}.yaml` first.
+- Run `keyshelf validate <shelf>/<stage>` to see what keyshelf thinks is wrong before guessing.
 - `--json` on any command gives structured output and a stable `error.code`; `--help` documents each command's exact surface.

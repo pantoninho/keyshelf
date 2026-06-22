@@ -11,14 +11,14 @@ keyshelf v5? See [Migrating from v5](./migrating-from-v5.md).
 ├── config.yaml                     # project + providers (required)
 └── {shelf}/                        # one shelf per schema
     ├── schema.yaml                 # the shelf's closed validation contract
-    ├── {env}.yaml                  # an environment implementing the shelf's schema
-    └── {env}.secrets.yaml          # sops store for that environment (encrypted; committed)
+    ├── {stage}.yaml                # an environment implementing the shelf's schema
+    └── {stage}.secrets.yaml        # sops store for that environment (encrypted; committed)
 ```
 
 Identity is **filesystem-derived**: the shelf is its directory name, the
-environment is its filename, the schema is the shelf's `schema.yaml`. No `name:`
-or `schema:` fields anywhere. An environment is addressed as `{shelf}/{env}`
-(e.g. `web-service/staging`).
+environment is its filename (the stage), the schema is the shelf's `schema.yaml`.
+No `name:` or `schema:` fields anywhere. An environment is addressed as
+`{shelf}/{stage}` (e.g. `web-service/staging`).
 
 ## config.yaml
 
@@ -27,7 +27,7 @@ project: myapp # required; namespaces secrets in shared backends
 providers:
   local:
     adapter: sops # only required field for sops
-    # store: "{shelf}/{env}.secrets.yaml"   # optional layout override (default shown)
+    # store: "{shelf}/{stage}.secrets.yaml"   # optional layout override (default shown)
   gcp-staging:
     adapter: gcp
     projectId: my-gcp-proj-stg # required; adapter fields never reuse `project`
@@ -38,7 +38,7 @@ providers:
 - A provider entry is a named map with an `adapter:` discriminator plus
   adapter-specific fields. Providers are project-global.
 - Reference adapters (e.g. `gcp`) name remote secrets by the **fixed** convention
-  `keyshelf__{project}__{shelf}__{env}__{key}`. No configurable template; the only override is
+  `keyshelf__{project}__{shelf}__{stage}__{key}`. No configurable template; the only override is
   a per-key explicit reference. A missing required adapter field (e.g. `gcp`'s
   `projectId`) is a `MALFORMED_FILE`.
 
@@ -53,14 +53,14 @@ keys:
   FEATURE_X: !optional # may be supplied; absence is OK
 
 
-  DATABASE_PASSWORD: !required # presence only — secret-ness is the env's call
+  DATABASE_PASSWORD: !required # presence only — secret-ness is the environment's call
 
 ```
 
 Presence only — `default value` / `!required` / `!optional`. Never decides
 plaintext vs secret. Closed contract: environments may only use declared keys.
 
-## {shelf}/{env}.yaml
+## {shelf}/{stage}.yaml
 
 ```yaml
 provider: gcp-staging # references a provider in config.yaml
@@ -79,21 +79,21 @@ keys:
   another.
 - Values are **strings** only.
 - Secret _values_ never appear here — only `!secret` references. Values live in
-  the adapter's store (sops: `{shelf}/{env}.secrets.yaml`; gcp: the backend).
+  the adapter's store (sops: `{shelf}/{stage}.secrets.yaml`; gcp: the backend).
 - `!secret` payload shape is adapter-defined; bare = convention, optional explicit
   `{ ref: ... }` overrides.
 
 ## CLI surface (MVP)
 
-Built on **oclif**. The qualified environment `{shelf}/{env}` is a positional
+Built on **oclif**. The qualified environment `{shelf}/{stage}` is a positional
 argument.
 
 | Command                                             | Purpose                                                                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `keyshelf init [--project <name>] [--shelf <name>]` | Scaffold `.keyshelf/` (non-interactive; project defaults to cwd name; creates `config.yaml` with a default `local` sops provider and a starter shelf — `--shelf`, default `app` — with an empty `schema.yaml`). Refuses to clobber without `--force`. |
-| `keyshelf set <KEY> <shelf>/<env> [--secret]`       | Write a value. Read from stdin/prompt, never argv. `--secret` → store + write a `!secret` reference; plaintext → env file. Key must already be in the shelf's schema; never mutates the schema.                                                       |
-| `keyshelf run <shelf>/<env> -- <cmd>`               | Resolve config + secrets into env vars, overlay the inherited environment, exec `<cmd>`. Fail-fast: aborts before exec if anything is unresolvable.                                                                                                   |
-| `keyshelf validate [<shelf>/<env>]`                 | Run the same closed-contract + resolution checks as `run`, execute nothing, emit structured results. Validates the whole project when the argument is omitted.                                                                                        |
+| `keyshelf set <KEY> <shelf>/<stage> [--secret]`     | Write a value. Read from stdin/prompt, never argv. `--secret` → store + write a `!secret` reference; plaintext → environment file. Key must already be in the shelf's schema; never mutates the schema.                                               |
+| `keyshelf run <shelf>/<stage> -- <cmd>`             | Resolve config + secrets into env vars, overlay the inherited environment, exec `<cmd>`. Fail-fast: aborts before exec if anything is unresolvable.                                                                                                   |
+| `keyshelf validate [<shelf>/<stage>]`               | Run the same closed-contract + resolution checks as `run`, execute nothing, emit structured results. Validates the whole project when the argument is omitted.                                                                                        |
 
 Conventions:
 
@@ -125,8 +125,8 @@ Closed code set (additive growth OK; renames are breaking):
 | `SHELF_NOT_FOUND`       | Addressed shelf directory does not exist                               |
 | `SCHEMA_NOT_FOUND`      | Shelf has no `schema.yaml`                                             |
 | `ENVIRONMENT_NOT_FOUND` | Named environment file missing in the shelf                            |
-| `PROVIDER_NOT_FOUND`    | Env references an undefined provider                                   |
-| `UNKNOWN_KEY`           | Env key not declared in the shelf's schema                             |
+| `PROVIDER_NOT_FOUND`    | Environment references an undefined provider                           |
+| `UNKNOWN_KEY`           | Environment key not declared in the shelf's schema                     |
 | `MISSING_REQUIRED`      | A `!required` key is absent                                            |
 | `INVALID_KEY_NAME`      | Key is not a valid env-var identifier                                  |
 | `ADAPTER_UNAVAILABLE`   | Backend prerequisite missing (e.g. sops not found)                     |

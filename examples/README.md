@@ -3,7 +3,7 @@
 Runnable v6 example projects. Each subdirectory is a complete, self-contained
 Keyshelf project: a `.keyshelf/` with a `config.yaml` (project + providers), one
 or more shelves (each a directory holding a `schema.yaml`), and per-environment
-YAML files (`{env}.yaml`). They demonstrate the v6 model — filesystem-derived
+YAML files (`{stage}.yaml`). They demonstrate the v6 model — filesystem-derived
 identity, a closed schema contract, and secrets resolved through a provider.
 
 Every example uses the self-contained `fake` adapter so nothing here needs cloud
@@ -17,7 +17,7 @@ or `gcp` instead, leaving the schema and environment files unchanged.
 | [`02-multi-environment/`](./02-multi-environment) | One shelf, three environments (`dev`, `staging`, `production`) implementing the same schema, each overriding what it needs.                                           |
 | [`03-presence-rules/`](./03-presence-rules)       | The three schema presence rules side by side: a config default, `!required`, and `!optional`.                                                                         |
 | [`04-secret-provider/`](./04-secret-provider)     | A required key satisfied with a `!secret` resolved through a provider, alongside plaintext config and an explicit `!secret { ref: ... }` for a shared/foreign secret. |
-| [`05-multi-shelf/`](./05-multi-shelf)             | One project with two shelves (`web-service`, `worker`), each with its own schema, sharing a project-global provider; addressed as `{shelf}/{env}`.                    |
+| [`05-multi-shelf/`](./05-multi-shelf)             | One project with two shelves (`web-service`, `worker`), each with its own schema, sharing a project-global provider; addressed as `{shelf}/{stage}`.                  |
 
 ## File layout
 
@@ -27,13 +27,13 @@ NN-example/
     ├── config.yaml          # project + providers (required)
     ├── {shelf}/             # one shelf per schema
     │   ├── schema.yaml      # the shelf's closed validation contract
-    │   └── {env}.yaml       # an environment implementing the schema
+    │   └── {stage}.yaml       # an environment implementing the schema
     └── .fake-store.json     # the fake adapter's secret store (stands in for a backend)
 ```
 
 Identity is filesystem-derived: the shelf is its directory name, the environment
 is its filename, the schema is the shelf's `schema.yaml`. There are no `name:` or
-`schema:` fields. An environment is addressed as `{shelf}/{env}` (e.g.
+`schema:` fields. An environment is addressed as `{shelf}/{stage}` (e.g.
 `web/staging`).
 
 ## Trying them out

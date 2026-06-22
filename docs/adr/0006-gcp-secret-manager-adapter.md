@@ -20,8 +20,8 @@ Concrete choices:
   the lazy-load complexity.
 
 - **Naming: one secret per key, by the fixed reference convention.** A key maps to
-  a Secret Manager _secret_ whose id is `keyshelf__{project}__{shelf}__{env}__{key}`,
-  in the provider's `projectId`. The `keyshelf__{project}__{shelf}__{env}` prefix
+  a Secret Manager _secret_ whose id is `keyshelf__{project}__{shelf}__{stage}__{key}`,
+  in the provider's `projectId`. The `keyshelf__{project}__{shelf}__{stage}` prefix
   (the adapter's _namespace_) keeps the same key distinct across environments and
   shelves in a shared backend. `write` returns that id, which is exactly what `set`
   resolves by — so a convention write records a _bare_ `!secret`. An explicit
@@ -32,7 +32,7 @@ Concrete choices:
   The `keyshelf__`-prefixed, `__`-separated form echoes keyshelf v5's styling
   (v5 was `keyshelf__{project}__{env}__{key}`, no shelf) on the v6 component
   structure. The double-underscore separator is more parse-robust than a single
-  `-` when project/shelf/env names themselves contain hyphens. GCP secret ids
+  `-` when project/shelf/stage names themselves contain hyphens. GCP secret ids
   allow `[a-zA-Z0-9_-]`, so the underscores are valid, and v6 keys are single
   tokens matching `^[A-Z_][A-Z0-9_]*$` (never `/`-paths), so the composed id is
   unambiguous. This is intentionally **not byte-compatible** with secrets v5
@@ -69,7 +69,7 @@ trades a slightly larger install for simpler, branch-free code; the asymmetry wi
 the optional `sops` packages is deliberate and rooted in sops being a native
 per-platform binary, which the SDK is not.
 
-One-secret-per-key with the fixed `keyshelf__{project}__{shelf}__{env}__{key}` convention is the
+One-secret-per-key with the fixed `keyshelf__{project}__{shelf}__{stage}__{key}` convention is the
 same model `fake` already implements and `set` already resolves by, so the gcp
 adapter slots into the existing reference-adapter behaviour with no new wiring in
 callers. Carrying values as JSON strings reuses the proven sops trick and is the

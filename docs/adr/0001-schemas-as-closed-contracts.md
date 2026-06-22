@@ -4,8 +4,8 @@
 
 Schemas and environments are organized into **shelves**: each shelf is a directory
 under `.keyshelf/` holding exactly one `schema.yaml` and the environments
-(`{env}.yaml`) that implement it. Multiple schemas in a project means multiple
-shelves. An environment is addressed as `{shelf}/{env}` and is **implicitly bound**
+(`{stage}.yaml`) that implement it. Multiple schemas in a project means multiple
+shelves. An environment is addressed as `{shelf}/{stage}` and is **implicitly bound**
 to its shelf's schema — there is no schema-reference field.
 
 A schema is a **closed contract**: an environment may only use keys the schema
