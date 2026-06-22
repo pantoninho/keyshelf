@@ -6,7 +6,7 @@ import { listEnvironments, loadEnvironment } from "../loader.js";
 import type { LoadedEnvironment } from "../model.js";
 import { resolveEnvironment } from "../resolve.js";
 import { parseTarget } from "../target.js";
-import { validateEnvironment } from "../validate.js";
+import { validateEnvironment, validateReferences } from "../validate.js";
 
 /** The structured outcome of validating one environment in whole-project mode. */
 interface EnvironmentResult {
@@ -27,16 +27,30 @@ interface ProjectResult {
 }
 
 /**
- * Fully verify one loaded environment: structural validation, then secret
- * *resolvability* — "valid means would run" (docs/reference.md "Testing"). Every
- * declared `!secret` is resolved through the provider's adapter; an unresolvable
- * secret (e.g. `SECRET_NOT_FOUND`) makes the environment invalid. Resolution is
- * the only step here that touches a backend; it never executes anything.
+ * Fully verify one loaded environment, in three escalating stages:
+ *
+ * 1. **Structural** — the closed-contract + presence checks ({@link
+ *    validateEnvironment}), pure, no I/O.
+ * 2. **Reference** — static, offline validation of every `!ref` ({@link
+ *    validateReferences}): the target shelf/stage/key exist, are supplied, and
+ *    land one hop on config or secret. Reaches the filesystem to load target
+ *    schemas/environments, but touches **no backend** (ADR-0007, issue #203), so
+ *    a dangling or chained reference fails before any provider is built.
+ * 3. **Resolvability** — every declared `!secret` is resolved through its
+ *    provider's adapter ("valid means would run", docs/reference.md "Testing");
+ *    an unresolvable secret makes the environment invalid. This is the only stage
+ *    that touches a backend; nothing is ever executed.
  */
 async function verify(projectDir: string, loaded: LoadedEnvironment): Promise<void> {
   validateEnvironment(loaded);
 
-  await resolveEnvironment(loaded, resolveDepsFor(projectDir));
+  await validateReferences(loaded, {
+    loadReference: (shelf, stage) => loadEnvironment(projectDir, shelf, stage)
+  });
+
+  // References were just proven sound offline; resolve only confirms LOCAL
+  // secret resolvability here, never following a !ref into a backend.
+  await resolveEnvironment(loaded, resolveDepsFor(projectDir), { references: "static" });
 }
 
 /** Verify one environment, returning the structured error if any. */

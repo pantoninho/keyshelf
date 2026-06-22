@@ -315,6 +315,31 @@ describe("resolveEnvironment (key references)", () => {
     expect(thrown).toBeInstanceOf(KeyshelfError);
     expect((thrown as KeyshelfError).code).toBe("REFERENCE_NOT_FOUND");
   });
+
+  it("in static reference mode (validate) never follows a !ref into a backend", async () => {
+    // Deps that would BLOW UP if the !ref were followed: no target loadable, no
+    // adapter for the shelf. Static mode must not touch either — issue #203.
+    const explodingDeps: ResolveDeps = {
+      adapterFor: () => {
+        throw new Error("adapterFor must not be called for a !ref in static mode");
+      },
+      loadEnvironment: async () => {
+        throw new Error("loadEnvironment must not be called for a !ref in static mode");
+      }
+    };
+
+    const map = await resolveEnvironment(
+      env({
+        REGION: { kind: "config", value: "eu" },
+        DATABASE_PASSWORD: { kind: "ref", reference: { shelf: "shared" } }
+      }),
+      explodingDeps,
+      { references: "static" }
+    );
+    // The ref contributes a placeholder; config is still merged normally.
+    expect(map.REGION).toBe("eu");
+    expect(map.DATABASE_PASSWORD).toBe("");
+  });
 });
 
 describe("parseSet", () => {
