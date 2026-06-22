@@ -9,10 +9,16 @@ const KEY_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
  * rules. Pure logic, no I/O — the loader has already turned files into the model.
  *
  * Checks, in order:
- * 1. The referenced provider exists in `config.providers`  → `PROVIDER_NOT_FOUND`
+ * 1. If a local `!secret` is declared, the referenced provider is present and
+ *    exists in `config.providers`                           → `PROVIDER_NOT_FOUND`
  * 2. Every key name is a valid env-var identifier          → `INVALID_KEY_NAME`
  * 3. Every environment key is declared in the schema        → `UNKNOWN_KEY`
  * 4. Every `!required` schema key is supplied               → `MISSING_REQUIRED`
+ *
+ * `provider:` is required **iff** the environment declares at least one local
+ * `!secret` (ADR-0007). A config-only or `!ref`-only mapping environment holds no
+ * local secret, so an absent provider is fine — each `!ref` resolves through its
+ * target's provider, never a local one.
  *
  * Does **not** resolve `!secret` values — a `!secret` entry is structurally fine
  * here. Throws the first {@link KeyshelfError} it finds, carrying the relevant
@@ -23,7 +29,25 @@ export function validateEnvironment(loaded: LoadedEnvironment): void {
   const { shelf, name } = environment;
   const where = { shelf, environment: `${shelf}/${name}` };
 
-  if (!Object.prototype.hasOwnProperty.call(config.providers, environment.provider)) {
+  const hasLocalSecret = Object.values(environment.keys).some((value) => value.kind === "secret");
+  if (hasLocalSecret) {
+    if (
+      environment.provider === undefined ||
+      !Object.prototype.hasOwnProperty.call(config.providers, environment.provider)
+    ) {
+      throw new KeyshelfError(
+        "PROVIDER_NOT_FOUND",
+        `Environment '${shelf}/${name}' declares a local !secret but references ` +
+          `${environment.provider === undefined ? "no provider" : `undefined provider '${environment.provider}'`}.`,
+        { ...where, provider: environment.provider }
+      );
+    }
+  } else if (
+    environment.provider !== undefined &&
+    !Object.prototype.hasOwnProperty.call(config.providers, environment.provider)
+  ) {
+    // No local secret, but an explicit provider name was given that doesn't exist:
+    // still an error — a named provider must resolve.
     throw new KeyshelfError(
       "PROVIDER_NOT_FOUND",
       `Environment '${shelf}/${name}' references undefined provider '${environment.provider}'.`,

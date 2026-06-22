@@ -63,7 +63,7 @@ plaintext vs secret. Closed contract: environments may only use declared keys.
 ## {shelf}/{stage}.yaml
 
 ```yaml
-provider: gcp-staging # references a provider in config.yaml
+provider: gcp-staging # references a provider in config.yaml; required iff a local !secret
 keys:
   LOG_LEVEL: debug # plaintext config (overrides schema default)
   REGION: eu-west-1 # required, supplied plaintext
@@ -74,6 +74,13 @@ keys:
 ```
 
 - No `schema:` field — the environment is implicitly bound to its shelf's schema.
+- `provider:` is **required if and only if** the environment declares at least one
+  local `!secret`. An environment whose keys are all plaintext config and/or `!ref`
+  key references holds no local secret, so it may omit `provider:` entirely — a
+  **mapping environment** (each `!ref` resolves through its _target's_ provider, so a
+  local provider would never be used). Declaring a local `!secret` with no
+  `provider:` is a `PROVIDER_NOT_FOUND`. Existing environments that declare a
+  provider remain valid — this is a relaxation, not a change.
 - Each value's **representation** (plaintext vs `!secret`) is chosen here, per
   environment. The same key may be plaintext in one environment and `!secret` in
   another.

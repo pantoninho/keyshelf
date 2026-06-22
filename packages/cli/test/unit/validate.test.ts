@@ -107,4 +107,46 @@ describe("validateEnvironment", () => {
     const e = env({ provider: "nope" });
     expectCode(() => validateEnvironment(loaded(e)), "PROVIDER_NOT_FOUND", { provider: "nope" });
   });
+
+  it("still requires a provider when a local !secret is declared", () => {
+    // A local !secret with no provider has nowhere to resolve from.
+    const e = env({
+      provider: undefined,
+      keys: {
+        REGION: { kind: "config", value: "eu" },
+        DATABASE_PASSWORD: { kind: "secret" }
+      }
+    });
+    expectCode(() => validateEnvironment(loaded(e)), "PROVIDER_NOT_FOUND");
+  });
+
+  it("allows a config-only environment to omit the provider", () => {
+    // No local !secret, so no provider is needed (mapping/config-only environment).
+    const e = env({
+      provider: undefined,
+      keys: {
+        REGION: { kind: "config", value: "eu" },
+        DATABASE_PASSWORD: { kind: "config", value: "plain" }
+      }
+    });
+    expect(() => validateEnvironment(loaded(e))).not.toThrow();
+  });
+
+  it("allows a !ref-only mapping environment to omit the provider", () => {
+    // Every key is config and/or a key reference; each !ref resolves through its
+    // target's provider, so a local provider would never be used.
+    const e = env({
+      provider: undefined,
+      keys: {
+        REGION: { kind: "config", value: "eu" },
+        DATABASE_PASSWORD: { kind: "ref", reference: { shelf: "shared" } }
+      }
+    });
+    expect(() => validateEnvironment(loaded(e))).not.toThrow();
+  });
+
+  it("still validates an undefined provider name when a local !secret is declared", () => {
+    const e = env({ provider: "nope" });
+    expectCode(() => validateEnvironment(loaded(e)), "PROVIDER_NOT_FOUND", { provider: "nope" });
+  });
 });
