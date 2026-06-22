@@ -100,9 +100,36 @@ async function resolveReference(
     });
   }
 
-  const targetShelf = reference.shelf;
   const targetKey = reference.key ?? consumingKey;
   const targetStage = reference.stage ?? currentStage;
+  const { target, value } = await loadReferenceTarget(
+    consumingKey,
+    reference.shelf,
+    targetKey,
+    targetStage,
+    deps
+  );
+
+  // A secret target resolves through the TARGET's own provider; config is direct.
+  if (value.kind === "secret") {
+    return resolveSecret(deps.adapterFor(target), targetKey, value.ref);
+  }
+  return value.value ?? "";
+}
+
+/**
+ * Load the target `{shelf}/{stage}` and return the non-`!ref` {@link
+ * EnvironmentValue} the referenced key supplies. A missing target shelf/stage/key
+ * is `REFERENCE_NOT_FOUND`; landing on another `!ref` is `INVALID_REFERENCE` (one
+ * hop only — resolution never recurses).
+ */
+async function loadReferenceTarget(
+  consumingKey: string,
+  targetShelf: string,
+  targetKey: string,
+  targetStage: string,
+  deps: ResolveDeps
+): Promise<{ target: LoadedEnvironment; value: EnvironmentValue }> {
   const targetId = `${targetShelf}/${targetStage}`;
   const where = { key: consumingKey, target: `${targetId}#${targetKey}` };
 
@@ -122,8 +149,8 @@ async function resolveReference(
     throw error;
   }
 
-  const targetValue = targetEnvironmentValue(target, targetKey);
-  if (targetValue === undefined) {
+  const value = targetEnvironmentValue(target, targetKey);
+  if (value === undefined) {
     throw new KeyshelfError(
       "REFERENCE_NOT_FOUND",
       `Key '${consumingKey}' references '${where.target}', but that key supplies no value.`,
@@ -131,8 +158,7 @@ async function resolveReference(
     );
   }
 
-  // One hop only: a reference must land on a config or secret, never another !ref.
-  if (targetValue.kind === "ref") {
+  if (value.kind === "ref") {
     throw new KeyshelfError(
       "INVALID_REFERENCE",
       `Key '${consumingKey}' references '${where.target}', which is itself a !ref (one hop only).`,
@@ -140,11 +166,7 @@ async function resolveReference(
     );
   }
 
-  if (targetValue.kind === "secret") {
-    return resolveSecret(deps.adapterFor(target), targetKey, targetValue.ref);
-  }
-
-  return targetValue.value ?? "";
+  return { target, value };
 }
 
 /**

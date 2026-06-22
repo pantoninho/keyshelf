@@ -166,6 +166,31 @@ async function loadSchema(root: string, shelf: string): Promise<Schema> {
 }
 
 /**
+ * Read a non-empty string `field` from a `!ref` mapping. A required field that is
+ * absent, or any field that is present but not a non-empty string, is a
+ * `MALFORMED_FILE`; an absent optional field yields `undefined`.
+ */
+function refField(
+  file: string,
+  key: string,
+  raw: Record<string, unknown>,
+  field: string,
+  required: boolean
+): string | undefined {
+  const value = raw[field];
+  if (value === undefined) {
+    if (required) {
+      throw malformed(file, `key '${key}' has a !ref missing the required '${field}' field`);
+    }
+    return undefined;
+  }
+  if (typeof value !== "string" || value.length === 0) {
+    throw malformed(file, `key '${key}' has a !ref with a non-string '${field}'`);
+  }
+  return value;
+}
+
+/**
  * Validate a `!ref` mapping payload into a {@link KeyReference}. `shelf` is
  * required; `key` and `stage` are optional (their defaults are applied at
  * resolution, not here). A scalar `!ref` or a missing/empty `shelf` is a
@@ -176,23 +201,11 @@ function parseKeyReference(file: string, key: string, raw: unknown): KeyReferenc
     throw malformed(file, `key '${key}' has an invalid !ref (expected a mapping with a 'shelf')`);
   }
 
-  if (typeof raw.shelf !== "string" || raw.shelf.length === 0) {
-    throw malformed(file, `key '${key}' has a !ref missing the required 'shelf' field`);
-  }
-
-  const reference: KeyReference = { shelf: raw.shelf };
-  if (raw.key !== undefined) {
-    if (typeof raw.key !== "string" || raw.key.length === 0) {
-      throw malformed(file, `key '${key}' has a !ref with a non-string 'key'`);
-    }
-    reference.key = raw.key;
-  }
-  if (raw.stage !== undefined) {
-    if (typeof raw.stage !== "string" || raw.stage.length === 0) {
-      throw malformed(file, `key '${key}' has a !ref with a non-string 'stage'`);
-    }
-    reference.stage = raw.stage;
-  }
+  const reference: KeyReference = { shelf: refField(file, key, raw, "shelf", true) as string };
+  const targetKey = refField(file, key, raw, "key", false);
+  if (targetKey !== undefined) reference.key = targetKey;
+  const stage = refField(file, key, raw, "stage", false);
+  if (stage !== undefined) reference.stage = stage;
 
   return reference;
 }
