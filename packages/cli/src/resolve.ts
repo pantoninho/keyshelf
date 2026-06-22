@@ -21,6 +21,26 @@ export interface ResolveDeps {
 }
 
 /**
+ * How a `!ref` is treated during resolution.
+ *
+ * - `"resolve"` (default, used by `run`) — follow the reference one hop into the
+ *   *target's* provider and fetch the real value.
+ * - `"static"` (used by `validate`) — do **not** reach any backend for a `!ref`.
+ *   The reference is assumed already proven sound by `validateReferences`
+ *   (issue #203): its six static checks confirm the target shelf/stage/key
+ *   exist, are supplied, and land one hop on config or secret, all offline. So a
+ *   `!ref` simply contributes a placeholder here — `validate` produces no env to
+ *   exec, only a verdict, and a target `!secret` is never fetched (that backend
+ *   resolvability is a `run`-time concern, out of scope for the static slice).
+ */
+export type ReferenceMode = "resolve" | "static";
+
+export interface ResolveOptions {
+  /** Reference handling; defaults to `"resolve"` (full `run` behavior). */
+  references?: ReferenceMode;
+}
+
+/**
  * Resolve a structurally-valid environment into the flat `string→string` map of
  * env-var names → values that Keyshelf manages.
  *
@@ -49,9 +69,11 @@ export interface ResolveDeps {
  */
 export async function resolveEnvironment(
   loaded: LoadedEnvironment,
-  deps: ResolveDeps
+  deps: ResolveDeps,
+  options: ResolveOptions = {}
 ): Promise<Record<string, string>> {
   const { schema, environment } = loaded;
+  const references = options.references ?? "resolve";
   const map: Record<string, string> = {};
 
   // Schema config defaults form the base layer.
@@ -72,6 +94,13 @@ export async function resolveEnvironment(
       adapter ??= deps.adapterFor(loaded);
       map[key] = await resolveSecret(adapter, key, value.ref);
     } else if (value.kind === "ref") {
+      // In static mode (validate) a !ref is already proven sound by
+      // validateReferences and is never followed into a backend — it contributes
+      // a placeholder. In resolve mode (run) it is followed one hop.
+      if (references === "static") {
+        map[key] = "";
+        continue;
+      }
       // The loader never produces a ref-kind value without a reference; guard anyway.
       if (value.reference === undefined) {
         throw new KeyshelfError("INVALID_REFERENCE", `Key '${key}' has a malformed !ref.`, { key });

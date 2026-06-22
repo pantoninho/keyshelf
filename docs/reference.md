@@ -135,6 +135,40 @@ The principal running `keyshelf run` must have read access to every referenced
 environment's store (e.g. the ability to decrypt the canonical sops file), since
 the value resolves through the target's provider.
 
+### Static validation of key references
+
+`keyshelf validate` checks every `!ref` **statically and offline** — a dangling
+or chained reference fails before any `run`, with **no backend access**.
+Validation reaches across shelves: it loads the target shelf's `schema.yaml` and
+`{shelf}/{stage}.yaml` (filesystem reads only) to confirm the reference would
+resolve in principle, but it never resolves the target's value through any
+provider (no decrypt, no network — a secret target is confirmed to _be_ a secret,
+not fetched).
+
+For a key `K: !ref { shelf: S, key: T, stage: G? }` in the environment being
+validated (with `T` defaulting to `K` and `G` to the current stage), validate
+runs six checks:
+
+1. `K` is declared in the consuming shelf's schema — the existing closed-contract
+   rule (`UNKNOWN_KEY` otherwise). Supplying a `!ref` **discharges** a `!required`
+   key, exactly as a config or `!secret` value would.
+2. Target shelf `S` exists — else `REFERENCE_NOT_FOUND`.
+3. Target stage exists, i.e. `S/{G}.yaml` is present — else `REFERENCE_NOT_FOUND`.
+4. Target key `T` is declared in `S`'s schema — else `REFERENCE_NOT_FOUND`.
+5. `T` is **present** in the target environment — supplied there, or covered by a
+   schema config default — else `REFERENCE_NOT_FOUND`.
+6. `T`'s representation is config or `!secret`, **not** another `!ref` (one hop
+   only) — else `INVALID_REFERENCE`. A malformed `!ref` payload (e.g. a scalar
+   `!ref`, or a missing/empty `shelf`) is also `INVALID_REFERENCE`/`MALFORMED_FILE`
+   at load.
+
+Code mapping: checks 2–5 (target shelf/stage/key missing or unsupplied) →
+`REFERENCE_NOT_FOUND`; check 6 (target is itself a `!ref`) → `INVALID_REFERENCE`.
+Both codes are surfaced in `--json` like every other structured error. Backend
+failures (a `!secret` that exists but cannot be fetched, bad creds) are **not**
+in scope for these static checks — they keep their `run`-time codes
+(`SECRET_NOT_FOUND`, `PROVIDER_AUTH`).
+
 ## CLI surface (MVP)
 
 Built on **oclif**. The qualified environment `{shelf}/{stage}` is a positional
