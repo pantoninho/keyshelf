@@ -35,11 +35,11 @@ export interface EnvironmentValue {
   ref?: unknown;
 }
 
-/** An environment, parsed from `{shelf}/{env}.yaml`. */
+/** An environment, parsed from `{shelf}/{stage}.yaml`. */
 export interface Environment {
   /** The shelf this environment belongs to (its directory name). */
   shelf: string;
-  /** The environment name (its filename without extension). */
+  /** The stage (its filename without extension). */
   name: string;
   /** The provider name this environment references in `config.yaml`. */
   provider: string;

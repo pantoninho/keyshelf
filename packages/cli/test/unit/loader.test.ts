@@ -144,7 +144,7 @@ describe("listEnvironments", () => {
     await expectCode(listEnvironments(root), "NOT_INITIALIZED");
   });
 
-  it("lists every {shelf}/{env} across all shelves, ignoring schema and secrets files", async () => {
+  it("lists every {shelf}/{stage} across all shelves, ignoring schema and secrets files", async () => {
     await scaffold();
     await write(".keyshelf/web/prod.yaml", "provider: local\nkeys: {}\n");
     await write(".keyshelf/web/staging.secrets.yaml", "enc: stuff\n");
@@ -152,7 +152,7 @@ describe("listEnvironments", () => {
     await write(".keyshelf/api/dev.yaml", "provider: local\nkeys: {}\n");
 
     const envs = await listEnvironments(root);
-    const ids = envs.map((e) => `${e.shelf}/${e.env}`).sort();
+    const ids = envs.map((e) => `${e.shelf}/${e.stage}`).sort();
     expect(ids).toEqual(["api/dev", "web/prod", "web/staging"]);
   });
 });

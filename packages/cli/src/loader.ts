@@ -206,7 +206,7 @@ async function loadEnvironmentFile(
 }
 
 /**
- * Load a single environment (`{shelf}/{env}`) into the model: the project
+ * Load a single environment (`{shelf}/{stage}`) into the model: the project
  * `config.yaml`, the shelf's `schema.yaml`, and the environment file. Maps
  * structural failures to the closed error codes — `NOT_INITIALIZED`,
  * `SHELF_NOT_FOUND`, `SCHEMA_NOT_FOUND`, `ENVIRONMENT_NOT_FOUND`,
@@ -215,7 +215,7 @@ async function loadEnvironmentFile(
 export async function loadEnvironment(
   projectDir: string,
   shelf: string,
-  env: string
+  stage: string
 ): Promise<LoadedEnvironment> {
   const root = keyshelfRoot(projectDir);
   const config = await loadConfig(root);
@@ -231,19 +231,19 @@ export async function loadEnvironment(
     });
   }
 
-  if (!existsSync(path.join(shelfDir, `${env}.yaml`))) {
+  if (!existsSync(path.join(shelfDir, `${stage}.yaml`))) {
     throw new KeyshelfError(
       "ENVIRONMENT_NOT_FOUND",
-      `Environment '${shelf}/${env}' does not exist.`,
+      `Environment '${shelf}/${stage}' does not exist.`,
       {
         shelf,
-        environment: `${shelf}/${env}`
+        environment: `${shelf}/${stage}`
       }
     );
   }
 
   const schema = await loadSchema(root, shelf);
-  const environment = await loadEnvironmentFile(root, shelf, env);
+  const environment = await loadEnvironmentFile(root, shelf, stage);
 
   return { config, schema, environment };
 }
@@ -251,11 +251,11 @@ export async function loadEnvironment(
 /** An environment's filesystem-derived identity, discovered by {@link listEnvironments}. */
 export interface EnvironmentRef {
   shelf: string;
-  env: string;
+  stage: string;
 }
 
 /**
- * Discover every `{shelf}/{env}` in a project by walking `.keyshelf/`. A shelf is
+ * Discover every `{shelf}/{stage}` in a project by walking `.keyshelf/`. A shelf is
  * a directory; an environment is a `*.yaml` file in it that is neither
  * `schema.yaml` nor a `*.secrets.yaml` store. Throws `NOT_INITIALIZED` when the
  * project is not initialized.
@@ -272,7 +272,7 @@ async function listShelfEnvironments(root: string, shelf: string): Promise<Envir
   const files = await readdir(path.join(root, shelf), { withFileTypes: true });
   return files
     .filter((file) => file.isFile() && isEnvironmentFile(file.name))
-    .map((file) => ({ shelf, env: file.name.slice(0, -".yaml".length) }));
+    .map((file) => ({ shelf, stage: file.name.slice(0, -".yaml".length) }));
 }
 
 export async function listEnvironments(projectDir: string): Promise<EnvironmentRef[]> {

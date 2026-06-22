@@ -55,7 +55,7 @@ describe("createAdapter sops branch", () => {
   it("builds a SopsAdapter with the per-environment store path", () => {
     const adapter = createAdapter(
       { adapter: "sops" },
-      { projectDir: "/proj", project: "myapp", shelf: "web", env: "staging" }
+      { projectDir: "/proj", project: "myapp", shelf: "web", stage: "staging" }
     );
     expect(adapter).toBeInstanceOf(SopsAdapter);
   });

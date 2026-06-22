@@ -9,10 +9,10 @@ import { parseTarget } from "../target.js";
 import { validateEnvironment } from "../validate.js";
 
 /**
- * Resolve a `{shelf}/{env}`'s config into environment variables, overlay them on
+ * Resolve a `{shelf}/{stage}`'s config into environment variables, overlay them on
  * the inherited process environment, and exec a wrapped command.
  *
- * Surface: `keyshelf run <shelf>/<env> [--set KEY=VALUE]... -- <cmd> [args...]`.
+ * Surface: `keyshelf run <shelf>/<stage> [--set KEY=VALUE]... -- <cmd> [args...]`.
  * Everything after the `--` separator is the wrapped command and its own
  * arguments, captured verbatim — its flags are never interpreted by keyshelf.
  *
@@ -29,7 +29,7 @@ import { validateEnvironment } from "../validate.js";
  */
 export default class Run extends BaseCommand {
   static description =
-    "Resolve a shelf/env's config into env vars and exec a wrapped command after '--'.";
+    "Resolve a shelf/stage's config into env vars and exec a wrapped command after '--'.";
 
   static examples = [
     "<%= config.bin %> run web/staging -- printenv REGION",
@@ -43,7 +43,7 @@ export default class Run extends BaseCommand {
 
   static args = {
     target: Args.string({
-      description: "The environment to run as <shelf>/<env>.",
+      description: "The environment to run as <shelf>/<stage>.",
       required: true
     })
   };
@@ -58,7 +58,7 @@ export default class Run extends BaseCommand {
   async run(): Promise<never> {
     const { target, command } = this.splitArgv();
 
-    const { shelf, env } = parseTarget(target);
+    const { shelf, stage } = parseTarget(target);
 
     // --set flags (and --json) live before `--`; parse only that left side.
     const { flags } = await this.parse(Run);
@@ -70,7 +70,7 @@ export default class Run extends BaseCommand {
 
     // Fail-fast: load + structurally validate + resolve before exec.
     const projectDir = process.cwd();
-    const loaded = await loadEnvironment(projectDir, shelf, env);
+    const loaded = await loadEnvironment(projectDir, shelf, stage);
     validateEnvironment(loaded);
 
     // Secrets resolve through the environment's provider's adapter, built lazily
@@ -78,7 +78,7 @@ export default class Run extends BaseCommand {
     // exist (validateEnvironment checked PROVIDER_NOT_FOUND).
     const managed = await resolveEnvironment(loaded, () => {
       const provider = loaded.config.providers[loaded.environment.provider];
-      return createAdapter(provider, { projectDir, project: loaded.config.project, shelf, env });
+      return createAdapter(provider, { projectDir, project: loaded.config.project, shelf, stage });
     });
 
     const childEnv = buildChildEnv({ ambient: process.env, managed, sets });
@@ -113,8 +113,8 @@ export default class Run extends BaseCommand {
     const left = raw.slice(0, sep);
     const target = left.find((token) => !token.startsWith("-"));
     if (target === undefined) {
-      throw new KeyshelfError("MALFORMED_FILE", "run requires a <shelf>/<env> target.", {
-        reason: "missing <shelf>/<env> target"
+      throw new KeyshelfError("MALFORMED_FILE", "run requires a <shelf>/<stage> target.", {
+        reason: "missing <shelf>/<stage> target"
       });
     }
 

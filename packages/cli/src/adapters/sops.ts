@@ -18,7 +18,7 @@ const execFileAsync = promisify(execFile);
  * project's native `.sops.yaml`; Keyshelf never writes or mutates it.
  *
  * **Store.** A per-environment sibling encrypted file
- * `.keyshelf/{shelf}/{env}.secrets.yaml`, committed and encrypted. It holds a
+ * `.keyshelf/{shelf}/{stage}.secrets.yaml`, committed and encrypted. It holds a
  * flat `key -> value` mapping. Because sops and YAML can mangle multiline and
  * whitespace-bearing scalars, every value is carried as a JSON string inside the
  * store: `write` uses `sops set` with `JSON.stringify(value)` and `resolve`

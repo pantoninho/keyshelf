@@ -35,7 +35,7 @@ interface SetResult {
  */
 export default class Set extends BaseCommand {
   static description =
-    "Write a value into a shelf/env. The value is read from stdin (or a prompt), never argv.";
+    "Write a value into a shelf/stage. The value is read from stdin (or a prompt), never argv.";
 
   static examples = [
     "echo my-region | <%= config.bin %> set REGION web/staging",
@@ -48,7 +48,7 @@ export default class Set extends BaseCommand {
       required: true
     }),
     target: Args.string({
-      description: "The environment to write to, as <shelf>/<env>.",
+      description: "The environment to write to, as <shelf>/<stage>.",
       required: true
     })
   };
@@ -62,7 +62,7 @@ export default class Set extends BaseCommand {
 
   async run(): Promise<SetResult> {
     const { args, flags } = await this.parse(Set);
-    const { shelf, env } = parseTarget(args.target);
+    const { shelf, stage } = parseTarget(args.target);
     const { key } = args;
 
     // The value is never taken from argv. A TTY prompts; otherwise stdin is read
@@ -72,7 +72,7 @@ export default class Set extends BaseCommand {
     const projectDir = process.cwd();
     // Loads config + schema + environment, surfacing NOT_INITIALIZED /
     // SHELF_NOT_FOUND / SCHEMA_NOT_FOUND / ENVIRONMENT_NOT_FOUND / MALFORMED_FILE.
-    const loaded = await loadEnvironment(projectDir, shelf, env);
+    const loaded = await loadEnvironment(projectDir, shelf, stage);
 
     // The key must already exist in the shelf's schema — set never declares keys.
     if (!Object.prototype.hasOwnProperty.call(loaded.schema.keys, key)) {
@@ -82,25 +82,25 @@ export default class Set extends BaseCommand {
         {
           key,
           shelf,
-          environment: `${shelf}/${env}`
+          environment: `${shelf}/${stage}`
         }
       );
     }
 
     // Edit the existing environment file in place, preserving every other key,
     // the provider line, and comments.
-    const file = path.join(projectDir, ".keyshelf", shelf, `${env}.yaml`);
+    const file = path.join(projectDir, ".keyshelf", shelf, `${stage}.yaml`);
     const doc = parseDocument(await readFile(file, "utf8"));
 
     if (flags.secret) {
-      await this.writeSecret(loaded, projectDir, shelf, env, key, value, doc);
+      await this.writeSecret(loaded, projectDir, shelf, stage, key, value, doc);
     } else {
       setConfigValue(doc, key, value);
     }
 
     await writeFile(file, doc.toString(), "utf8");
 
-    const result: SetResult = { key, environment: `${shelf}/${env}`, secret: flags.secret };
+    const result: SetResult = { key, environment: `${shelf}/${stage}`, secret: flags.secret };
     if (!this.jsonEnabled()) {
       this.log(`Set ${result.environment} ${key}${flags.secret ? " (secret)" : ""}.`);
     }
@@ -119,7 +119,7 @@ export default class Set extends BaseCommand {
     loaded: Awaited<ReturnType<typeof loadEnvironment>>,
     projectDir: string,
     shelf: string,
-    env: string,
+    stage: string,
     key: string,
     value: string,
     doc: ReturnType<typeof parseDocument>
@@ -128,8 +128,8 @@ export default class Set extends BaseCommand {
     if (provider === undefined) {
       throw new KeyshelfError(
         "PROVIDER_NOT_FOUND",
-        `Environment '${shelf}/${env}' references undefined provider '${loaded.environment.provider}'.`,
-        { shelf, environment: `${shelf}/${env}`, provider: loaded.environment.provider }
+        `Environment '${shelf}/${stage}' references undefined provider '${loaded.environment.provider}'.`,
+        { shelf, environment: `${shelf}/${stage}`, provider: loaded.environment.provider }
       );
     }
 
@@ -137,15 +137,15 @@ export default class Set extends BaseCommand {
       projectDir,
       project: loaded.config.project,
       shelf,
-      env
+      stage
     });
     const ref = await adapter.write(key, value);
 
     // The fake/reference convention names a secret
-    // `keyshelf__{project}__{shelf}__{env}__{key}`; a returned ref matching that
+    // `keyshelf__{project}__{shelf}__{stage}__{key}`; a returned ref matching that
     // resolves by convention (bare !secret).
     const conventionRef = conventionName(
-      `keyshelf__${loaded.config.project}__${shelf}__${env}`,
+      `keyshelf__${loaded.config.project}__${shelf}__${stage}`,
       key
     );
     setSecretRef(doc, key, secretRefForm(ref, conventionRef));

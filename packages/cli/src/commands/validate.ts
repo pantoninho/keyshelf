@@ -43,7 +43,7 @@ async function verify(projectDir: string, loaded: LoadedEnvironment): Promise<vo
       projectDir,
       project: loaded.config.project,
       shelf,
-      env: name
+      stage: name
     });
   });
 }
@@ -52,9 +52,9 @@ async function verify(projectDir: string, loaded: LoadedEnvironment): Promise<vo
 function checkOne(
   projectDir: string,
   shelf: string,
-  env: string
+  stage: string
 ): Promise<KeyshelfError | undefined> {
-  return loadEnvironment(projectDir, shelf, env)
+  return loadEnvironment(projectDir, shelf, stage)
     .then(async (loaded) => {
       await verify(projectDir, loaded);
       return undefined;
@@ -67,7 +67,7 @@ function checkOne(
 
 /**
  * Run the closed-contract + presence checks against a project, executing
- * nothing. `keyshelf validate <shelf>/<env>` checks a single environment and
+ * nothing. `keyshelf validate <shelf>/<stage>` checks a single environment and
  * fails with that environment's first {@link KeyshelfError}. `keyshelf validate`
  * (no argument) checks every environment in the project and emits a
  * per-environment aggregate; it exits non-zero if any environment fails.
@@ -85,7 +85,7 @@ export default class Validate extends BaseCommand {
   static args = {
     target: Args.string({
       description:
-        "The environment to validate as <shelf>/<env>. Omit to validate the whole project.",
+        "The environment to validate as <shelf>/<stage>. Omit to validate the whole project.",
       required: false
     })
   };
@@ -102,11 +102,11 @@ export default class Validate extends BaseCommand {
   }
 
   private async validateSingle(cwd: string, target: string): Promise<SingleResult> {
-    const { shelf, env } = parseTarget(target);
-    const loaded = await loadEnvironment(cwd, shelf, env);
+    const { shelf, stage } = parseTarget(target);
+    const loaded = await loadEnvironment(cwd, shelf, stage);
     await verify(cwd, loaded);
 
-    const environment = `${shelf}/${env}`;
+    const environment = `${shelf}/${stage}`;
     if (!this.jsonEnabled()) {
       this.log(`${environment} is valid.`);
     }
@@ -116,12 +116,12 @@ export default class Validate extends BaseCommand {
 
   private async validateProject(cwd: string): Promise<ProjectResult> {
     const refs = await listEnvironments(cwd);
-    refs.sort((a, b) => `${a.shelf}/${a.env}`.localeCompare(`${b.shelf}/${b.env}`));
+    refs.sort((a, b) => `${a.shelf}/${a.stage}`.localeCompare(`${b.shelf}/${b.stage}`));
 
     const results: EnvironmentResult[] = [];
     for (const ref of refs) {
-      const environment = `${ref.shelf}/${ref.env}`;
-      const error = await checkOne(cwd, ref.shelf, ref.env);
+      const environment = `${ref.shelf}/${ref.stage}`;
+      const error = await checkOne(cwd, ref.shelf, ref.stage);
       results.push(
         error ? { environment, valid: false, error: error.toJSON() } : { environment, valid: true }
       );

@@ -9,8 +9,8 @@ import { SopsAdapter } from "./sops.js";
 /**
  * Everything an adapter needs to bind to a concrete environment's store. The
  * reference-adapter convention composes a remote secret's name from
- * `keyshelf__{project}__{shelf}__{env}__{key}` (docs/reference.md), so the
- * project, shelf, and environment names are part of the construction context,
+ * `keyshelf__{project}__{shelf}__{stage}__{key}` (docs/reference.md), so the
+ * project, shelf, and stage names are part of the construction context,
  * not just the provider config.
  */
 export interface AdapterContext {
@@ -20,8 +20,8 @@ export interface AdapterContext {
   project: string;
   /** The shelf of the environment being resolved. */
   shelf: string;
-  /** The environment name being resolved. */
-  env: string;
+  /** The stage of the environment being resolved. */
+  stage: string;
 }
 
 /** Where the file-backed fake store lives, relative to the project root. */
@@ -45,16 +45,16 @@ function requireStringField(provider: Provider, field: string, ctx: AdapterConte
 
 /**
  * The sops store's default layout: a per-environment sibling encrypted file
- * `.keyshelf/{shelf}/{env}.secrets.yaml` (docs/reference.md, ADR-0002). A
+ * `.keyshelf/{shelf}/{stage}.secrets.yaml` (docs/reference.md, ADR-0002). A
  * provider may override the layout with a `store:` template using `{shelf}` and
- * `{env}` placeholders, resolved relative to the project root.
+ * `{stage}` placeholders, resolved relative to the project root.
  */
 function sopsStorePath(provider: Provider, ctx: AdapterContext): string {
   const template =
     typeof provider.store === "string"
       ? provider.store
-      : path.join(".keyshelf", "{shelf}", "{env}.secrets.yaml");
-  const rel = template.replaceAll("{shelf}", ctx.shelf).replaceAll("{env}", ctx.env);
+      : path.join(".keyshelf", "{shelf}", "{stage}.secrets.yaml");
+  const rel = template.replaceAll("{shelf}", ctx.shelf).replaceAll("{stage}", ctx.stage);
   return path.resolve(ctx.projectDir, rel);
 }
 
@@ -71,13 +71,13 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
       // Persist to a JSON file under the project so a value written in one
       // `keyshelf` process is resolvable by a separate process later (the E2E
       // suite spawns the real binary across invocations). The namespace mirrors
-      // the reference convention `keyshelf__{project}__{shelf}__{env}` so the
+      // the reference convention `keyshelf__{project}__{shelf}__{stage}` so the
       // same key in different environments stays distinct in the shared store.
       const storePath =
         typeof provider.store === "string"
           ? path.resolve(ctx.projectDir, provider.store)
           : path.join(ctx.projectDir, FAKE_STORE_FILE);
-      const namespace = `keyshelf__${ctx.project}__${ctx.shelf}__${ctx.env}`;
+      const namespace = `keyshelf__${ctx.project}__${ctx.shelf}__${ctx.stage}`;
       return new FakeAdapter(fileStore(storePath), namespace);
     }
 
@@ -90,13 +90,13 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
 
     case "gcp": {
       // One secret per key in the provider's GCP project, named by the reference
-      // convention `keyshelf__{project}__{shelf}__{env}__{key}`; the namespace is
-      // the `keyshelf__{project}__{shelf}__{env}` prefix so the same key across
+      // convention `keyshelf__{project}__{shelf}__{stage}__{key}`; the namespace is
+      // the `keyshelf__{project}__{shelf}__{stage}` prefix so the same key across
       // environments stays distinct in the shared backend. `location` is an
       // optional replication hint (absent/`global` ⇒ automatic).
       const projectId = requireStringField(provider, "projectId", ctx);
       const location = typeof provider.location === "string" ? provider.location : undefined;
-      const namespace = `keyshelf__${ctx.project}__${ctx.shelf}__${ctx.env}`;
+      const namespace = `keyshelf__${ctx.project}__${ctx.shelf}__${ctx.stage}`;
       return new GcpAdapter({ projectId, namespace, location });
     }
 
