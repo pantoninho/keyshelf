@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.0.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.0.0...keyshelf-v6.0.0) (2026-06-22)
+
+
+### Bug Fixes
+
+* **publish:** add repository to platform packages for provenance (E422) ([#215](https://github.com/pantoninho/keyshelf/issues/215)) ([fb3ff89](https://github.com/pantoninho/keyshelf/commit/fb3ff8926cc3016edabd03f2294af64d6f365e19))
+
 ## [6.0.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.4.0...keyshelf-v6.0.0) (2026-06-22)
 
 
