@@ -169,17 +169,51 @@ failures (a `!secret` that exists but cannot be fetched, bad creds) are **not**
 in scope for these static checks — they keep their `run`-time codes
 (`SECRET_NOT_FOUND`, `PROVIDER_AUTH`).
 
+### Authoring a `!ref` with `set --ref`
+
+So that every representation stays CLI-authorable (no hand-editing YAML), `set`
+writes a key reference directly:
+
+```
+keyshelf set <KEY> <shelf>/<stage> --ref <target-shelf>[/<target-stage>] [--ref-key <target-key>]
+```
+
+This is a **pure offline file mutation**: unlike `set --secret`, it reads no value
+from stdin, calls no adapter, and requires no provider credentials. It edits the
+consuming environment file in place (provider line, comments, and every other key
+survive), writing a `!ref` node that round-trips through the loader above.
+
+- `--ref <shelf>` → `!ref { shelf }` — same-name target, current stage.
+- `--ref <shelf>/<stage>` → adds an explicit `stage:` — `!ref { shelf, stage }`.
+- `--ref-key <target>` → adds a `key:` to rename the target — `!ref { shelf, key }`.
+  The `key:` is **omitted** when `<target>` equals the consuming `<KEY>` (a rename
+  to the same name is the same-name default, so it is not recorded).
+- `--ref` is mutually exclusive with `--secret`; `--ref-key` requires `--ref`.
+
+Examples:
+
+```
+# !ref { shelf: supabase }
+keyshelf set SUPABASE_SERVICE_ROLE_KEY backend/production --ref supabase
+
+# !ref { shelf: supabase, key: SERVICE_ROLE_KEY }
+keyshelf set DB_PASSWORD backend/production --ref supabase --ref-key SERVICE_ROLE_KEY
+
+# !ref { shelf: shared, stage: production }
+keyshelf set AUDIT_KEY backend/staging --ref shared/production
+```
+
 ## CLI surface (MVP)
 
 Built on **oclif**. The qualified environment `{shelf}/{stage}` is a positional
 argument.
 
-| Command                                             | Purpose                                                                                                                                                                                                                                               |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `keyshelf init [--project <name>] [--shelf <name>]` | Scaffold `.keyshelf/` (non-interactive; project defaults to cwd name; creates `config.yaml` with a default `local` sops provider and a starter shelf — `--shelf`, default `app` — with an empty `schema.yaml`). Refuses to clobber without `--force`. |
-| `keyshelf set <KEY> <shelf>/<stage> [--secret]`     | Write a value. Read from stdin/prompt, never argv. `--secret` → store + write a `!secret` reference; plaintext → environment file. Key must already be in the shelf's schema; never mutates the schema.                                               |
-| `keyshelf run <shelf>/<stage> -- <cmd>`             | Resolve config + secrets into env vars, overlay the inherited environment, exec `<cmd>`. Fail-fast: aborts before exec if anything is unresolvable.                                                                                                   |
-| `keyshelf validate [<shelf>/<stage>]`               | Run the same closed-contract + resolution checks as `run`, execute nothing, emit structured results. Validates the whole project when the argument is omitted.                                                                                        |
+| Command                                                                                         | Purpose                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keyshelf init [--project <name>] [--shelf <name>]`                                             | Scaffold `.keyshelf/` (non-interactive; project defaults to cwd name; creates `config.yaml` with a default `local` sops provider and a starter shelf — `--shelf`, default `app` — with an empty `schema.yaml`). Refuses to clobber without `--force`.                                                      |
+| `keyshelf set <KEY> <shelf>/<stage> [--secret \| --ref <shelf>[/<stage>] [--ref-key <target>]]` | Write a value. Read from stdin/prompt, never argv. `--secret` → store + write a `!secret` reference; plaintext → environment file. `--ref` → author a `!ref` key reference (pure offline file edit, no value read, no provider call). Key must already be in the shelf's schema; never mutates the schema. |
+| `keyshelf run <shelf>/<stage> -- <cmd>`                                                         | Resolve config + secrets into env vars, overlay the inherited environment, exec `<cmd>`. Fail-fast: aborts before exec if anything is unresolvable.                                                                                                                                                        |
+| `keyshelf validate [<shelf>/<stage>]`                                                           | Run the same closed-contract + resolution checks as `run`, execute nothing, emit structured results. Validates the whole project when the argument is omitted.                                                                                                                                             |
 
 Conventions:
 
