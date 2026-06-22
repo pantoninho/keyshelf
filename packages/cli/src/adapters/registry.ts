@@ -115,7 +115,7 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
 /** Build the adapter for an environment, looking its provider up in its own config. */
 function adapterForEnvironment(projectDir: string, loaded: LoadedEnvironment): Adapter {
   const { shelf, name, provider: providerName } = loaded.environment;
-  const provider = loaded.config.providers[providerName];
+  const provider = providerName === undefined ? undefined : loaded.config.providers[providerName];
   if (provider === undefined) {
     throw new KeyshelfError(
       "PROVIDER_NOT_FOUND",

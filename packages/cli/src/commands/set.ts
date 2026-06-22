@@ -124,12 +124,13 @@ export default class Set extends BaseCommand {
     value: string,
     doc: ReturnType<typeof parseDocument>
   ): Promise<void> {
-    const provider = loaded.config.providers[loaded.environment.provider];
+    const providerName = loaded.environment.provider;
+    const provider = providerName === undefined ? undefined : loaded.config.providers[providerName];
     if (provider === undefined) {
       throw new KeyshelfError(
         "PROVIDER_NOT_FOUND",
-        `Environment '${shelf}/${stage}' references undefined provider '${loaded.environment.provider}'.`,
-        { shelf, environment: `${shelf}/${stage}`, provider: loaded.environment.provider }
+        `Environment '${shelf}/${stage}' references undefined provider '${providerName}'.`,
+        { shelf, environment: `${shelf}/${stage}`, provider: providerName }
       );
     }
 
