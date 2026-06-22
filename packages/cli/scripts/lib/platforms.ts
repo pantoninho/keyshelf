@@ -61,6 +61,12 @@ export interface PlatformPackageJson {
   readonly cpu: [string];
   readonly files: ["bin"];
   readonly engines: { node: string };
+  /**
+   * Must be present and match the keyshelf repo: npm rejects a `--provenance`
+   * publish (E422) unless `repository.url` matches the GitHub repo derived from
+   * the OIDC provenance statement.
+   */
+  readonly repository: { type: "git"; url: string };
   readonly dependencies?: never;
   readonly optionalDependencies?: never;
 }
@@ -96,7 +102,8 @@ export function platformPackageJson(key: PlatformKey, manifest: SopsManifest): P
     os: [os],
     cpu: [cpu],
     files: ["bin"],
-    engines: { node: ">=18" }
+    engines: { node: ">=18" },
+    repository: { type: "git", url: "https://github.com/pantoninho/keyshelf" }
   };
 }
 

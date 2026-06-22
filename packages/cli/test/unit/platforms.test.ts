@@ -59,6 +59,15 @@ describe("platformPackageJson", () => {
     }
   });
 
+  it("declares the keyshelf repository (required for --provenance; empty url => npm E422)", () => {
+    for (const key of platforms) {
+      expect(platformPackageJson(key, manifest).repository, key).toEqual({
+        type: "git",
+        url: "https://github.com/pantoninho/keyshelf"
+      });
+    }
+  });
+
   it("redistributes sops, so its license is MPL-2.0 (not keyshelf MIT)", () => {
     for (const key of platforms) {
       expect(platformPackageJson(key, manifest).license, key).toBe("MPL-2.0");
