@@ -40,16 +40,24 @@ does not decide whether a value is plaintext or secret. It is a closed contract
 shelf.
 _Avoid_: template, spec, type
 
+**Stage**:
+A deployment name shared across shelves (e.g. `dev`, `staging`, `production`). A
+stage is not itself an environment; paired with a shelf it identifies one. The
+same stage recurs across shelves — `backend/production` and `mobile/production`
+share the `production` stage but are distinct environments.
+_Avoid_: env, env slug, tier
+
 **Environment**:
-An implementation of its shelf's schema, held in `{shelf}/{env}.yaml`. Supplies a
-provider and the actual values. Implicitly bound to its shelf's schema (no schema
-reference field). Addressed as `{shelf}/{env}` (e.g. `web-service/staging`).
-_Avoid_: stage, env (in prose), target
+A shelf at a stage: the implementation of a shelf's schema for one stage, held in
+`{shelf}/{stage}.yaml`. Supplies the actual values (and a provider when it holds a
+local secret). Implicitly bound to its shelf's schema (no schema reference field).
+Addressed as `{shelf}/{stage}` (e.g. `backend/production`).
+_Avoid_: env, target
 
 **Key**:
 A single named entry, declared in a schema and given a value in an environment.
-A key's _representation_ (plaintext config vs. secret) is chosen per environment,
-not fixed by the schema.
+A key's _representation_ (config, secret, or key reference) is chosen per
+environment, not fixed by the schema.
 _Avoid_: field, variable, entry
 
 **Config (value)**:
@@ -71,6 +79,21 @@ The environment file holds `!secret` references _into_ the store, never the valu
 _Avoid_: vault, backend, storage
 
 **Reference**:
-The pointer held by a `!secret` entry in the environment file that locates a
-value in the store. Its shape is adapter-defined.
+A pointer in an environment file to where a value actually lives, instead of an
+inline value. The genus of two kinds: a _store reference_ and a _key reference_.
 _Avoid_: pointer, link, handle
+
+**Store reference**:
+The pointer a Secret holds into its adapter store, resolved _by the adapter_. Its
+shape is adapter-defined — by convention a bare `!secret` (the key name locates
+the value), or an explicit `ref` locator for foreign/pre-existing secrets that
+some adapters accept. A `ref` is an adapter parameter, not a first-class concept.
+_Avoid_: secret ref, locator
+
+**Key reference**:
+A key's third representation (alongside config and secret), marked `!ref`. Instead
+of supplying a value, it points at another key in keyshelf coordinates —
+`!ref { shelf, key }`, resolving at the _current stage_ by default, with an
+optional `stage` to cross stages. Resolved by re-resolving the target key,
+landing transparently on whatever representation that key has (config or secret).
+_Avoid_: alias, link, import
