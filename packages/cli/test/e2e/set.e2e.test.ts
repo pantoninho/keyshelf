@@ -53,7 +53,7 @@ async function scaffold(): Promise<void> {
   await write(".keyshelf/web/staging.yaml", ENV);
 }
 
-describe("keyshelf set <KEY> <shelf>/<env>", () => {
+describe("keyshelf set <KEY> <shelf>/<stage>", () => {
   it("reads a plaintext value from stdin and writes it under keys, preserving others", async () => {
     await scaffold();
     const { code, stdout } = await runKeyshelf(
@@ -138,7 +138,7 @@ describe("keyshelf set <KEY> <shelf>/<env>", () => {
     expect(JSON.parse(stdout).error.code).toBe("ENVIRONMENT_NOT_FOUND");
   });
 
-  it("rejects a malformed <shelf>/<env> argument with MALFORMED_FILE", async () => {
+  it("rejects a malformed <shelf>/<stage> argument with MALFORMED_FILE", async () => {
     await scaffold();
     const { code, stdout } = await runKeyshelf(["set", "REGION", "webstaging", "--json"], {
       cwd,
@@ -155,7 +155,7 @@ describe("keyshelf set <KEY> <shelf>/<env>", () => {
   });
 });
 
-describe("keyshelf set <KEY> <shelf>/<env> --secret", () => {
+describe("keyshelf set <KEY> <shelf>/<stage> --secret", () => {
   it("writes the value to the store and records only a bare !secret reference", async () => {
     await scaffold();
     const secret = "s3cr3t-value";
@@ -174,7 +174,7 @@ describe("keyshelf set <KEY> <shelf>/<env> --secret", () => {
     });
 
     const envText = await read(".keyshelf/web/staging.yaml");
-    // The plaintext value never lands in the env file — only a !secret reference.
+    // The plaintext value never lands in the environment file — only a !secret reference.
     expect(envText).not.toContain(secret);
     expect(envText).toContain("!secret");
     expect(envText).toContain("DATABASE_PASSWORD");
@@ -236,7 +236,7 @@ describe("keyshelf set <KEY> <shelf>/<env> --secret", () => {
     );
     expect(code).not.toBe(0);
     expect(JSON.parse(stdout).error.code).toBe("ADAPTER_UNAVAILABLE");
-    // Nothing recorded in the env file on a failed write.
+    // Nothing recorded in the environment file on a failed write.
     expect(await read(".keyshelf/web/staging.yaml")).not.toContain("!secret");
   });
 });

@@ -61,7 +61,7 @@ function errorOf(stdout: string): { code: string } & Record<string, unknown> {
   return JSON.parse(stdout).error;
 }
 
-describe("keyshelf validate <shelf>/<env>", () => {
+describe("keyshelf validate <shelf>/<stage>", () => {
   it("validates a well-formed environment successfully", async () => {
     await scaffold();
     const { code, stdout } = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
@@ -147,7 +147,7 @@ describe("keyshelf validate <shelf>/<env>", () => {
     expect(errorOf(stdout).code).toBe("NOT_INITIALIZED");
   });
 
-  it("rejects a malformed argument that is not shelf/env", async () => {
+  it("rejects a malformed argument that is not shelf/stage", async () => {
     await scaffold();
     const { code } = await runKeyshelf(["validate", "webstaging", "--json"], { cwd });
     expect(code).not.toBe(0);
