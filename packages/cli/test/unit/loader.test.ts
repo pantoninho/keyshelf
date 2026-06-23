@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { KeyshelfError } from "../../src/errors.js";
-import { listEnvironments, loadEnvironment } from "../../src/loader.js";
+import { listEnvironments, loadEnvironment, loadProjectMap } from "../../src/loader.js";
 
 let root: string;
 
@@ -224,5 +224,60 @@ describe("listEnvironments", () => {
     const envs = await listEnvironments(root);
     const ids = envs.map((e) => `${e.shelf}/${e.stage}`).sort();
     expect(ids).toEqual(["api/dev", "web/prod", "web/staging"]);
+  });
+});
+
+describe("loadProjectMap", () => {
+  it("throws NOT_INITIALIZED when no .keyshelf exists", async () => {
+    await expectCode(loadProjectMap(root), "NOT_INITIALIZED");
+  });
+
+  it("maps every shelf to its schema key count and its sorted environments", async () => {
+    await scaffold(); // web: 4 keys, staging
+    await write(".keyshelf/web/prod.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/api/schema.yaml", "keys:\n  TOKEN: !required\n  HOST: localhost\n");
+    await write(".keyshelf/api/dev.yaml", "provider: local\nkeys: {}\n");
+
+    const map = await loadProjectMap(root);
+
+    // Shelves are sorted alphabetically: api before web.
+    expect(map.shelves.map((s) => s.shelf)).toEqual(["api", "web"]);
+
+    const api = map.shelves.find((s) => s.shelf === "api")!;
+    expect(api.keys).toBe(2);
+    expect(api.stages).toEqual(["dev"]);
+
+    const web = map.shelves.find((s) => s.shelf === "web")!;
+    expect(web.keys).toBe(4);
+    // Environment leaves are sorted alphabetically: prod before staging.
+    expect(web.stages).toEqual(["prod", "staging"]);
+  });
+
+  it("returns an empty shelf list for an initialized project with no shelves", async () => {
+    await write(".keyshelf/config.yaml", CONFIG);
+    const map = await loadProjectMap(root);
+    expect(map.shelves).toEqual([]);
+  });
+
+  it("includes a shelf with no environments as a node with no stages", async () => {
+    await scaffold();
+    await write(".keyshelf/empty/schema.yaml", "keys:\n  ONE: !required\n");
+
+    const map = await loadProjectMap(root);
+    const empty = map.shelves.find((s) => s.shelf === "empty")!;
+    expect(empty.keys).toBe(1);
+    expect(empty.stages).toEqual([]);
+  });
+
+  it("fails fast with SCHEMA_NOT_FOUND when a shelf has no schema.yaml", async () => {
+    await scaffold();
+    await write(".keyshelf/broken/dev.yaml", "provider: local\nkeys: {}\n");
+    await expectCode(loadProjectMap(root), "SCHEMA_NOT_FOUND", { shelf: "broken" });
+  });
+
+  it("fails fast with MALFORMED_FILE when a shelf schema is unparseable", async () => {
+    await scaffold();
+    await write(".keyshelf/broken/schema.yaml", "keys: {bad\n");
+    await expectCode(loadProjectMap(root), "MALFORMED_FILE", {});
   });
 });
