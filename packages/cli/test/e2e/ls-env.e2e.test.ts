@@ -1,0 +1,178 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { makeTmpDir, removeDir, runKeyshelf } from "./helpers.js";
+
+let cwd: string;
+
+beforeEach(async () => {
+  cwd = await makeTmpDir();
+});
+
+afterEach(async () => {
+  await removeDir(cwd);
+});
+
+async function write(rel: string, contents: string): Promise<void> {
+  const full = path.join(cwd, rel);
+  await mkdir(path.dirname(full), { recursive: true });
+  await writeFile(full, contents, "utf8");
+}
+
+const CONFIG = `project: myapp
+providers:
+  local:
+    adapter: sops
+`;
+
+/**
+ * Scaffold the issue's worked example: a backend shelf whose schema declares all
+ * six status cases for the production environment.
+ */
+async function scaffold(): Promise<void> {
+  await write(".keyshelf/config.yaml", CONFIG);
+  await write(
+    ".keyshelf/backend/schema.yaml",
+    `keys:
+  DATABASE_URL: !required
+  LOG_LEVEL: info
+  REGION: eu-west-1
+  SUPABASE_KEY: !required
+  API_TOKEN: !required
+  DEBUG: !optional
+`
+  );
+  await write(
+    ".keyshelf/backend/production.yaml",
+    `provider: local
+keys:
+  DATABASE_URL: !secret
+  LOG_LEVEL: debug
+  SUPABASE_KEY: !ref
+    shelf: supabase
+`
+  );
+  // A target shelf for the !ref — present so nothing is malformed, but ls never
+  // follows the reference, so its contents are irrelevant to the view.
+  await write(".keyshelf/supabase/schema.yaml", "keys:\n  SUPABASE_KEY: !required\n");
+  await write(
+    ".keyshelf/supabase/production.yaml",
+    "provider: local\nkeys:\n  SUPABASE_KEY: !secret\n"
+  );
+}
+
+// eslint-disable-next-line no-control-regex
+const ANSI = /\[/;
+
+describe("keyshelf ls <shelf>/<stage> (environment key view)", () => {
+  it("returns the key-centric --json shape with the raw status enum", async () => {
+    await scaffold();
+    const { code, stdout } = await runKeyshelf(["ls", "backend/production", "--json"], { cwd });
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout)).toEqual({
+      shelf: "backend",
+      stage: "production",
+      keys: [
+        { key: "DATABASE_URL", presence: "required", status: "secret" },
+        { key: "LOG_LEVEL", presence: "default", status: "config" },
+        { key: "REGION", presence: "default", status: "default" },
+        {
+          key: "SUPABASE_KEY",
+          presence: "required",
+          status: "ref",
+          reference: { shelf: "supabase", stage: "production", key: "SUPABASE_KEY" }
+        },
+        { key: "API_TOKEN", presence: "required", status: "missing" },
+        { key: "DEBUG", presence: "optional", status: "unset" }
+      ]
+    });
+  });
+
+  it("prints a borderless aligned table in schema declaration order", async () => {
+    await scaffold();
+    const { code, stdout } = await runKeyshelf(["ls", "backend/production"], { cwd });
+    expect(code).toBe(0);
+    const lines = stdout.trimEnd().split("\n");
+    expect(lines[0]).toMatch(/^KEY\s+PRESENCE\s+STATUS$/);
+    expect(lines.slice(1)).toEqual([
+      "DATABASE_URL   required   ✓ secret",
+      "LOG_LEVEL      default    ✓ config",
+      "REGION         default    — default",
+      "SUPABASE_KEY   required   ✓ ref → supabase/production",
+      "API_TOKEN      required   ✗ missing",
+      "DEBUG          optional   — unset"
+    ]);
+  });
+
+  it("never prints any key value (config or secret)", async () => {
+    await scaffold();
+    const { stdout } = await runKeyshelf(["ls", "backend/production"], { cwd });
+    // LOG_LEVEL's committed config value is `debug`; the view shows status, not value.
+    expect(stdout).not.toContain("debug");
+    expect(stdout).not.toContain("eu-west-1");
+    expect(stdout).not.toContain("info");
+  });
+
+  it("prints 'No keys declared.' for an empty schema", async () => {
+    await write(".keyshelf/config.yaml", CONFIG);
+    await write(".keyshelf/empty/schema.yaml", "keys: {}\n");
+    await write(".keyshelf/empty/production.yaml", "provider: local\nkeys: {}\n");
+    const { code, stdout } = await runKeyshelf(["ls", "empty/production"], { cwd });
+    expect(code).toBe(0);
+    expect(stdout.trim()).toBe("No keys declared.");
+  });
+
+  it("emits an empty keys array for an empty schema under --json", async () => {
+    await write(".keyshelf/config.yaml", CONFIG);
+    await write(".keyshelf/empty/schema.yaml", "keys: {}\n");
+    await write(".keyshelf/empty/production.yaml", "provider: local\nkeys: {}\n");
+    const { code, stdout } = await runKeyshelf(["ls", "empty/production", "--json"], { cwd });
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout)).toEqual({ shelf: "empty", stage: "production", keys: [] });
+  });
+
+  it("disables colour and glyphless on a non-TTY (no ANSI escapes when piped)", async () => {
+    await scaffold();
+    const { stdout } = await runKeyshelf(["ls", "backend/production"], { cwd });
+    expect(ANSI.test(stdout)).toBe(false);
+  });
+
+  it("disables colour when NO_COLOR is set", async () => {
+    await scaffold();
+    const { stdout } = await runKeyshelf(["ls", "backend/production"], {
+      cwd,
+      env: { NO_COLOR: "1", FORCE_COLOR: "1" }
+    });
+    expect(ANSI.test(stdout)).toBe(false);
+  });
+
+  it("fails fast with SHELF_NOT_FOUND for an unknown shelf", async () => {
+    await scaffold();
+    const { code, stdout } = await runKeyshelf(["ls", "ghost/production", "--json"], { cwd });
+    expect(code).not.toBe(0);
+    expect(JSON.parse(stdout).error).toMatchObject({ code: "SHELF_NOT_FOUND", shelf: "ghost" });
+  });
+
+  it("fails fast with ENVIRONMENT_NOT_FOUND for an unknown stage", async () => {
+    await scaffold();
+    const { code, stdout } = await runKeyshelf(["ls", "backend/ghost", "--json"], { cwd });
+    expect(code).not.toBe(0);
+    expect(JSON.parse(stdout).error.code).toBe("ENVIRONMENT_NOT_FOUND");
+  });
+
+  it("fails fast with MALFORMED_FILE for a broken environment file", async () => {
+    await write(".keyshelf/config.yaml", CONFIG);
+    await write(".keyshelf/backend/schema.yaml", "keys:\n  A: !required\n");
+    await write(".keyshelf/backend/production.yaml", "provider: local\nkeys:\n  A: : :\n");
+    const { code, stdout } = await runKeyshelf(["ls", "backend/production", "--json"], { cwd });
+    expect(code).not.toBe(0);
+    expect(JSON.parse(stdout).error.code).toBe("MALFORMED_FILE");
+  });
+
+  it("fails fast with MALFORMED_FILE for a malformed target argument", async () => {
+    await scaffold();
+    const { code, stdout } = await runKeyshelf(["ls", "no-slash", "--json"], { cwd });
+    expect(code).not.toBe(0);
+    expect(JSON.parse(stdout).error.code).toBe("MALFORMED_FILE");
+  });
+});
