@@ -62,7 +62,10 @@ describe("environmentKeyView", () => {
 
   it("does not show environment keys that the schema does not declare", () => {
     const view = environmentKeyView(
-      loaded({ A: { kind: "required" } }, { A: { kind: "secret" }, EXTRA: { kind: "config", value: "x" } })
+      loaded(
+        { A: { kind: "required" } },
+        { A: { kind: "secret" }, EXTRA: { kind: "config", value: "x" } }
+      )
     );
     expect(view.map((v) => v.key)).toEqual(["A"]);
   });

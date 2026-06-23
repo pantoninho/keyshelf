@@ -34,6 +34,7 @@
   "dependencies": {
     "@google-cloud/secret-manager": "^6.2.0",
     "@oclif/core": "^4.0.0",
+    "string-width": "^5.1.2",
     "yaml": "^2.4.0"
   },
   "optionalDependencies": {
