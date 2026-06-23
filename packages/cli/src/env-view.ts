@@ -1,4 +1,4 @@
-import type { KeyReference, LoadedEnvironment } from "./model.js";
+import type { Environment, KeyReference, LoadedEnvironment, SchemaKey } from "./model.js";
 
 /** A key's schema presence requirement, surfaced in the environment key view. */
 export type Presence = "required" | "optional" | "default";
@@ -34,40 +34,56 @@ export interface KeyView {
  */
 export function environmentKeyView(loaded: LoadedEnvironment): KeyView[] {
   const { schema, environment } = loaded;
+  return Object.entries(schema.keys).map(([key, declared]) => keyView(key, declared, environment));
+}
 
-  return Object.entries(schema.keys).map(([key, declared]) => {
-    const supplied = environment.keys[key];
+/** A key's schema presence requirement, derived from its declared kind. */
+const PRESENCE_OF: Record<SchemaKey["kind"], Presence> = {
+  config: "default",
+  optional: "optional",
+  required: "required"
+};
 
-    if (supplied === undefined) {
-      // The environment omits the key; its status follows from schema presence.
-      if (declared.kind === "config") return { key, presence: "default", status: "default" };
-      if (declared.kind === "optional") return { key, presence: "optional", status: "unset" };
-      return { key, presence: "required", status: "missing" };
-    }
+/** The view of one declared key against the environment that may (or may not) supply it. */
+function keyView(key: string, declared: SchemaKey, environment: Environment): KeyView {
+  const presence = PRESENCE_OF[declared.kind];
+  const supplied = environment.keys[key];
 
-    const presence: Presence =
-      declared.kind === "config"
-        ? "default"
-        : declared.kind === "optional"
-          ? "optional"
-          : "required";
+  if (supplied === undefined) {
+    // The environment omits the key; its status follows from schema presence.
+    return { key, presence, status: absentStatus(declared.kind) };
+  }
 
-    if (supplied.kind === "ref" && supplied.reference !== undefined) {
-      return {
-        key,
-        presence,
-        status: "ref",
-        reference: {
-          shelf: supplied.reference.shelf,
-          // Coordinate defaults (ADR-0007): stage → current stage, key → own name.
-          stage: supplied.reference.stage ?? environment.name,
-          key: supplied.reference.key ?? key
-        }
-      };
-    }
+  if (supplied.kind === "ref" && supplied.reference !== undefined) {
+    return {
+      key,
+      presence,
+      status: "ref",
+      reference: resolveReferenceCoordinates(key, supplied.reference, environment.name)
+    };
+  }
 
-    return { key, presence, status: supplied.kind === "secret" ? "secret" : "config" };
-  });
+  return { key, presence, status: supplied.kind === "secret" ? "secret" : "config" };
+}
+
+/** The status of a key the environment omits: default-backed, optional, or required. */
+function absentStatus(kind: SchemaKey["kind"]): Status {
+  if (kind === "config") return "default";
+  if (kind === "optional") return "unset";
+  return "missing";
+}
+
+/** Apply the `!ref` coordinate defaults (ADR-0007): stage → current stage, key → own name. */
+function resolveReferenceCoordinates(
+  consumingKey: string,
+  reference: KeyReference,
+  currentStage: string
+): Required<KeyReference> {
+  return {
+    shelf: reference.shelf,
+    stage: reference.stage ?? currentStage,
+    key: reference.key ?? consumingKey
+  };
 }
 
 /** A named colour applied to a span of status text. {@link ux.colorize}-compatible. */
