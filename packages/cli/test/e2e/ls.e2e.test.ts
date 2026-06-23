@@ -84,13 +84,7 @@ describe("keyshelf ls (project map)", () => {
 
     const { stdout } = await runKeyshelf(["ls"], { cwd });
     const lines = stdout.trimEnd().split("\n");
-    expect(lines).toEqual([
-      "apple (1 keys)",
-      "└─ prod",
-      "zoo (1 keys)",
-      "├─ alpha",
-      "└─ beta"
-    ]);
+    expect(lines).toEqual(["apple (1 keys)", "└─ prod", "zoo (1 keys)", "├─ alpha", "└─ beta"]);
   });
 
   it("renders a shelf with no environments as a node with no leaves", async () => {
