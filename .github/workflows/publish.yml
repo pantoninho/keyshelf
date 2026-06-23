@@ -1,30 +1,39 @@
 name: Publish
 
-# GATED — merging a PR NEVER publishes. Two independent guards must BOTH hold for
-# the publish step to run:
+# GATED — merging an ordinary PR NEVER publishes. Two independent guards must BOTH
+# hold for the publish step to run:
 #   1. Trigger: only a pushed release tag matching `keyshelf-v*` (e.g.
 #      `keyshelf-v6.0.0`, the scheme release-please emits via
 #      include-component-in-tag). A merge to `main`, or any pull_request, cannot
 #      start this workflow at all.
 #   2. Step guard: the publish step is skipped unless an npm credential is present
-#      (`secrets.NPM_TOKEN`). The `@keyshelf` scope has no token/OIDC trusted
-#      publisher configured yet (a human-only handoff), so even a tag push only
-#      builds + verifies and then no-ops the publish.
-# A reviewer can confirm by inspection that nothing is published by this PR: there
-# is no `push: branches` / `pull_request` trigger, and the publish step's `if`
-# cannot be true without a secret that does not exist.
+#      (`secrets.NPM_TOKEN`). `NPM_TOKEN` IS now configured for the `@keyshelf`
+#      scope, so a tag push (or a `workflow_dispatch` run on a `keyshelf-v*` tag
+#      ref) performs a real publish.
+# A reviewer can confirm by inspection that an ordinary PR publishes nothing:
+# there is no `push: branches` / `pull_request` trigger, so this workflow cannot
+# even start from a PR merge.
+#
+# NOTE: release-please creates the `keyshelf-v*` tag using the default
+# `GITHUB_TOKEN`, and GitHub suppresses workflow-event cascades from that token —
+# so the tag push does NOT auto-trigger this workflow. After a release PR merges,
+# kick off the publish manually with:
+#     gh workflow run publish.yml --ref keyshelf-v<x.y.z>
+# (the tag ref keeps the publish step's `startsWith(github.ref, …)` guard true).
 
 on:
   push:
     tags:
       - "keyshelf-v*"
-  # Manual dry-run: builds + verifies the integrity gates, never publishes
-  # (the publish step's secret guard is still required).
+  # Manual trigger. On a branch ref this is a dry-run (builds + verifies only —
+  # the publish step's `startsWith(github.ref, 'refs/tags/keyshelf-v')` guard is
+  # false). On a `keyshelf-v*` tag ref it publishes for real, which is how a
+  # release is shipped after merge (see the NOTE above).
   workflow_dispatch:
 
 permissions:
   contents: read
-  # Required for npm provenance via OIDC once a trusted publisher is configured.
+  # Required for npm provenance via OIDC.
   id-token: write
 
 jobs:
@@ -58,9 +67,10 @@ jobs:
         run: npm audit signatures
         working-directory: packages/cli
 
-      # Decide whether a real publish may proceed. The @keyshelf scope's npm
-      # trusted-publisher/NPM_TOKEN is NOT configured yet (human-only handoff), so
-      # this is empty on every current run and the publish steps below are skipped.
+      # Decide whether a real publish may proceed. `NPM_TOKEN` is configured for
+      # the @keyshelf scope, so this is `enabled=true` on tag runs and the publish
+      # step below runs. If the token is ever removed, this falls back to
+      # enabled=false and the run only builds + verifies (no publish).
       - name: Determine whether publishing is configured
         id: gate
         env:
@@ -74,9 +84,10 @@ jobs:
           fi
 
       # Publish the five platform packages, then keyshelf. `--provenance` attaches
-      # a signed provenance statement via OIDC. GUARDED: only runs on a `v*` tag
-      # AND only when the npm credential exists. Both conditions are false for this
-      # PR, so nothing is published on merge.
+      # a signed provenance statement via OIDC. GUARDED: only runs on a `keyshelf-v*`
+      # tag ref AND only when the npm credential exists. An ordinary PR satisfies
+      # neither (this workflow can't even start from a PR), so nothing is published
+      # on merge; a tag run satisfies both and publishes for real.
       - name: Publish platform packages + keyshelf (provenance, OIDC)
         if: steps.gate.outputs.enabled == 'true' && startsWith(github.ref, 'refs/tags/keyshelf-v')
         env:
