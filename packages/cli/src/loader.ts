@@ -354,3 +354,55 @@ export async function listEnvironments(projectDir: string): Promise<EnvironmentR
 
   return refs;
 }
+
+/** One shelf's offline shape: its schema contract size and its environments. */
+export interface ShelfMap {
+  shelf: string;
+  /** The shelf's schema contract size (count of keys declared in `schema.yaml`). */
+  keys: number;
+  /** The shelf's environment stages, sorted alphabetically. */
+  stages: string[];
+}
+
+/** An offline map of the whole project: every shelf with its shape. */
+export interface ProjectMap {
+  /** Every shelf, sorted alphabetically by name. */
+  shelves: ShelfMap[];
+}
+
+/**
+ * Build an offline map of the project (ADR-0008): every shelf, its schema's key
+ * count, and the environments under it. A pure file read — it builds no provider,
+ * touches no backend, and reads no key values. Shelves and their environment
+ * stages are each sorted alphabetically.
+ *
+ * Throws `NOT_INITIALIZED` when the project is not initialized. A broken shelf
+ * (missing or malformed `schema.yaml`) fails fast with that shelf's
+ * `KeyshelfError` — the whole map aborts rather than render partially.
+ */
+export async function loadProjectMap(projectDir: string): Promise<ProjectMap> {
+  const root = keyshelfRoot(projectDir);
+  const entries = await readdir(root, { withFileTypes: true });
+
+  const shelfNames = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+
+  const shelves: ShelfMap[] = [];
+  for (const shelf of shelfNames) {
+    if (!existsSync(path.join(root, shelf, SCHEMA_FILE))) {
+      throw new KeyshelfError("SCHEMA_NOT_FOUND", `Shelf '${shelf}' has no ${SCHEMA_FILE}.`, {
+        shelf
+      });
+    }
+
+    const schema = await loadSchema(root, shelf);
+    const environments = await listShelfEnvironments(root, shelf);
+    const stages = environments.map((env) => env.stage).sort((a, b) => a.localeCompare(b));
+
+    shelves.push({ shelf, keys: Object.keys(schema.keys).length, stages });
+  }
+
+  return { shelves };
+}
