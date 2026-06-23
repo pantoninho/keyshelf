@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { environmentKeyView, type KeyView } from "../../src/env-view.js";
+import {
+  environmentKeyView,
+  formatStatus,
+  type Colorize,
+  type KeyView
+} from "../../src/env-view.js";
 import type { LoadedEnvironment } from "../../src/model.js";
 
 /** Assemble a minimal {@link LoadedEnvironment} from schema + environment keys. */
@@ -94,5 +99,38 @@ describe("environmentKeyView", () => {
 
   it("returns an empty array for a schema that declares no keys", () => {
     expect(environmentKeyView(loaded({}, {}))).toEqual([]);
+  });
+});
+
+describe("formatStatus", () => {
+  /** An identity colorizer — the glyphless plain text, so assertions read clearly. */
+  const plain: Colorize = (_color, text) => text;
+
+  /** A tagging colorizer — proves which colour each span gets, glyph-free. */
+  const tag: Colorize = (color, text) => `<${color}>${text}</${color}>`;
+
+  function view(status: KeyView["status"], reference?: KeyView["reference"]): KeyView {
+    return { key: "K", presence: "required", status, reference };
+  }
+
+  it("renders each status with its glyph + word (plain)", () => {
+    expect(formatStatus(view("config"), plain)).toBe("✓ config");
+    expect(formatStatus(view("secret"), plain)).toBe("✓ secret");
+    expect(formatStatus(view("default"), plain)).toBe("— default");
+    expect(formatStatus(view("unset"), plain)).toBe("— unset");
+    expect(formatStatus(view("missing"), plain)).toBe("✗ missing");
+  });
+
+  it("renders ref with its resolved (unfollowed) target", () => {
+    const ref = view("ref", { shelf: "supabase", stage: "production", key: "K" });
+    expect(formatStatus(ref, plain)).toBe("✓ ref → supabase/production");
+  });
+
+  it("colours the glyph green, secret yellow, missing red, defaults/unset dim", () => {
+    expect(formatStatus(view("config"), tag)).toBe("<green>✓</green> config");
+    expect(formatStatus(view("secret"), tag)).toBe("<green>✓</green> <yellow>secret</yellow>");
+    expect(formatStatus(view("missing"), tag)).toBe("<red>✗</red> <red>missing</red>");
+    expect(formatStatus(view("default"), tag)).toBe("<dim>— default</dim>");
+    expect(formatStatus(view("unset"), tag)).toBe("<dim>— unset</dim>");
   });
 });

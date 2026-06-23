@@ -1,7 +1,7 @@
 import { Args, ux } from "@oclif/core";
 import stringWidth from "string-width";
 import { BaseCommand } from "../base-command.js";
-import { environmentKeyView, type KeyView } from "../env-view.js";
+import { environmentKeyView, formatStatus, type KeyView } from "../env-view.js";
 import { loadEnvironment, loadProjectMap, type ProjectMap } from "../loader.js";
 import { parseTarget } from "../target.js";
 
@@ -124,7 +124,7 @@ export default class Ls extends BaseCommand {
     const rows = keys.map((view) => ({
       key: view.key,
       presence: view.presence,
-      status: renderStatus(view)
+      status: formatStatus(view, (color, text) => ux.colorize(color, text))
     }));
 
     // Column widths are measured on the *uncoloured* text (status here is plain,
@@ -153,31 +153,6 @@ function columnWidth<T>(header: string, rows: T[], cell: (row: T) => string): nu
 /** Right-pad `text` with spaces to a target display width (width-aware). */
 function pad(text: string, width: number): string {
   return text + " ".repeat(Math.max(0, width - stringWidth(text)));
-}
-
-/**
- * The coloured `glyph word` for a key's status. The glyph vocabulary is
- * `✓` (supplied), `—` (resting on a default / unset), `✗` (required but missing).
- * `secret` is highlighted so sensitive keys catch the eye; `ref` shows its
- * resolved target. Colour auto-disables via {@link ux.colorize}.
- */
-function renderStatus(view: KeyView): string {
-  switch (view.status) {
-    case "config":
-      return `${ux.colorize("green", "✓")} config`;
-    case "secret":
-      return `${ux.colorize("green", "✓")} ${ux.colorize("yellow", "secret")}`;
-    case "ref": {
-      const target = `${view.reference?.shelf}/${view.reference?.stage}`;
-      return `${ux.colorize("green", "✓")} ref → ${target}`;
-    }
-    case "default":
-      return ux.colorize("dim", "— default");
-    case "unset":
-      return ux.colorize("dim", "— unset");
-    case "missing":
-      return `${ux.colorize("red", "✗")} ${ux.colorize("red", "missing")}`;
-  }
 }
 
 /** Flatten the project map into the environment-centric `--json` shape. */

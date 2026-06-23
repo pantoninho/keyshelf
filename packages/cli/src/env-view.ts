@@ -69,3 +69,36 @@ export function environmentKeyView(loaded: LoadedEnvironment): KeyView[] {
     return { key, presence, status: supplied.kind === "secret" ? "secret" : "config" };
   });
 }
+
+/** A named colour applied to a span of status text. {@link ux.colorize}-compatible. */
+export type StatusColor = "green" | "red" | "yellow" | "dim";
+
+/** Apply a colour to a span of text; identity disables colour (e.g. for tests). */
+export type Colorize = (color: StatusColor, text: string) => string;
+
+/**
+ * Render a key's STATUS as its `glyph word` display string, colour applied via
+ * `colorize`. The glyph vocabulary is `✓` (supplied), `—` (resting on a default
+ * / unset), `✗` (required but missing); `secret` is highlighted so sensitive keys
+ * catch the eye and `ref` shows its resolved (but unfollowed) target. Pure — the
+ * caller supplies `colorize` so colour is its concern (auto-off on non-TTY /
+ * `NO_COLOR`), keeping this value-free and directly testable.
+ */
+export function formatStatus(view: KeyView, colorize: Colorize): string {
+  const check = colorize("green", "✓");
+
+  switch (view.status) {
+    case "config":
+      return `${check} config`;
+    case "secret":
+      return `${check} ${colorize("yellow", "secret")}`;
+    case "ref":
+      return `${check} ref → ${view.reference?.shelf}/${view.reference?.stage}`;
+    case "default":
+      return colorize("dim", "— default");
+    case "unset":
+      return colorize("dim", "— unset");
+    case "missing":
+      return `${colorize("red", "✗")} ${colorize("red", "missing")}`;
+  }
+}
