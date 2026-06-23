@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.1.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.0.0...keyshelf-v6.1.0) (2026-06-23)
+
+
+### Features
+
+* **cli:** keyshelf ls environment key view ([#229](https://github.com/pantoninho/keyshelf/issues/229)) ([2d68c77](https://github.com/pantoninho/keyshelf/commit/2d68c779efe6d38a91b40c6d2521fac87035ea38))
+* **cli:** keyshelf ls project map ([#227](https://github.com/pantoninho/keyshelf/issues/227)) ([baa8fad](https://github.com/pantoninho/keyshelf/commit/baa8fad1fb2219db64633ec06ff6520de428cfe5))
+
 ## [6.0.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v5.4.0...keyshelf-v6.0.0) (2026-06-22)
 
 
