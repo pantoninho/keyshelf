@@ -14,12 +14,18 @@ name: Publish
 # there is no `push: branches` / `pull_request` trigger, so this workflow cannot
 # even start from a PR merge.
 #
-# NOTE: release-please creates the `keyshelf-v*` tag using the default
-# `GITHUB_TOKEN`, and GitHub suppresses workflow-event cascades from that token —
-# so the tag push does NOT auto-trigger this workflow. After a release PR merges,
-# kick off the publish manually with:
+# NOTE: publishing is now AUTOMATIC on release. release-please creates the
+# `keyshelf-v*` tag using the default `GITHUB_TOKEN`, and GitHub suppresses
+# workflow-event cascades from that token — so the tag *push* does NOT auto-trigger
+# this workflow. Instead, the `release-please` job in ci.yml dispatches this
+# workflow (`gh workflow run publish.yml --ref <tag>`) when — and only when — a
+# `keyshelf` release is created; `workflow_dispatch` is exempt from the
+# GITHUB_TOKEN recursion guard, so that dispatch starts a real run. Dispatching on
+# the tag ref keeps the publish step's `startsWith(github.ref, …)` guard true.
+#
+# Manual dispatch remains the fallback (e.g. to re-run a publish, or if the
+# automatic dispatch ever fails):
 #     gh workflow run publish.yml --ref keyshelf-v<x.y.z>
-# (the tag ref keeps the publish step's `startsWith(github.ref, …)` guard true).
 
 on:
   push:

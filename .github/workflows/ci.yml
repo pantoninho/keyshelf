@@ -96,9 +96,30 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # Required so this job can dispatch the Publish workflow (gh workflow run)
+      # when a release is cut. Without actions:write the dispatch API 403s.
+      actions: write
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # Auto-publish on release. release-please pushes the keyshelf-v* tag with the
+      # default GITHUB_TOKEN, and GitHub suppresses the push→workflow cascade from
+      # GITHUB_TOKEN — so the Publish workflow's `push: tags` trigger never fires on
+      # a release. workflow_dispatch is an explicit exception to that recursion
+      # guard, so dispatching it here DOES start a run. We dispatch against the new
+      # tag ref so the publish step's `startsWith(github.ref, 'refs/tags/keyshelf-v')`
+      # guard stays satisfied. Gated on the release-please "release created" output
+      # for the keyshelf package (manifest path packages/cli); when no release is
+      # created (the common case — just maintaining the release PR) this step is
+      # skipped and nothing is dispatched. Output keys are path-prefixed for a
+      # manifest config and the path contains a slash, so bracket access is required.
+      - name: Dispatch Publish workflow for the new release tag
+        if: ${{ steps.release.outputs['packages/cli--release_created'] }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.release.outputs['packages/cli--tag_name'] }}
+        run: gh workflow run publish.yml --ref "$TAG_NAME"
