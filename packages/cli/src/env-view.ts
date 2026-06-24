@@ -1,3 +1,4 @@
+import type { Adapter, AdapterMetadata } from "./adapters/adapter.js";
 import type { Environment, KeyReference, LoadedEnvironment, SchemaKey } from "./model.js";
 
 /** A key's schema presence requirement, surfaced in the environment key view. */
@@ -19,6 +20,13 @@ export interface KeyView {
   status: Status;
   /** Resolved `!ref` coordinates (defaults applied); present only for `ref` keys. */
   reference?: Required<KeyReference>;
+  /**
+   * The key's offline backend **address** (never its value), present only for
+   * `secret` keys when the environment's adapter implements
+   * {@link Adapter.metadata}. Computed without any network or credentials
+   * (ADR-0008).
+   */
+  metadata?: AdapterMetadata;
 }
 
 /**
@@ -31,10 +39,20 @@ export interface KeyView {
  * (target stage → the current stage, target key → the consuming key's own name)
  * so the target is reported without the reference being followed. No key value is
  * read or returned.
+ *
+ * When an `adapter` is supplied and implements {@link Adapter.metadata}, each
+ * `secret` key is annotated with its offline backend **address** (its storage
+ * location, never its value — ADR-0008). `metadata()` is synchronous and
+ * network-free, so this stays a pure, offline read. Only `secret` keys are
+ * addressed: a `!ref` key resolves through its *target* environment's provider,
+ * not this one's, so addressing it here would be misleading; config/default/
+ * unset/missing keys have no backend storage at all.
  */
-export function environmentKeyView(loaded: LoadedEnvironment): KeyView[] {
+export function environmentKeyView(loaded: LoadedEnvironment, adapter?: Adapter): KeyView[] {
   const { schema, environment } = loaded;
-  return Object.entries(schema.keys).map(([key, declared]) => keyView(key, declared, environment));
+  return Object.entries(schema.keys).map(([key, declared]) =>
+    keyView(key, declared, environment, adapter)
+  );
 }
 
 /** A key's schema presence requirement, derived from its declared kind. */
@@ -45,7 +63,12 @@ const PRESENCE_OF: Record<SchemaKey["kind"], Presence> = {
 };
 
 /** The view of one declared key against the environment that may (or may not) supply it. */
-function keyView(key: string, declared: SchemaKey, environment: Environment): KeyView {
+function keyView(
+  key: string,
+  declared: SchemaKey,
+  environment: Environment,
+  adapter?: Adapter
+): KeyView {
   const presence = PRESENCE_OF[declared.kind];
   const supplied = environment.keys[key];
 
@@ -63,7 +86,18 @@ function keyView(key: string, declared: SchemaKey, environment: Environment): Ke
     };
   }
 
-  return { key, presence, status: supplied.kind === "secret" ? "secret" : "config" };
+  if (supplied.kind === "secret") {
+    // Address the secret offline through the environment's own adapter, if it can
+    // (an adapter that can't compute an address without a network call omits
+    // metadata() — ADR-0008). The explicit `!secret { ref }` payload, if any,
+    // overrides the convention address.
+    const metadata = adapter?.metadata?.(key, supplied.ref);
+    return metadata === undefined
+      ? { key, presence, status: "secret" }
+      : { key, presence, status: "secret", metadata };
+  }
+
+  return { key, presence, status: "config" };
 }
 
 /** The status of a key the environment omits: default-backed, optional, or required. */
