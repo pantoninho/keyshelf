@@ -11,21 +11,32 @@ import { captureError } from "../support/capture-error.js";
 export interface AdapterHarness {
   /** A label for the test report (e.g. `'fake'`). */
   readonly name: string;
+  /**
+   * Whether the backend can store an empty string. Defaults to `true`. The gcp
+   * adapter sets this `false`: Secret Manager rejects an empty payload and an
+   * empty secret has no native form to mount, so it rejects empty values with
+   * `ADAPTER_ERROR` (ADR-0006). This is the contract's one sanctioned per-backend
+   * divergence in value fidelity.
+   */
+  readonly supportsEmptyValue?: boolean;
   /** Provision a fresh backend + adapter for a single test. */
   setup(): Promise<{ adapter: Adapter }>;
   /** Tear down whatever {@link setup} provisioned. */
   teardown(): Promise<void>;
 }
 
-/** Adversarial values that must round-trip byte-exactly through any adapter. */
+/**
+ * Adversarial values that must round-trip byte-exactly through any adapter. The
+ * empty string is handled separately because not every backend can represent it
+ * (see {@link AdapterHarness.supportsEmptyValue}).
+ */
 const ADVERSARIAL_VALUES: ReadonlyArray<readonly [label: string, value: string]> = [
   ["embedded newlines", "line1\nline2\nline3"],
   ["trailing/leading whitespace", "  padded value \t"],
   ["equals signs", "postgres://h?a=b=c&d=e"],
   ["single and double quotes", `it's a "quoted" 'value'`],
   ["unicode", "café — 日本語 — 🔐 — Ω"],
-  ["multi-KB blob", "x".repeat(8192)],
-  ["empty string", ""]
+  ["multi-KB blob", "x".repeat(8192)]
 ];
 
 /**
@@ -66,6 +77,18 @@ export function runAdapterContractSuite(harness: AdapterHarness): void {
           await adapter.write("FIDELITY_KEY", value);
           const resolved = await adapter.resolve("FIDELITY_KEY");
           expect(resolved).toBe(value);
+        });
+      }
+
+      if (harness.supportsEmptyValue ?? true) {
+        it("round-trips the empty string", async () => {
+          await adapter.write("FIDELITY_KEY", "");
+          expect(await adapter.resolve("FIDELITY_KEY")).toBe("");
+        });
+      } else {
+        it("rejects an empty value with ADAPTER_ERROR", async () => {
+          const error = await captureError(() => adapter.write("FIDELITY_KEY", ""));
+          expect(error.code).toBe("ADAPTER_ERROR");
         });
       }
 
