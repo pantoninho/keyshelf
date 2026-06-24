@@ -1,5 +1,17 @@
 # Changelog
 
+## [6.3.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.2.0...keyshelf-v6.3.0) (2026-06-24)
+
+
+### Features
+
+* secret version pinning (require-deploy for secret changes) — ADR-0009 + impl ([#246](https://github.com/pantoninho/keyshelf/issues/246)) ([dc002df](https://github.com/pantoninho/keyshelf/commit/dc002dfb81e4298d23c80339d3cc3dd146b766b9))
+
+
+### Bug Fixes
+
+* **run:** forward termination signals to the wrapped child ([#244](https://github.com/pantoninho/keyshelf/issues/244)) ([5a8dc5e](https://github.com/pantoninho/keyshelf/commit/5a8dc5e22d2a7c45fd2560182c03fd751b06e550))
+
 ## [6.2.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.1.1...keyshelf-v6.2.0) (2026-06-24)
 
 
