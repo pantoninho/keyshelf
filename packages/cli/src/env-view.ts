@@ -21,10 +21,17 @@ export interface KeyView {
   /** Resolved `!ref` coordinates (defaults applied); present only for `ref` keys. */
   reference?: Required<KeyReference>;
   /**
+   * The pinned backend version (ADR-0009), present only for a `secret` key whose
+   * `!secret` reference pins one. Absent ⇒ the secret floats (resolves `latest`).
+   * Surfaced so the pin is visible offline in `ls --json` independently of the
+   * adapter address.
+   */
+  version?: number;
+  /**
    * The key's offline backend **address** (never its value), present only for
    * `secret` keys when the environment's adapter implements
-   * {@link Adapter.metadata}. Computed without any network or credentials
-   * (ADR-0008).
+   * {@link Adapter.metadata}. For a pinned secret the address pins the version
+   * (`.../versions/N`). Computed without any network or credentials (ADR-0008).
    */
   metadata?: AdapterMetadata;
 }
@@ -89,12 +96,13 @@ function keyView(
   if (supplied.kind === "secret") {
     // Address the secret offline through the environment's own adapter, if it can
     // (an adapter that can't compute an address without a network call omits
-    // metadata() — ADR-0008). The explicit `!secret { ref }` payload, if any,
-    // overrides the convention address.
+    // metadata() — ADR-0008). The explicit `!secret { ref, version }` payload, if
+    // any, overrides the convention address and pins the version (ADR-0009).
     const metadata = adapter?.metadata?.(key, supplied.ref);
-    return metadata === undefined
-      ? { key, presence, status: "secret" }
-      : { key, presence, status: "secret", metadata };
+    const view: KeyView = { key, presence, status: "secret" };
+    if (supplied.version !== undefined) view.version = supplied.version;
+    if (metadata !== undefined) view.metadata = metadata;
+    return view;
   }
 
   return { key, presence, status: "config" };
