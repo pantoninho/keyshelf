@@ -1,9 +1,16 @@
-import { Args, ux } from "@oclif/core";
+import { Args, Flags, ux } from "@oclif/core";
 import stringWidth from "string-width";
+import { adapterForEnvironment } from "../adapters/registry.js";
 import { BaseCommand } from "../base-command.js";
 import { environmentKeyView, formatStatus, type KeyView } from "../env-view.js";
 import { loadEnvironment, loadProjectMap, type ProjectMap } from "../loader.js";
 import { parseTarget } from "../target.js";
+
+/** Render an {@link KeyView.metadata} address as a single-line table cell. */
+function metadataCell(view: KeyView): string {
+  if (view.metadata === undefined) return "";
+  return view.metadata.adapter === "gcp" ? view.metadata.resource : "";
+}
 
 /** One environment in the flat, environment-centric `--json` shape. */
 interface EnvironmentEntry {
@@ -60,15 +67,23 @@ export default class Ls extends BaseCommand {
     })
   };
 
+  static flags = {
+    metadata: Flags.boolean({
+      description:
+        "Show each secret key's offline backend address (e.g. its GCP Secret Manager resource) as an extra table column. Always present in --json.",
+      default: false
+    })
+  };
+
   async run(): Promise<ProjectMapResult | EnvironmentViewResult> {
-    const { args } = await this.parse(Ls);
+    const { args, flags } = await this.parse(Ls);
     const cwd = process.cwd();
 
     if (args.target === undefined) {
       return this.runProjectMap(cwd);
     }
 
-    return this.runEnvironmentView(cwd, args.target);
+    return this.runEnvironmentView(cwd, args.target, flags.metadata);
   }
 
   /** `keyshelf ls` — the whole-project map. */
@@ -83,13 +98,23 @@ export default class Ls extends BaseCommand {
   }
 
   /** `keyshelf ls <shelf>/<stage>` — one environment's key contract. */
-  private async runEnvironmentView(cwd: string, target: string): Promise<EnvironmentViewResult> {
+  private async runEnvironmentView(
+    cwd: string,
+    target: string,
+    showMetadata: boolean
+  ): Promise<EnvironmentViewResult> {
     const { shelf, stage } = parseTarget(target);
     const loaded = await loadEnvironment(cwd, shelf, stage);
-    const keys = environmentKeyView(loaded);
+    // Build the environment's adapter to compute offline secret addresses. This
+    // stays offline and credential-free: construction never reaches the backend,
+    // and metadata() is synchronous and network-free (ADR-0008). Adapter address
+    // metadata is always carried in --json; the human table shows it only behind
+    // --metadata.
+    const adapter = adapterForEnvironment(cwd, loaded);
+    const keys = environmentKeyView(loaded, adapter);
 
     if (!this.jsonEnabled()) {
-      this.renderKeyTable(keys);
+      this.renderKeyTable(keys, showMetadata);
     }
 
     return { shelf, stage, keys };
@@ -114,8 +139,13 @@ export default class Ls extends BaseCommand {
     }
   }
 
-  /** Print the borderless, column-aligned key table (non-JSON mode only). */
-  private renderKeyTable(keys: KeyView[]): void {
+  /**
+   * Print the borderless, column-aligned key table (non-JSON mode only). With
+   * `showMetadata`, append a METADATA column carrying each secret key's offline
+   * backend address (blank for keys with none); the default table omits it
+   * entirely so it stays lean.
+   */
+  private renderKeyTable(keys: KeyView[], showMetadata: boolean): void {
     if (keys.length === 0) {
       this.log("No keys declared.");
       return;
@@ -124,7 +154,8 @@ export default class Ls extends BaseCommand {
     const rows = keys.map((view) => ({
       key: view.key,
       presence: view.presence,
-      status: formatStatus(view, (color, text) => ux.colorize(color, text))
+      status: formatStatus(view, (color, text) => ux.colorize(color, text)),
+      metadata: metadataCell(view)
     }));
 
     // Column widths are measured on the *uncoloured* text (status here is plain,
@@ -132,15 +163,35 @@ export default class Ls extends BaseCommand {
     const keyWidth = columnWidth("KEY", rows, (r) => r.key);
     const presenceWidth = columnWidth("PRESENCE", rows, (r) => r.presence);
 
+    if (!showMetadata) {
+      this.log(
+        `${ux.colorize("bold", pad("KEY", keyWidth))}   ${ux.colorize(
+          "bold",
+          pad("PRESENCE", presenceWidth)
+        )}   ${ux.colorize("bold", "STATUS")}`
+      );
+      for (const row of rows) {
+        this.log(`${pad(row.key, keyWidth)}   ${pad(row.presence, presenceWidth)}   ${row.status}`);
+      }
+      return;
+    }
+
+    // STATUS carries glyphs/colour, so pad it on its uncoloured display width to
+    // keep the trailing METADATA column aligned.
+    const statusWidth = columnWidth("STATUS", rows, (r) => r.status);
     this.log(
       `${ux.colorize("bold", pad("KEY", keyWidth))}   ${ux.colorize(
         "bold",
         pad("PRESENCE", presenceWidth)
-      )}   ${ux.colorize("bold", "STATUS")}`
+      )}   ${ux.colorize("bold", pad("STATUS", statusWidth))}   ${ux.colorize("bold", "METADATA")}`
     );
-
     for (const row of rows) {
-      this.log(`${pad(row.key, keyWidth)}   ${pad(row.presence, presenceWidth)}   ${row.status}`);
+      this.log(
+        `${pad(row.key, keyWidth)}   ${pad(row.presence, presenceWidth)}   ${pad(
+          row.status,
+          statusWidth
+        )}   ${row.metadata}`
+      );
     }
   }
 }

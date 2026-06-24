@@ -176,3 +176,121 @@ describe("keyshelf ls <shelf>/<stage> (environment key view)", () => {
     expect(JSON.parse(stdout).error.code).toBe("MALFORMED_FILE");
   });
 });
+
+/**
+ * A project backed by the gcp adapter, which implements offline `metadata()`.
+ * No credentials are configured: `ls` must build the adapter and compute the
+ * Secret Manager address without ever reaching the network (ADR-0008).
+ */
+async function scaffoldGcp(): Promise<void> {
+  await write(
+    ".keyshelf/config.yaml",
+    `project: myapp
+providers:
+  cloud:
+    adapter: gcp
+    projectId: my-gcp-project
+`
+  );
+  await write(
+    ".keyshelf/backend/schema.yaml",
+    `keys:
+  DATABASE_PASSWORD: !required
+  SHARED_TOKEN: !required
+  LOG_LEVEL: info
+`
+  );
+  await write(
+    ".keyshelf/backend/production.yaml",
+    `provider: cloud
+keys:
+  DATABASE_PASSWORD: !secret
+  SHARED_TOKEN: !secret
+    ref: shared-secret
+  LOG_LEVEL: debug
+`
+  );
+}
+
+describe("keyshelf ls <shelf>/<stage> (adapter metadata, offline)", () => {
+  it("always includes the gcp address in --json for secret keys (omits it elsewhere)", async () => {
+    await scaffoldGcp();
+    const { code, stdout } = await runKeyshelf(["ls", "backend/production", "--json"], { cwd });
+    expect(code).toBe(0);
+    const result = JSON.parse(stdout);
+    expect(result.keys).toEqual([
+      {
+        key: "DATABASE_PASSWORD",
+        presence: "required",
+        status: "secret",
+        metadata: {
+          adapter: "gcp",
+          resource:
+            "projects/my-gcp-project/secrets/keyshelf__myapp__backend__production__DATABASE_PASSWORD/versions/latest"
+        }
+      },
+      {
+        key: "SHARED_TOKEN",
+        presence: "required",
+        status: "secret",
+        metadata: {
+          adapter: "gcp",
+          resource: "projects/my-gcp-project/secrets/shared-secret/versions/latest"
+        }
+      },
+      { key: "LOG_LEVEL", presence: "default", status: "config" }
+    ]);
+  });
+
+  it("shows a METADATA column behind --metadata; the default table omits it", async () => {
+    await scaffoldGcp();
+    const plain = await runKeyshelf(["ls", "backend/production"], { cwd });
+    expect(plain.code).toBe(0);
+    expect(plain.stdout).not.toContain("METADATA");
+    expect(plain.stdout).not.toContain("versions/latest");
+    expect(plain.stdout.split("\n")[0]).toMatch(/^KEY\s+PRESENCE\s+STATUS$/);
+
+    const withMeta = await runKeyshelf(["ls", "backend/production", "--metadata"], { cwd });
+    expect(withMeta.code).toBe(0);
+    expect(withMeta.stdout.split("\n")[0]).toMatch(/^KEY\s+PRESENCE\s+STATUS\s+METADATA$/);
+    expect(withMeta.stdout).toContain(
+      "projects/my-gcp-project/secrets/keyshelf__myapp__backend__production__DATABASE_PASSWORD/versions/latest"
+    );
+    expect(withMeta.stdout).toContain(
+      "projects/my-gcp-project/secrets/shared-secret/versions/latest"
+    );
+  });
+
+  it("remains fully offline with no GCP credentials available (no network)", async () => {
+    await scaffoldGcp();
+    // Point ADC at a non-existent file and disable any ambient project so a
+    // network/credential attempt would fail loudly. ls must still succeed.
+    const { code, stdout } = await runKeyshelf(["ls", "backend/production", "--json"], {
+      cwd,
+      env: {
+        GOOGLE_APPLICATION_CREDENTIALS: path.join(cwd, "does-not-exist.json"),
+        GCLOUD_PROJECT: "",
+        GOOGLE_CLOUD_PROJECT: ""
+      }
+    });
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout).keys[0].metadata.adapter).toBe("gcp");
+  });
+
+  it("omits metadata for an adapter that does not implement it (sops --json)", async () => {
+    await scaffold();
+    const { code, stdout } = await runKeyshelf(["ls", "backend/production", "--json"], { cwd });
+    expect(code).toBe(0);
+    for (const key of JSON.parse(stdout).keys) {
+      expect(key.metadata).toBeUndefined();
+    }
+  });
+
+  it("--metadata leaves the table unchanged when no key has metadata (sops)", async () => {
+    await scaffold();
+    const { code, stdout } = await runKeyshelf(["ls", "backend/production", "--metadata"], { cwd });
+    expect(code).toBe(0);
+    // No adapter address to show, so the METADATA column stays empty (cells blank).
+    expect(stdout).not.toContain("versions/latest");
+  });
+});
