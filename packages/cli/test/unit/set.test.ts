@@ -47,7 +47,11 @@ describe("secretRefForm", () => {
 
   it("stays floating (no version) when the adapter reports no version", () => {
     expect(
-      secretRefForm("keyshelf__myapp__web__staging__DB", "keyshelf__myapp__web__staging__DB", undefined)
+      secretRefForm(
+        "keyshelf__myapp__web__staging__DB",
+        "keyshelf__myapp__web__staging__DB",
+        undefined
+      )
     ).toEqual({ bare: true });
   });
 });

@@ -9,10 +9,10 @@ not reshape — the two-method adapter contract (ADR-0002), the conformance suit
 
 Two modes ride one mechanism:
 
-| Mode     | Reference                          | Resolution                                        |
-| -------- | ---------------------------------- | ------------------------------------------------- |
-| Floating | bare `!secret` (today)             | the backend's `latest` — value change needs no deploy |
-| Pinned   | `!secret { version: N }`           | exactly version `N` — value change is a manifest diff |
+| Mode     | Reference                | Resolution                                            |
+| -------- | ------------------------ | ----------------------------------------------------- |
+| Floating | bare `!secret` (today)   | the backend's `latest` — value change needs no deploy |
+| Pinned   | `!secret { version: N }` | exactly version `N` — value change is a manifest diff |
 
 ### 1. `set` default — pinned on versioned adapters; bare `!secret` stays floating
 
@@ -20,7 +20,7 @@ This is the load-bearing decision (the issue's open question 1), settled by the
 maintainer before hand-off and recorded here verbatim in spirit:
 
 - **Non-versioned adapters (sops):** pinning is **N/A**. A sops value lives in the
-  committed sibling encrypted file, so it is *already* deploy-gated by
+  committed sibling encrypted file, so it is _already_ deploy-gated by
   construction — a value change is already a git diff. There is no behavior
   change, and `set` records no version. The adapter declares
   `supportsVersionPinning: false`.
@@ -28,21 +28,21 @@ maintainer before hand-off and recorded here verbatim in spirit:
   the concrete version it wrote** in the env-file reference **by default**
   (pinned). A `--floating` flag opts out, recording a bare `!secret`.
 - **Backward compatibility:** a bare `!secret` continues to resolve `latest`
-  (floating). Existing manifests are unaffected; only *new* `set` calls begin
+  (floating). Existing manifests are unaffected; only _new_ `set` calls begin
   pinning. The change is **additive, not breaking**.
 
 The rationale (recorded so the decision is not re-litigated):
 
 1. **Adapter consistency.** sops is inherently deploy-gated; gcp is the only
-   adapter where a value floats *outside* the committed manifest. Pinned-by-default
+   adapter where a value floats _outside_ the committed manifest. Pinned-by-default
    makes gcp behave like sops — across all adapters, a value change becomes a
    committed, diffable, deploy-gated event (in the spirit of the ADR-0005 uniform
    contract).
 2. **Honest manifest.** keyshelf's core principle is that the env file is the
-   committed, diffable source of truth. Pinning makes the file *fully determine*
+   committed, diffable source of truth. Pinning makes the file _fully determine_
    what resolves, instead of saying `!secret` over a value that mutates underneath.
 3. **Reproducible deploys.** Checking out an old commit and deploying yields the
-   value current *at that commit*, not whatever is `latest` now.
+   value current _at that commit_, not whatever is `latest` now.
 4. **Safe by default.** The convenient-but-surprising auto-propagation becomes an
    explicit `--floating` opt-in rather than the path of least resistance.
 
@@ -55,7 +55,7 @@ The rationale (recorded so the decision is not re-litigated):
   foreign reference (ADR-0006): a foreign/pre-existing secret pinned to a version.
 - `version` is a positive integer. The `!secret` payload shape is adapter-defined
   (ADR-0002), so core stays version-agnostic: it parses and round-trips the
-  payload, and the gcp adapter is the only code that *interprets* `version`.
+  payload, and the gcp adapter is the only code that _interprets_ `version`.
 
 ### 3. Adapter contract — `write` surfaces the version; `resolve` honors a pin
 
@@ -75,8 +75,10 @@ The two-method contract (ADR-0002) is intact; one return shape widens:
 ### 4. Non-versioned adapters — a `supportsVersionPinning` conformance capability
 
 Mirroring `supportsEmptyValue` (ADR-0005/0006), the harness declares
-`supportsVersionPinning` (default `true`). sops sets it **false**: a pinned
-`version` is meaningless for a sibling-file store. The shared contract suite
+`supportsVersionPinning` (default `false`, since most stores hold one value per
+key). The gcp harness opts in with **`true`**; sops (and the in-memory `fake`)
+leave it **false** — a pinned `version` is meaningless for a sibling-file store,
+which is already deploy-gated by being committed. The shared contract suite
 gates its pinning cases on this flag — adapters that pin exercise pinned +
 floating resolution and the `write`→`version` round-trip; adapters that do not
 skip those cases. gcp's hermetic unit tests (in-memory client double) cover the
@@ -91,7 +93,7 @@ A pinned secret's `ls` adapter metadata addresses `.../versions/N` (not
 
 ### 6. Re-pin workflow — `set --pin-latest`
 
-To bump a pinned secret to the latest version *without changing the value* (the
+To bump a pinned secret to the latest version _without changing the value_ (the
 counterpart to pinned-by-default), `set --pin-latest` reads the current latest
 version from the backend and records it — no value is read from stdin and no new
 version is written. It is the symmetric escape hatch: `--floating` removes the
@@ -104,7 +106,7 @@ since there is no version to advance to.
 
 If keyshelf later emits Cloud Run `secretKeyRef` config (#241), the linkage is
 direct: pinned → `version: N`, floating → `latest`. This ADR establishes the
-env-file form that makes *either* consumption path (native `secretKeyRef` or the
+env-file form that makes _either_ consumption path (native `secretKeyRef` or the
 `keyshelf run` wrapper) deploy-gate a value change. The emission itself is out of
 scope here.
 
@@ -114,13 +116,13 @@ Per ADR-0006 the gcp adapter's `write` adds a version and `resolve` reads
 `latest`, so a `keyshelf set` reaches newly-started instances with no deploy and
 no diff. That is convenient but invisible. Pinning is the smallest mechanism that
 makes rotation an explicit, audited, deploy-gated event while leaving floating
-available — and it lands as an *additive* payload field on the existing `!secret`
+available — and it lands as an _additive_ payload field on the existing `!secret`
 tag, so nothing about today's references or resolution changes until a user opts
 in (or accepts the new pinned-by-default `set`).
 
 Keeping `version` interpretation inside the adapter honors ADR-0002: the payload
 shape is adapter-defined, core round-trips it, and only the versioned adapter
-reads it. That is why no new adapter *method* is needed — the pin travels in the
+reads it. That is why no new adapter _method_ is needed — the pin travels in the
 ref payload `resolve`/`metadata` already receive, and only `write`'s return
 widens (to report the version it just created). A `supportsVersionPinning`
 capability slots pinning into the established conformance pattern exactly as
@@ -132,7 +134,7 @@ divergence rather than an unstated gap.
 - **gcp** is the first adapter to interpret `version`. A pinned `resolve` accesses
   `.../versions/N` directly; a missing pinned version surfaces `SECRET_NOT_FOUND`
   uniformly (ADR-0005), exactly as a missing secret does. Old versions still
-  accumulate (keyshelf never destroys them, ADR-0006) — a pin merely *names* one.
+  accumulate (keyshelf never destroys them, ADR-0006) — a pin merely _names_ one.
 - **`set --secret` on gcp now mutates the env file with `version: N` by default.**
   This is the intended deploy-gating behavior, but it means a `set` that
   previously produced a no-op diff (bare `!secret` already present) now writes a

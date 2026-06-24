@@ -53,7 +53,9 @@ export function refVersion(ref: unknown): number | undefined {
 /** Whether a `!secret` ref payload carries an explicit foreign name (vs only a pin). */
 export function hasExplicitName(ref: unknown): boolean {
   if (typeof ref === "string") return true;
-  return Boolean(ref && typeof ref === "object" && typeof (ref as { ref?: unknown }).ref === "string");
+  return Boolean(
+    ref && typeof ref === "object" && typeof (ref as { ref?: unknown }).ref === "string"
+  );
 }
 
 /** The first non-empty line of a multi-line diagnostic, for terse messages. */
