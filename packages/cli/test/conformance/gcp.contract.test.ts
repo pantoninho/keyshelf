@@ -27,6 +27,10 @@ if (testProject) {
     // Secret Manager rejects an empty payload and an empty secret has no native
     // form to mount, so the gcp adapter refuses empty values (ADR-0006).
     supportsEmptyValue: false,
+    // gcp versions its store, so it runs the pinning cases (ADR-0009): write
+    // reports the concrete version, a pinned resolve returns exactly that
+    // version, and latestVersion reads the current latest.
+    supportsVersionPinning: true,
     async setup() {
       counter += 1;
       namespace = `${runPrefix}-${counter}`;

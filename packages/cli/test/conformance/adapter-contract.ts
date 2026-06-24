@@ -19,6 +19,16 @@ export interface AdapterHarness {
    * divergence in value fidelity.
    */
   readonly supportsEmptyValue?: boolean;
+  /**
+   * Whether the backend versions its store and honors a pinned `version` on a
+   * `!secret` reference (ADR-0009). Defaults to `false`: most stores hold one
+   * value per key. The gcp adapter sets this `true` and runs the pinning cases —
+   * `write` reports the version it created, a pinned `resolve` returns exactly
+   * that version, a bare `resolve` returns `latest`, and `latestVersion` reads
+   * the current version. sops/fake leave it `false` (their stores hold one value,
+   * already deploy-gated for sops), so those cases are skipped for them.
+   */
+  readonly supportsVersionPinning?: boolean;
   /** Provision a fresh backend + adapter for a single test. */
   setup(): Promise<{ adapter: Adapter }>;
   /** Tear down whatever {@link setup} provisioned. */
@@ -113,5 +123,37 @@ export function runAdapterContractSuite(harness: AdapterHarness): void {
         expect(resolved).toBe("foreign-value");
       });
     });
+
+    if (harness.supportsVersionPinning ?? false) {
+      describe("version pinning (ADR-0009)", () => {
+        it("write reports the concrete version it created", async () => {
+          const first = await adapter.write("PINNED_KEY", "v1");
+          const second = await adapter.write("PINNED_KEY", "v2");
+          expect(first.version).toBeDefined();
+          expect(second.version).toBeDefined();
+          expect(second.version).not.toBe(first.version);
+        });
+
+        it("a pinned resolve returns exactly that version, not latest", async () => {
+          const v1 = await adapter.write("PINNED_KEY", "value-1");
+          await adapter.write("PINNED_KEY", "value-2");
+          // Pinned to the first version: must return value-1 though latest is value-2.
+          expect(await adapter.resolve("PINNED_KEY", { version: Number(v1.version) })).toBe(
+            "value-1"
+          );
+          // A bare (floating) resolve returns latest.
+          expect(await adapter.resolve("PINNED_KEY")).toBe("value-2");
+        });
+
+        it("latestVersion reads the current latest without writing", async () => {
+          await adapter.write("PINNED_KEY", "value-1");
+          const second = await adapter.write("PINNED_KEY", "value-2");
+          expect(adapter.latestVersion).toBeDefined();
+          expect(await adapter.latestVersion!("PINNED_KEY")).toBe(second.version);
+          // Reading the latest does not add a version: latest is still value-2.
+          expect(await adapter.resolve("PINNED_KEY")).toBe("value-2");
+        });
+      });
+    }
   });
 }

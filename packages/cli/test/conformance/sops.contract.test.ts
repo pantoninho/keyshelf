@@ -18,6 +18,10 @@ if (sopsAvailable()) {
 
   runAdapterContractSuite({
     name: "sops",
+    // sops does not version its store — a sibling encrypted file holds one value,
+    // already deploy-gated by being committed (ADR-0009). Pinning is N/A, so the
+    // pinning cases are skipped for sops.
+    supportsVersionPinning: false,
     async setup() {
       fixture = await makeSopsFixture();
       // Decryption needs the fixture's throwaway age key in the environment.
