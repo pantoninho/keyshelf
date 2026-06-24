@@ -226,3 +226,9 @@ direct: a pinned `!secret { version: N }` corresponds to `secretKeyRef.key: "N"`
 keyshelf@6 is a ground-up redesign, not an incremental upgrade — the config
 format, the key model, and the provider set all changed. See
 [`docs/migrating-from-v5.md`](./docs/migrating-from-v5.md).
+
+## Changelog
+
+Release notes are generated from conventional commits by release-please. See
+[`packages/cli/CHANGELOG.md`](./packages/cli/CHANGELOG.md) or the
+[GitHub Releases](https://github.com/pantoninho/keyshelf/releases) page.
