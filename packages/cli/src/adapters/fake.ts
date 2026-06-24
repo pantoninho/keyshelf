@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { KeyshelfError } from "../errors.js";
 import type { Adapter, WriteResult } from "./adapter.js";
-import { conventionName, refName } from "./shared.js";
+import { conventionName, hasExplicitName, refName } from "./shared.js";
 
 /**
  * The store backing the {@link FakeAdapter}: a flat `storedName -> value` map.
@@ -92,7 +92,10 @@ export class FakeAdapter implements Adapter {
   }
 
   async resolve(key: string, ref?: unknown): Promise<string> {
-    const name = ref === undefined ? conventionName(this.namespace, key) : refName("fake", ref);
+    // A bare `!secret`, or a name-less pinned payload `{ version: N }`, resolves
+    // by convention; the fake does not version its store, so any pin is inert
+    // (ADR-0009). Only an explicit foreign name overrides the convention.
+    const name = hasExplicitName(ref) ? refName("fake", ref) : conventionName(this.namespace, key);
     const value = this.store.read(name);
     if (value === undefined) {
       throw new KeyshelfError("SECRET_NOT_FOUND", `No secret stored for '${name}'.`, {

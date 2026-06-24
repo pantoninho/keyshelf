@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as readline from "node:readline/promises";
 import { parseDocument } from "yaml";
-import { createAdapter } from "../adapters/registry.js";
+import { adapterForEnvironment } from "../adapters/registry.js";
 import { conventionName, hasExplicitName, refName } from "../adapters/shared.js";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
@@ -113,7 +113,7 @@ export default class Set extends BaseCommand {
 
     let version: number | undefined;
     if (flags.secret) {
-      const written = await this.writeSecret(
+      version = await this.writeSecret(
         loaded,
         projectDir,
         shelf,
@@ -123,7 +123,6 @@ export default class Set extends BaseCommand {
         doc,
         flags.floating
       );
-      if (written !== undefined) version = Number.parseInt(written, 10);
     } else {
       setConfigValue(doc, key, value);
     }
@@ -165,7 +164,7 @@ export default class Set extends BaseCommand {
       );
     }
 
-    const adapter = this.adapterFor(loaded, projectDir, shelf, stage);
+    const adapter = adapterForEnvironment(projectDir, loaded);
     if (adapter.latestVersion === undefined) {
       throw new KeyshelfError(
         "ADAPTER_ERROR",
@@ -197,30 +196,6 @@ export default class Set extends BaseCommand {
     }
 
     return result;
-  }
-
-  /** Build the environment's adapter, surfacing PROVIDER_NOT_FOUND uniformly. */
-  private adapterFor(
-    loaded: Awaited<ReturnType<typeof loadEnvironment>>,
-    projectDir: string,
-    shelf: string,
-    stage: string
-  ) {
-    const providerName = loaded.environment.provider;
-    const provider = providerName === undefined ? undefined : loaded.config.providers[providerName];
-    if (provider === undefined) {
-      throw new KeyshelfError(
-        "PROVIDER_NOT_FOUND",
-        `Environment '${shelf}/${stage}' references undefined provider '${providerName}'.`,
-        { shelf, environment: `${shelf}/${stage}`, provider: providerName }
-      );
-    }
-    return createAdapter(provider, {
-      projectDir,
-      project: loaded.config.project,
-      shelf,
-      stage
-    });
   }
 
   /**
@@ -318,9 +293,9 @@ export default class Set extends BaseCommand {
    * Hand the value to the environment's provider's adapter, then record the
    * returned reference (bare or explicit, floating or pinned) in the document.
    * The provider is known to exist from the loaded config; an unregistered
-   * adapter surfaces `ADAPTER_UNAVAILABLE` from {@link createAdapter} before
-   * anything is written to the file. Returns the pinned version recorded (for the
-   * result), or `undefined` when the reference floats.
+   * adapter surfaces `ADAPTER_UNAVAILABLE` from `createAdapter` before anything
+   * is written to the file. Returns the pinned version recorded (for the result),
+   * or `undefined` when the reference floats.
    */
   private async writeSecret(
     loaded: Awaited<ReturnType<typeof loadEnvironment>>,
@@ -331,8 +306,8 @@ export default class Set extends BaseCommand {
     value: string,
     doc: ReturnType<typeof parseDocument>,
     floating: boolean
-  ): Promise<string | undefined> {
-    const adapter = this.adapterFor(loaded, projectDir, shelf, stage);
+  ): Promise<number | undefined> {
+    const adapter = adapterForEnvironment(projectDir, loaded);
     const { ref, version } = await adapter.write(key, value);
 
     // The fake/reference convention names a secret
@@ -346,7 +321,7 @@ export default class Set extends BaseCommand {
     );
     const pin = floating ? undefined : version;
     setSecretRef(doc, key, secretRefForm(ref, conventionRef, pin));
-    return pin;
+    return pin === undefined ? undefined : Number.parseInt(pin, 10);
   }
 
   /**

@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { KeyshelfError } from "../errors.js";
 import type { Adapter, WriteResult } from "./adapter.js";
-import { firstLine, refName } from "./shared.js";
+import { firstLine, hasExplicitName, refName } from "./shared.js";
 import { resolveSopsBinary } from "./sops-binary.js";
 
 const execFileAsync = promisify(execFile);
@@ -49,7 +49,11 @@ export class SopsAdapter implements Adapter {
   }
 
   async resolve(key: string, ref?: unknown): Promise<string> {
-    const name = ref === undefined ? key : refName("sops", ref);
+    // A bare `!secret`, or a name-less pinned payload `{ version: N }`, resolves
+    // by convention. sops does not version its store (a sibling file holds one
+    // value, already deploy-gated), so any `version` is inert (ADR-0009): only an
+    // explicit foreign name overrides the convention key.
+    const name = hasExplicitName(ref) ? refName("sops", ref) : key;
     const store = await this.decryptStore();
     if (!Object.prototype.hasOwnProperty.call(store, name)) {
       throw new KeyshelfError(

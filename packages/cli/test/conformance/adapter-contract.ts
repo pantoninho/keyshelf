@@ -122,6 +122,16 @@ export function runAdapterContractSuite(harness: AdapterHarness): void {
         const resolved = await adapter.resolve("A_DIFFERENT_KEY", ref ?? "CANONICAL_KEY");
         expect(resolved).toBe("foreign-value");
       });
+
+      it("resolves a name-less pinned ref by convention (a version-only payload, ADR-0009)", async () => {
+        // A `!secret { version: N }` carries a pin but no explicit name, so it
+        // must still resolve by convention. A versioned adapter honors the pin
+        // (version 1 is the first write); a non-versioned adapter ignores the
+        // inapplicable pin and returns its single stored value. Neither may treat
+        // the version-only payload as a foreign name and reject it.
+        await adapter.write("PIN_ONLY_KEY", "the-value");
+        expect(await adapter.resolve("PIN_ONLY_KEY", { version: 1 })).toBe("the-value");
+      });
     });
 
     if (harness.supportsVersionPinning ?? false) {

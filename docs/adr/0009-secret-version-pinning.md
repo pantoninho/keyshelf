@@ -22,8 +22,9 @@ maintainer before hand-off and recorded here verbatim in spirit:
 - **Non-versioned adapters (sops):** pinning is **N/A**. A sops value lives in the
   committed sibling encrypted file, so it is _already_ deploy-gated by
   construction — a value change is already a git diff. There is no behavior
-  change, and `set` records no version. The adapter declares
-  `supportsVersionPinning: false`.
+  change, and `set` records no version. Its conformance harness declares
+  `supportsVersionPinning: false`, and at runtime it simply omits the optional
+  `latestVersion()` method (so `set --pin-latest` reports pinning is N/A).
 - **Versioned adapters (gcp / future remote):** `keyshelf set --secret` **records
   the concrete version it wrote** in the env-file reference **by default**
   (pinned). A `--floating` flag opts out, recording a bare `!secret`.
@@ -74,11 +75,14 @@ The two-method contract (ADR-0002) is intact; one return shape widens:
 
 ### 4. Non-versioned adapters — a `supportsVersionPinning` conformance capability
 
-Mirroring `supportsEmptyValue` (ADR-0005/0006), the harness declares
-`supportsVersionPinning` (default `false`, since most stores hold one value per
-key). The gcp harness opts in with **`true`**; sops (and the in-memory `fake`)
-leave it **false** — a pinned `version` is meaningless for a sibling-file store,
-which is already deploy-gated by being committed. The shared contract suite
+Mirroring `supportsEmptyValue` (ADR-0005/0006), the **conformance harness**
+declares `supportsVersionPinning` (default `false`, since most stores hold one
+value per key). The gcp harness opts in with **`true`**; sops (and the in-memory
+`fake`) leave it **false** — a pinned `version` is meaningless for a sibling-file
+store, which is already deploy-gated by being committed. (At runtime there is no
+such field on the `Adapter` interface: a non-versioned adapter resolves a
+name-less pinned payload by convention — ignoring the inert `version` — and omits
+the optional `latestVersion()` method.) The shared contract suite
 gates its pinning cases on this flag — adapters that pin exercise pinned +
 floating resolution and the `write`→`version` round-trip; adapters that do not
 skip those cases. gcp's hermetic unit tests (in-memory client double) cover the

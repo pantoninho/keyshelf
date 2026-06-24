@@ -131,15 +131,14 @@ export class GcpAdapter implements Adapter {
     const data = response.payload?.data;
     if (data === undefined || data === null) {
       // A version with no payload should not happen for values we wrote, but a
-      // foreign or hand-created secret could have one — treat it as absent.
-      throw new KeyshelfError(
-        "SECRET_NOT_FOUND",
-        `Secret '${name}' has no payload in its latest version.`,
-        {
-          key,
-          ref: name
-        }
-      );
+      // foreign or hand-created secret could have one — treat it as absent. Name
+      // the version actually requested (pinned N or latest) for an honest message.
+      const pinned = refVersion(ref);
+      const which = pinned === undefined ? "its latest version" : `version ${pinned}`;
+      throw new KeyshelfError("SECRET_NOT_FOUND", `Secret '${name}' has no payload in ${which}.`, {
+        key,
+        ref: name
+      });
     }
 
     // The value is stored as its raw UTF-8 bytes, so the payload *is* the value.
