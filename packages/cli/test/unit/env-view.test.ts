@@ -142,6 +142,29 @@ describe("environmentKeyView", () => {
       ]);
     });
 
+    it("surfaces the pinned version on a secret key and passes the pinned ref to metadata (ADR-0009)", () => {
+      const adapter = stubAdapter();
+      const view = environmentKeyView(
+        loaded(
+          { TOKEN: { kind: "required" } },
+          { TOKEN: { kind: "secret", ref: { version: 5 }, version: 5 } }
+        ),
+        adapter
+      );
+      expect(view[0]).toMatchObject({ key: "TOKEN", status: "secret", version: 5 });
+      // The pinned payload reaches metadata so the address pins .../versions/5.
+      expect(adapter.calls).toEqual([{ key: "TOKEN", ref: { version: 5 } }]);
+    });
+
+    it("omits version on a floating (bare) secret", () => {
+      const adapter = stubAdapter();
+      const view = environmentKeyView(
+        loaded({ TOKEN: { kind: "required" } }, { TOKEN: { kind: "secret" } }),
+        adapter
+      );
+      expect(view[0].version).toBeUndefined();
+    });
+
     it("omits metadata for non-secret keys (config, default, ref, missing, unset)", () => {
       const adapter = stubAdapter();
       const view = environmentKeyView(

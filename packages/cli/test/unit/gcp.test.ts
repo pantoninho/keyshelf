@@ -20,6 +20,12 @@ function fakeClient() {
     return match[1];
   }
 
+  /** The version selector of a `.../versions/X` resource: a number or "latest". */
+  function versionOf(resource: string): string {
+    const match = resource.match(/\/versions\/([^/]+)$/);
+    return match ? match[1] : "latest";
+  }
+
   const client: SecretsClient = {
     async createSecret(request) {
       createCalls.push({ secretId: request.secretId, replication: request.secret.replication });
@@ -35,7 +41,9 @@ function fakeClient() {
       const secret = secrets.get(id);
       if (!secret) throw Object.assign(new Error("no such secret"), { code: 5 });
       secret.versions.push(request.payload.data);
-      return [{}];
+      // The real API returns the created version resource, whose trailing segment
+      // is the concrete version number write records (ADR-0009).
+      return [{ name: `${request.parent}/versions/${secret.versions.length}` }];
     },
     async accessSecretVersion(request) {
       const id = idOf(request.name, "version");
@@ -44,7 +52,20 @@ function fakeClient() {
         throw Object.assign(new Error("not found"), { code: 5 });
       }
 
-      return [{ payload: { data: secret.versions[secret.versions.length - 1] } }];
+      // Version numbers are 1-based and ascending; "latest" is the newest.
+      const selector = versionOf(request.name);
+      const index =
+        selector === "latest" ? secret.versions.length - 1 : Number.parseInt(selector, 10) - 1;
+      const data = secret.versions[index];
+      if (data === undefined) {
+        throw Object.assign(new Error("no such version"), { code: 5 });
+      }
+
+      // The real API echoes the concrete resolved version in `name`, which is how
+      // the adapter learns the latest version number for --pin-latest.
+      const resolvedVersion = selector === "latest" ? String(secret.versions.length) : selector;
+      const base = request.name.replace(/\/versions\/[^/]+$/, "");
+      return [{ name: `${base}/versions/${resolvedVersion}`, payload: { data } }];
     }
   };
 
@@ -82,7 +103,7 @@ describe("GcpAdapter", () => {
   describe("naming convention", () => {
     it("stores under {namespace}__{key} and returns that id from write", async () => {
       const { client } = fakeClient();
-      const ref = await adapter(client).write("DATABASE_PASSWORD", "sekret");
+      const { ref } = await adapter(client).write("DATABASE_PASSWORD", "sekret");
       expect(ref).toBe("keyshelf__myapp__web__staging__DATABASE_PASSWORD");
     });
 
@@ -106,7 +127,7 @@ describe("GcpAdapter", () => {
     it("resolves a foreign value through an explicit ref", async () => {
       const { client } = fakeClient();
       const a = adapter(client);
-      const ref = await a.write("CANONICAL_KEY", "foreign-value");
+      const { ref } = await a.write("CANONICAL_KEY", "foreign-value");
       expect(await a.resolve("A_DIFFERENT_KEY", ref)).toBe("foreign-value");
     });
 
@@ -126,6 +147,71 @@ describe("GcpAdapter", () => {
       await a.write("KEY", "first");
       await a.write("KEY", "second");
       expect(await a.resolve("KEY")).toBe("second");
+    });
+  });
+
+  describe("version pinning (ADR-0009)", () => {
+    it("resolves exactly the pinned version, not latest", async () => {
+      const { client } = fakeClient();
+      const a = adapter(client);
+      await a.write("TOKEN", "v1");
+      await a.write("TOKEN", "v2");
+      await a.write("TOKEN", "v3");
+      // Pin to version 1 (the convention name): must return v1, not latest (v3).
+      expect(await a.resolve("TOKEN", { version: 1 })).toBe("v1");
+      expect(await a.resolve("TOKEN", { version: 2 })).toBe("v2");
+      // No pin ⇒ latest.
+      expect(await a.resolve("TOKEN")).toBe("v3");
+    });
+
+    it("resolves a foreign secret pinned to a version via { ref, version }", async () => {
+      const { client, seed } = fakeClient();
+      seed("shared-token", Buffer.from("foreign-v1", "utf8"));
+      const a = adapter(client);
+      expect(await a.resolve("ANY_KEY", { ref: "shared-token", version: 1 })).toBe("foreign-v1");
+    });
+
+    it("write returns the concrete version it created", async () => {
+      const { client } = fakeClient();
+      const a = adapter(client);
+      expect((await a.write("TOKEN", "first")).version).toBe("1");
+      expect((await a.write("TOKEN", "second")).version).toBe("2");
+    });
+
+    it("write returns the convention ref alongside the version", async () => {
+      const { client } = fakeClient();
+      const result = await adapter(client).write("DATABASE_PASSWORD", "sekret");
+      expect(result.ref).toBe("keyshelf__myapp__web__staging__DATABASE_PASSWORD");
+      expect(result.version).toBe("1");
+    });
+
+    it("addresses the pinned version in metadata (not latest)", () => {
+      const { client } = fakeClient();
+      const meta = adapter(client).metadata("DATABASE_PASSWORD", { version: 5 });
+      expect(meta.resource).toBe(
+        "projects/test-proj/secrets/keyshelf__myapp__web__staging__DATABASE_PASSWORD/versions/5"
+      );
+    });
+
+    it("addresses a foreign pinned ref's version in metadata", () => {
+      const { client } = fakeClient();
+      const meta = adapter(client).metadata("ANY_KEY", { ref: "shared-token", version: 4 });
+      expect(meta.resource).toBe("projects/test-proj/secrets/shared-token/versions/4");
+    });
+
+    it("reads the current latest version number (for --pin-latest)", async () => {
+      const { client } = fakeClient();
+      const a = adapter(client);
+      await a.write("TOKEN", "v1");
+      await a.write("TOKEN", "v2");
+      expect(await a.latestVersion("TOKEN")).toBe("2");
+    });
+
+    it("latestVersion of a foreign ref reads through the explicit name", async () => {
+      const { client, seed } = fakeClient();
+      seed("shared-token", Buffer.from("foreign", "utf8"));
+      const a = adapter(client);
+      expect(await a.latestVersion("ANY_KEY", { ref: "shared-token" })).toBe("1");
     });
   });
 

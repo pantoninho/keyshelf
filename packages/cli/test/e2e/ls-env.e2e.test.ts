@@ -242,6 +242,41 @@ describe("keyshelf ls <shelf>/<stage> (adapter metadata, offline)", () => {
     ]);
   });
 
+  it("surfaces a pinned !secret version in --json (version + pinned address, ADR-0009)", async () => {
+    await scaffoldGcp();
+    // Pin DATABASE_PASSWORD to version 3 and the foreign SHARED_TOKEN to 7.
+    await write(
+      ".keyshelf/backend/production.yaml",
+      `provider: cloud
+keys:
+  DATABASE_PASSWORD: !secret { version: 3 }
+  SHARED_TOKEN: !secret { ref: shared-secret, version: 7 }
+  LOG_LEVEL: debug
+`
+    );
+    const { code, stdout } = await runKeyshelf(["ls", "backend/production", "--json"], { cwd });
+    expect(code).toBe(0);
+    const keys = JSON.parse(stdout).keys;
+    expect(keys[0]).toMatchObject({
+      key: "DATABASE_PASSWORD",
+      status: "secret",
+      version: 3,
+      metadata: {
+        adapter: "gcp",
+        resource:
+          "projects/my-gcp-project/secrets/keyshelf__myapp__backend__production__DATABASE_PASSWORD/versions/3"
+      }
+    });
+    expect(keys[1]).toMatchObject({
+      key: "SHARED_TOKEN",
+      version: 7,
+      metadata: {
+        adapter: "gcp",
+        resource: "projects/my-gcp-project/secrets/shared-secret/versions/7"
+      }
+    });
+  });
+
   it("shows a METADATA column behind --metadata; the default table omits it", async () => {
     await scaffoldGcp();
     const plain = await runKeyshelf(["ls", "backend/production"], { cwd });

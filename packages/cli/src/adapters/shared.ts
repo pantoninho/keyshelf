@@ -35,6 +35,29 @@ export function refName(adapterName: string, ref: unknown): string {
   );
 }
 
+/**
+ * Extract the pinned `version` from a `!secret` ref payload, if any (ADR-0009).
+ * Accepts `{ version: N }` or `{ ref: NAME, version: N }`; a bare string ref or a
+ * payload with no `version` floats (returns `undefined`). The loader has already
+ * validated a present `version` as a positive integer, so this just reads it.
+ */
+export function refVersion(ref: unknown): number | undefined {
+  if (ref && typeof ref === "object" && "version" in ref) {
+    const version = (ref as { version: unknown }).version;
+    if (typeof version === "number") return version;
+  }
+
+  return undefined;
+}
+
+/** Whether a `!secret` ref payload carries an explicit foreign name (vs only a pin). */
+export function hasExplicitName(ref: unknown): boolean {
+  if (typeof ref === "string") return true;
+  return Boolean(
+    ref && typeof ref === "object" && typeof (ref as { ref?: unknown }).ref === "string"
+  );
+}
+
 /** The first non-empty line of a multi-line diagnostic, for terse messages. */
 export function firstLine(text: string): string {
   for (const line of text.split("\n")) {

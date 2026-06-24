@@ -3,8 +3,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as readline from "node:readline/promises";
 import { parseDocument } from "yaml";
-import { createAdapter } from "../adapters/registry.js";
-import { conventionName } from "../adapters/shared.js";
+import { adapterForEnvironment } from "../adapters/registry.js";
+import { conventionName, hasExplicitName, refName } from "../adapters/shared.js";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
 import { loadEnvironment } from "../loader.js";
@@ -19,6 +19,13 @@ interface SetResult {
   secret: boolean;
   /** Whether a `!ref` key reference was authored (vs a value/secret written). */
   ref: boolean;
+  /**
+   * The pinned backend version recorded in the env file (ADR-0009), when the
+   * provider versions its store and the secret was pinned. Absent when the
+   * reference floats (`--floating`, or a non-versioned adapter) or for a
+   * plaintext/`!ref` write.
+   */
+  version?: number;
 }
 
 /**
@@ -60,12 +67,24 @@ export default class Set extends BaseCommand {
     secret: Flags.boolean({
       description: "Store the value via the provider and record only a !secret reference.",
       default: false,
-      exclusive: ["ref"]
+      exclusive: ["ref", "pin-latest"]
+    }),
+    floating: Flags.boolean({
+      description:
+        "With --secret: record a floating !secret (resolves latest) instead of pinning the written version (ADR-0009). No effect on non-versioned providers.",
+      default: false,
+      exclusive: ["ref", "pin-latest"]
+    }),
+    "pin-latest": Flags.boolean({
+      description:
+        "Pin an existing !secret to the provider's current latest version without changing the value (no stdin read, no new version written).",
+      default: false,
+      exclusive: ["secret", "ref", "floating"]
     }),
     ref: Flags.string({
       description:
         "Author a !ref key reference to <shelf>[/<stage>] (offline file edit; no value, no provider).",
-      exclusive: ["secret"]
+      exclusive: ["secret", "floating", "pin-latest"]
     }),
     "ref-key": Flags.string({
       description: "The target key name for a rename; omitted from the node when equal to <KEY>.",
@@ -78,18 +97,38 @@ export default class Set extends BaseCommand {
     const { shelf, stage } = parseTarget(args.target);
     const { key } = args;
 
+    // Three mutually-exclusive authoring modes dispatch first; the default is a
+    // value write (plaintext, or --secret through the provider).
     if (flags.ref !== undefined) {
       return this.authorReference(shelf, stage, key, flags.ref, flags["ref-key"]);
     }
+    if (flags["pin-latest"]) {
+      return this.pinLatest(shelf, stage, key);
+    }
+    return this.writeValue(shelf, stage, key, flags.secret, flags.floating);
+  }
 
+  /**
+   * The default `set` path: write a value into the environment file. Plaintext
+   * lands as a config scalar; `--secret` hands the value to the provider and
+   * records only a `!secret` reference (pinned by default on a versioned
+   * provider, ADR-0009). The value is read from stdin/prompt, never argv.
+   */
+  private async writeValue(
+    shelf: string,
+    stage: string,
+    key: string,
+    secret: boolean,
+    floating: boolean
+  ): Promise<SetResult> {
     // The value is never taken from argv. A TTY prompts; otherwise stdin is read
     // raw (byte-exact), and an empty stdin is NO_INPUT.
     const value = await this.readValue(key);
-
     const { loaded, projectDir, file, doc } = await this.loadForEdit(shelf, stage, key);
 
-    if (flags.secret) {
-      await this.writeSecret(loaded, projectDir, shelf, stage, key, value, doc);
+    let version: number | undefined;
+    if (secret) {
+      version = await this.writeSecret(loaded, projectDir, shelf, stage, key, value, doc, floating);
     } else {
       setConfigValue(doc, key, value);
     }
@@ -99,11 +138,67 @@ export default class Set extends BaseCommand {
     const result: SetResult = {
       key,
       environment: `${shelf}/${stage}`,
-      secret: flags.secret,
-      ref: false
+      secret,
+      ref: false,
+      ...(version === undefined ? {} : { version })
     };
     if (!this.jsonEnabled()) {
-      this.log(`Set ${result.environment} ${key}${flags.secret ? " (secret)" : ""}.`);
+      const pinNote = version === undefined ? "" : ` (pinned v${version})`;
+      this.log(`Set ${result.environment} ${key}${secret ? " (secret)" : ""}${pinNote}.`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Bump an existing `!secret` to the provider's current latest version without
+   * changing the value (ADR-0009, `set --pin-latest`) — the counterpart to
+   * `--floating`. Reads no value from stdin and writes no new version: it asks
+   * the adapter for the current latest version and records it as the pin,
+   * preserving any explicit foreign `ref:`. The key must already be a `!secret`
+   * in the environment; a provider that does not version its store
+   * (`latestVersion` absent — e.g. sops) is an `ADAPTER_ERROR` (pinning N/A).
+   */
+  private async pinLatest(shelf: string, stage: string, key: string): Promise<SetResult> {
+    const { loaded, projectDir, file, doc } = await this.loadForEdit(shelf, stage, key);
+    const existing = loaded.environment.keys[key];
+    if (existing?.kind !== "secret") {
+      throw new KeyshelfError(
+        "UNKNOWN_KEY",
+        `Key '${key}' is not a !secret in '${shelf}/${stage}'; --pin-latest only re-pins an existing secret.`,
+        { key, environment: `${shelf}/${stage}` }
+      );
+    }
+
+    const adapter = adapterForEnvironment(projectDir, loaded);
+    if (adapter.latestVersion === undefined) {
+      throw new KeyshelfError(
+        "ADAPTER_ERROR",
+        `The provider for '${shelf}/${stage}' does not version its store, so --pin-latest is not applicable.`,
+        { key, environment: `${shelf}/${stage}` }
+      );
+    }
+
+    const version = Number.parseInt(await adapter.latestVersion(key, existing.ref), 10);
+    // Preserve any explicit foreign ref name; only (re)write the pin. A bare
+    // secret re-pins by convention; a foreign one keeps its name.
+    const conventionRef = conventionName(
+      `keyshelf__${loaded.config.project}__${shelf}__${stage}`,
+      key
+    );
+    const name = hasExplicitName(existing.ref) ? refName("set", existing.ref) : conventionRef;
+    setSecretRef(doc, key, secretRefForm(name, conventionRef, String(version)));
+    await writeFile(file, doc.toString(), "utf8");
+
+    const result: SetResult = {
+      key,
+      environment: `${shelf}/${stage}`,
+      secret: true,
+      ref: false,
+      version
+    };
+    if (!this.jsonEnabled()) {
+      this.log(`Pinned ${result.environment} ${key} to v${version}.`);
     }
 
     return result;
@@ -202,10 +297,11 @@ export default class Set extends BaseCommand {
 
   /**
    * Hand the value to the environment's provider's adapter, then record the
-   * returned reference (bare or explicit) in the document. The provider is known
-   * to exist from the loaded config; an unregistered adapter surfaces
-   * `ADAPTER_UNAVAILABLE` from {@link createAdapter} before anything is written
-   * to the file.
+   * returned reference (bare or explicit, floating or pinned) in the document.
+   * The provider is known to exist from the loaded config; an unregistered
+   * adapter surfaces `ADAPTER_UNAVAILABLE` from `createAdapter` before anything
+   * is written to the file. Returns the pinned version recorded (for the result),
+   * or `undefined` when the reference floats.
    */
   private async writeSecret(
     loaded: Awaited<ReturnType<typeof loadEnvironment>>,
@@ -214,34 +310,24 @@ export default class Set extends BaseCommand {
     stage: string,
     key: string,
     value: string,
-    doc: ReturnType<typeof parseDocument>
-  ): Promise<void> {
-    const providerName = loaded.environment.provider;
-    const provider = providerName === undefined ? undefined : loaded.config.providers[providerName];
-    if (provider === undefined) {
-      throw new KeyshelfError(
-        "PROVIDER_NOT_FOUND",
-        `Environment '${shelf}/${stage}' references undefined provider '${providerName}'.`,
-        { shelf, environment: `${shelf}/${stage}`, provider: providerName }
-      );
-    }
-
-    const adapter = createAdapter(provider, {
-      projectDir,
-      project: loaded.config.project,
-      shelf,
-      stage
-    });
-    const ref = await adapter.write(key, value);
+    doc: ReturnType<typeof parseDocument>,
+    floating: boolean
+  ): Promise<number | undefined> {
+    const adapter = adapterForEnvironment(projectDir, loaded);
+    const { ref, version } = await adapter.write(key, value);
 
     // The fake/reference convention names a secret
     // `keyshelf__{project}__{shelf}__{stage}__{key}`; a returned ref matching that
-    // resolves by convention (bare !secret).
+    // resolves by convention (bare !secret). A versioned adapter (gcp) reports the
+    // concrete version it created; unless --floating, it is pinned (ADR-0009). An
+    // adapter that does not version reports no version, so the ref stays floating.
     const conventionRef = conventionName(
       `keyshelf__${loaded.config.project}__${shelf}__${stage}`,
       key
     );
-    setSecretRef(doc, key, secretRefForm(ref, conventionRef));
+    const pin = floating ? undefined : version;
+    setSecretRef(doc, key, secretRefForm(ref, conventionRef, pin));
+    return pin === undefined ? undefined : Number.parseInt(pin, 10);
   }
 
   /**

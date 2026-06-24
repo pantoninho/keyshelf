@@ -9,21 +9,33 @@ import type { KeyReference } from "./model.js";
  * Anything else — a foreign/explicit name, or a non-string payload — is recorded
  * verbatim as `!secret { ref: ... }` so it round-trips back through the loader.
  */
-export type SecretRefForm = { bare: true } | { bare: false; ref: unknown };
+export type SecretRefForm =
+  | { bare: true; version?: number }
+  | { bare: false; ref: unknown; version?: number };
 
 /**
  * Decide how to record a written secret's reference. `adapterRef` is whatever
- * `Adapter.write` returned; `conventionRef` is the name the environment's
- * adapter would resolve by convention for this key. They match (or the adapter
- * returned `undefined`) ⇒ a bare `!secret`; otherwise the foreign reference is
- * carried explicitly.
+ * `Adapter.write` returned (its `ref`); `conventionRef` is the name the
+ * environment's adapter would resolve by convention for this key. They match (or
+ * the adapter returned `undefined`) ⇒ a bare `!secret`; otherwise the foreign
+ * reference is carried explicitly.
+ *
+ * `version` is the concrete backend version `write` reported (ADR-0009). When
+ * present it is recorded as a pin (`!secret { version: N }` or
+ * `!secret { ref: NAME, version: N }`); when `undefined` the reference floats
+ * (resolves `latest`), as adapters that do not version their store report.
  */
-export function secretRefForm(adapterRef: unknown, conventionRef: string): SecretRefForm {
+export function secretRefForm(
+  adapterRef: unknown,
+  conventionRef: string,
+  version?: string
+): SecretRefForm {
+  const pin = version === undefined ? {} : { version: Number.parseInt(version, 10) };
   if (adapterRef === undefined || adapterRef === conventionRef) {
-    return { bare: true };
+    return { bare: true, ...pin };
   }
 
-  return { bare: false, ref: adapterRef };
+  return { bare: false, ref: adapterRef, ...pin };
 }
 
 /**
@@ -69,14 +81,21 @@ export function setConfigValue(doc: Document, key: string, value: string): void 
 export function setSecretRef(doc: Document, key: string, form: SecretRefForm): void {
   const map = keysMap(doc);
 
-  if (form.bare) {
+  // A bare, floating !secret is a tagged null scalar; anything with a payload
+  // (an explicit foreign ref and/or a pinned version, ADR-0009) is a tagged
+  // mapping carrying only the fields the form supplies, in ref → version order.
+  if (form.bare && form.version === undefined) {
     const scalar = new Scalar(null);
     scalar.tag = "!secret";
     map.set(key, scalar);
     return;
   }
 
-  const node = doc.createNode({ ref: form.ref }) as YAMLMap;
+  const payload: Record<string, unknown> = {};
+  if (!form.bare) payload.ref = form.ref;
+  if (form.version !== undefined) payload.version = form.version;
+
+  const node = doc.createNode(payload) as YAMLMap;
   node.tag = "!secret";
   map.set(key, node);
 }

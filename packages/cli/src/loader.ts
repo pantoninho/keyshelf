@@ -210,6 +210,26 @@ function parseKeyReference(file: string, key: string, raw: unknown): KeyReferenc
   return reference;
 }
 
+/**
+ * Validate an optional `version:` on a `!secret` payload into a pinned version
+ * (ADR-0009). Absent ⇒ `undefined` (the reference floats / resolves `latest`).
+ * Present-but-not-a-positive-integer is a `MALFORMED_FILE`. The version is
+ * interpreted by the adapter; core only proves it is a sane positive integer
+ * here and surfaces it for offline visibility.
+ */
+function parseSecretVersion(file: string, key: string, payload: unknown): number | undefined {
+  if (!isPlainObject(payload)) return undefined;
+  const raw = payload.version;
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 1) {
+    throw malformed(
+      file,
+      `key '${key}' has a !secret with an invalid 'version' (expected a positive integer)`
+    );
+  }
+  return raw;
+}
+
 async function loadEnvironmentFile(
   root: string,
   shelf: string,
@@ -252,7 +272,11 @@ async function loadEnvironmentFile(
     }
 
     if (isMap(node) && (node as YAMLMap).tag === "!secret") {
-      return { kind: "secret", ref: (node as YAMLMap).toJSON() };
+      const payload = (node as YAMLMap).toJSON() as Record<string, unknown>;
+      const version = parseSecretVersion(file, key, payload);
+      return version === undefined
+        ? { kind: "secret", ref: payload }
+        : { kind: "secret", ref: payload, version };
     }
 
     if (isMap(node) && (node as YAMLMap).tag === "!ref") {
