@@ -1,5 +1,21 @@
 # Changelog
 
+## [6.1.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.1.0...keyshelf-v6.1.1) (2026-06-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **gcp:** store secret values raw for native Secret Manager interop ([#233](https://github.com/pantoninho/keyshelf/issues/233))
+
+### Features
+
+* **gcp:** store secret values raw for native Secret Manager interop ([#233](https://github.com/pantoninho/keyshelf/issues/233)) ([d5a60cf](https://github.com/pantoninho/keyshelf/commit/d5a60cff785f5ade8408941bef3441f3bd7614ca))
+
+
+### Miscellaneous Chores
+
+* force release-please to cut 6.1.1 ([#238](https://github.com/pantoninho/keyshelf/issues/238)) ([4df18bf](https://github.com/pantoninho/keyshelf/commit/4df18bf26c490d6d20321b721096d1a37359fb1c))
+
 ## [6.1.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.0.0...keyshelf-v6.1.0) (2026-06-23)
 
 
