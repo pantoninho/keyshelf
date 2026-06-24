@@ -112,8 +112,14 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
   }
 }
 
-/** Build the adapter for an environment, looking its provider up in its own config. */
-function adapterForEnvironment(projectDir: string, loaded: LoadedEnvironment): Adapter {
+/**
+ * Build the adapter for an environment, looking its provider up in its own
+ * config. Construction is offline and credential-free for every reference
+ * adapter (ADR-0008): the gcp client is constructed but never called until
+ * `resolve`/`write`, so `ls` can build an adapter solely to compute offline
+ * addresses via {@link Adapter.metadata}.
+ */
+export function adapterForEnvironment(projectDir: string, loaded: LoadedEnvironment): Adapter {
   const { shelf, name, provider: providerName } = loaded.environment;
   const provider = providerName === undefined ? undefined : loaded.config.providers[providerName];
   if (provider === undefined) {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Adapter, AdapterMetadata } from "../../src/adapters/adapter.js";
 import {
   environmentKeyView,
   formatStatus,
@@ -99,6 +100,89 @@ describe("environmentKeyView", () => {
 
   it("returns an empty array for a schema that declares no keys", () => {
     expect(environmentKeyView(loaded({}, {}))).toEqual([]);
+  });
+
+  describe("metadata (offline adapter address)", () => {
+    /** A stub adapter that records every metadata() call and echoes the key/ref. */
+    function stubAdapter(): Adapter & { calls: Array<{ key: string; ref?: unknown }> } {
+      const calls: Array<{ key: string; ref?: unknown }> = [];
+      return {
+        calls,
+        resolve: () => Promise.reject(new Error("must not resolve")),
+        write: () => Promise.reject(new Error("must not write")),
+        metadata(key, ref): AdapterMetadata {
+          calls.push({ key, ref });
+          return { adapter: "gcp", resource: `addr/${key}` };
+        }
+      };
+    }
+
+    it("attaches metadata to secret keys, passing the explicit !secret ref payload", () => {
+      const adapter = stubAdapter();
+      const view = environmentKeyView(
+        loaded(
+          { TOKEN: { kind: "required" }, OTHER: { kind: "required" } },
+          {
+            TOKEN: { kind: "secret" },
+            OTHER: { kind: "secret", ref: { ref: "shared-name" } }
+          }
+        ),
+        adapter
+      );
+      expect(view[0]).toEqual({
+        key: "TOKEN",
+        presence: "required",
+        status: "secret",
+        metadata: { adapter: "gcp", resource: "addr/TOKEN" }
+      });
+      expect(view[1].metadata).toEqual({ adapter: "gcp", resource: "addr/OTHER" });
+      expect(adapter.calls).toEqual([
+        { key: "TOKEN", ref: undefined },
+        { key: "OTHER", ref: { ref: "shared-name" } }
+      ]);
+    });
+
+    it("omits metadata for non-secret keys (config, default, ref, missing, unset)", () => {
+      const adapter = stubAdapter();
+      const view = environmentKeyView(
+        loaded(
+          {
+            CFG: { kind: "config", default: "x" },
+            DEF: { kind: "config", default: "x" },
+            REFK: { kind: "required" },
+            MISS: { kind: "required" },
+            OPT: { kind: "optional" }
+          },
+          {
+            CFG: { kind: "config", value: "y" },
+            REFK: { kind: "ref", reference: { shelf: "other" } }
+          }
+        ),
+        adapter
+      );
+      for (const v of view) expect(v.metadata).toBeUndefined();
+      // Only secret keys are addressed — none here, so the adapter is never called.
+      expect(adapter.calls).toEqual([]);
+    });
+
+    it("omits metadata when the adapter does not implement metadata()", () => {
+      const adapter: Adapter = {
+        resolve: () => Promise.reject(new Error("no")),
+        write: () => Promise.reject(new Error("no"))
+      };
+      const view = environmentKeyView(
+        loaded({ TOKEN: { kind: "required" } }, { TOKEN: { kind: "secret" } }),
+        adapter
+      );
+      expect(view[0].metadata).toBeUndefined();
+    });
+
+    it("omits metadata entirely when no adapter is supplied", () => {
+      const view = environmentKeyView(
+        loaded({ TOKEN: { kind: "required" } }, { TOKEN: { kind: "secret" } })
+      );
+      expect(view[0].metadata).toBeUndefined();
+    });
   });
 });
 

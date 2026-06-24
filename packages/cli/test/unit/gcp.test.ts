@@ -129,6 +129,53 @@ describe("GcpAdapter", () => {
     });
   });
 
+  describe("metadata (offline address)", () => {
+    it("returns the full convention version resource for a bare key", () => {
+      const { client } = fakeClient();
+      const meta = adapter(client).metadata("DATABASE_PASSWORD");
+      expect(meta).toEqual({
+        adapter: "gcp",
+        resource:
+          "projects/test-proj/secrets/keyshelf__myapp__web__staging__DATABASE_PASSWORD/versions/latest"
+      });
+    });
+
+    it("addresses an explicit bare-id ref in the configured project", () => {
+      const { client } = fakeClient();
+      const meta = adapter(client).metadata("ANY_KEY", { ref: "shared-token" });
+      expect(meta).toEqual({
+        adapter: "gcp",
+        resource: "projects/test-proj/secrets/shared-token/versions/latest"
+      });
+    });
+
+    it("addresses a foreign full-resource ref verbatim, appending versions/latest", () => {
+      const { client } = fakeClient();
+      const meta = adapter(client).metadata("ANY_KEY", {
+        ref: "projects/other-proj/secrets/foreign"
+      });
+      expect(meta).toEqual({
+        adapter: "gcp",
+        resource: "projects/other-proj/secrets/foreign/versions/latest"
+      });
+    });
+
+    it("preserves a foreign full-resource ref that already pins a version", () => {
+      const { client } = fakeClient();
+      const meta = adapter(client).metadata("ANY_KEY", {
+        ref: "projects/other-proj/secrets/foreign/versions/3"
+      });
+      expect(meta.resource).toBe("projects/other-proj/secrets/foreign/versions/3");
+    });
+
+    it("computes the address with no backend call (offline)", () => {
+      // A client that rejects every call: metadata must never touch it.
+      const client = throwingClient(new Error("network must not be reached"));
+      const meta = adapter(client).metadata("KEY");
+      expect(meta.adapter).toBe("gcp");
+    });
+  });
+
   describe("value fidelity (byte-exact round-trip)", () => {
     const cases: ReadonlyArray<readonly [string, string]> = [
       ["embedded newlines", "line1\nline2\nline3"],

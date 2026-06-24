@@ -4,6 +4,22 @@
 import type { KeyshelfError } from "../errors.js";
 
 /**
+ * The offline, backend-specific *address* of a stored key — never its value. Each
+ * adapter contributes its own variant, discriminated on `adapter`, so a consumer
+ * can locate the secret in the backend (a GCP console URL, an IAM grant target, a
+ * sops file path) without resolving it. This is pure config math: it is derivable
+ * from already-parsed config plus the key/ref, with zero network and zero
+ * credentials (ADR-0008).
+ *
+ * The shape is deliberately per-adapter rather than a flat string: a `gcp`
+ * resource path and a `sops` file+key are not the same kind of address, and a
+ * discriminated union lets each consumer destructure the one it expects.
+ */
+export type AdapterMetadata =
+  /** The full `projects/.../secrets/.../versions/latest` Secret Manager resource. */
+  { adapter: "gcp"; resource: string };
+
+/**
  * The sole seam for backend-specific behavior (ADR-0002). An adapter is the code
  * that talks to one type of backend (sops, gcp, the in-memory fake); a
  * {@link Provider} is a configured instance of one. Every adapter implements
@@ -52,4 +68,25 @@ export interface Adapter {
    *   foreign/explicit write returns the payload to embed under `{ ref: ... }`.
    */
   write(key: string, value: string): Promise<unknown>;
+
+  /**
+   * Compute this key's backend **address** — its storage location, never its
+   * value (ADR-0008). Optional: an adapter that cannot derive an address without
+   * a network round-trip must not implement this (so the field is simply omitted
+   * from the view), never fetch.
+   *
+   * **Contract (load-bearing):**
+   * - **Synchronous** — returns {@link AdapterMetadata}, not a `Promise`. The
+   *   non-promise signature structurally forbids async I/O: there is no awaitable
+   *   to hang a backend call on.
+   * - **Network-free and credential-free.** Computes purely from the
+   *   already-parsed config (captured at construction) plus the key/ref. It makes
+   *   no client calls and resolves no credentials.
+   *
+   * @param key  the environment key name (the convention location).
+   * @param ref  the optional explicit `!secret { ref: ... }` payload; `undefined`
+   *   means convention addressing.
+   * @returns the backend address for the key.
+   */
+  metadata?(key: string, ref?: unknown): AdapterMetadata;
 }

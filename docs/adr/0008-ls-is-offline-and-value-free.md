@@ -2,13 +2,23 @@
 
 ## Decision
 
-`keyshelf ls` is a pure offline read of the project's files. It never builds a
-provider and never touches a backend, and it never prints a key's **value** —
-neither a committed plaintext config nor a resolved secret. It reports **shape
-only**: which environments exist, and for each key its schema **presence**
-(`required` / `optional` / `default`) and its **status** in the listed
-environment (`config` / `secret` / `ref → target` / `default` / `missing` /
-`unset`).
+`keyshelf ls` is a pure offline read of the project's files. It never touches a
+backend, and it never prints a key's **value** — neither a committed plaintext
+config nor a resolved secret. It reports **shape only**: which environments
+exist, and for each key its schema **presence** (`required` / `optional` /
+`default`) and its **status** in the listed environment (`config` / `secret` /
+`ref → target` / `default` / `missing` / `unset`).
+
+`ls` **may** build a provider/adapter — but only to compute a key's storage
+**address** (e.g. a GCP Secret Manager resource path), never to resolve its
+value. This is safe because adapter construction and the adapter's `metadata()`
+method are offline and credential-free: the gcp client is constructed but never
+called, and `metadata()` is **synchronous** (its non-`Promise` return
+structurally forbids async I/O) and computed purely from already-parsed config
+plus the key/ref. An adapter that cannot derive an address without a network
+round-trip must not implement `metadata()` (the field is then omitted), and
+`metadata()` must never trigger a backend call. An address is not a value, so
+surfacing it does not breach the value-free rule.
 
 It has two modes:
 
@@ -48,6 +58,16 @@ and printing values (even just config) erases the shape/value line and edges
 toward leaking. If value display is ever wanted, it belongs behind an explicit,
 clearly-named opt-in flag — never the default — and secret values stay off the
 table regardless.
+
+A storage **address** is the sanctioned exception, and it follows exactly that
+rule. The address tells a user _where_ a secret lives (to find it in a console
+or grant IAM), never _what_ it is. It is carried for every secret key in the
+machine-consumption `--json` surface (which is already a structured,
+opt-in-by-flag output), and in the human table only behind the explicit
+`--metadata` flag — the default table stays lean. The load-bearing invariant is
+unchanged: computing an address is offline and credential-free, and the moment
+an adapter would need a network call to know an address, it omits it rather than
+fetch.
 
 Because `ls` never resolves, it cannot report whether a declared secret is
 _actually_ resolvable — a `!secret` shows as `secret` whether or not the backend
