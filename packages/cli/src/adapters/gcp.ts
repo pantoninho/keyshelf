@@ -1,7 +1,14 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { KeyshelfError } from "../errors.js";
 import type { Adapter, AdapterMetadata } from "./adapter.js";
-import { conventionName, firstLine, hasExplicitName, refName, refVersion } from "./shared.js";
+import {
+  conventionName,
+  firstLine,
+  hasExplicitName,
+  refName,
+  refVersion,
+  secretNotFound
+} from "./shared.js";
 
 /**
  * The gcp adapter (ADR-0002, ADR-0006). It stores each key as its own Google
@@ -125,19 +132,23 @@ export class GcpAdapter implements Adapter {
     try {
       [response] = await this.client.accessSecretVersion({ name: version });
     } catch (error) {
-      throw mapGcpError(error, { key, ref: name });
+      throw mapGcpError(error, { key, ref: name, explicit: hasExplicitName(ref) });
     }
 
     const data = response.payload?.data;
     if (data === undefined || data === null) {
       // A version with no payload should not happen for values we wrote, but a
       // foreign or hand-created secret could have one — treat it as absent. Name
-      // the version actually requested (pinned N or latest) for an honest message.
+      // the version actually requested (pinned N or latest) for an honest message,
+      // keeping the human subject the legible key (the namespaced address stays in
+      // the structured `ref` field).
       const pinned = refVersion(ref);
       const which = pinned === undefined ? "its latest version" : `version ${pinned}`;
-      throw new KeyshelfError("SECRET_NOT_FOUND", `Secret '${name}' has no payload in ${which}.`, {
+      throw secretNotFound({
         key,
-        ref: name
+        storedName: name,
+        explicit: hasExplicitName(ref),
+        where: which
       });
     }
 
@@ -290,25 +301,33 @@ function grpcCode(error: unknown): number | undefined {
   return typeof code === "number" ? code : undefined;
 }
 
+/** The diagnostic message a thrown gRPC/Google error carries, else its stringification. */
+function grpcMessage(error: unknown): string {
+  return (error as GrpcError | undefined)?.message ?? String(error);
+}
+
 /**
  * Translate a failed Secret Manager call into a structured {@link KeyshelfError}.
  * gRPC surfaces a numeric status on the error; credential problems thrown by the
  * auth layer before any RPC carry no status, so we fall back to a message probe.
  */
-function mapGcpError(error: unknown, ctx: { key?: string; ref: string }): KeyshelfError {
+function mapGcpError(
+  error: unknown,
+  ctx: { key?: string; ref: string; explicit?: boolean }
+): KeyshelfError {
   const code = grpcCode(error);
-  const message = (error as GrpcError | undefined)?.message ?? String(error);
+  const message = grpcMessage(error);
   const fields = ctx.key === undefined ? { ref: ctx.ref } : { key: ctx.key, ref: ctx.ref };
 
   if (code === GRPC.NOT_FOUND) {
-    return new KeyshelfError("SECRET_NOT_FOUND", `No secret stored for '${ctx.ref}'.`, fields);
+    return secretNotFound({
+      key: ctx.key ?? ctx.ref,
+      storedName: ctx.ref,
+      explicit: ctx.explicit ?? false
+    });
   }
 
-  if (
-    code === GRPC.PERMISSION_DENIED ||
-    code === GRPC.UNAUTHENTICATED ||
-    isCredentialFailure(message)
-  ) {
+  if (isAuthFailure(code, message)) {
     return new KeyshelfError(
       "PROVIDER_AUTH",
       `Google Cloud rejected the credentials for '${ctx.ref}': ${firstLine(message)}`,
@@ -320,6 +339,17 @@ function mapGcpError(error: unknown, ctx: { key?: string; ref: string }): Keyshe
     "ADAPTER_ERROR",
     `Secret Manager failed on '${ctx.ref}': ${firstLine(message)}`,
     fields
+  );
+}
+
+/**
+ * Whether a failed call is a credential/permission problem: an explicit gRPC
+ * status (denied/unauthenticated) or — for auth-layer failures thrown before any
+ * RPC, which carry no status — a probe of the error message.
+ */
+function isAuthFailure(code: number | undefined, message: string): boolean {
+  return (
+    code === GRPC.PERMISSION_DENIED || code === GRPC.UNAUTHENTICATED || isCredentialFailure(message)
   );
 }
 

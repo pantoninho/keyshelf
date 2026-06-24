@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { KeyshelfError } from "../errors.js";
 import type { Adapter, WriteResult } from "./adapter.js";
-import { conventionName, hasExplicitName, refName } from "./shared.js";
+import { conventionName, hasExplicitName, refName, secretNotFound } from "./shared.js";
 
 /**
  * The store backing the {@link FakeAdapter}: a flat `storedName -> value` map.
@@ -98,10 +98,7 @@ export class FakeAdapter implements Adapter {
     const name = hasExplicitName(ref) ? refName("fake", ref) : conventionName(this.namespace, key);
     const value = this.store.read(name);
     if (value === undefined) {
-      throw new KeyshelfError("SECRET_NOT_FOUND", `No secret stored for '${name}'.`, {
-        key,
-        ref: name
-      });
+      throw secretNotFound({ key, storedName: name, explicit: hasExplicitName(ref) });
     }
 
     return value;
