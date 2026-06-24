@@ -30,6 +30,26 @@ describe("secretRefForm", () => {
       ref: { name: "x" }
     });
   });
+
+  it("records a pinned version on a convention write (ADR-0009)", () => {
+    expect(
+      secretRefForm("keyshelf__myapp__web__staging__DB", "keyshelf__myapp__web__staging__DB", "4")
+    ).toEqual({ bare: true, version: 4 });
+  });
+
+  it("records a pinned version alongside a foreign ref", () => {
+    expect(secretRefForm("shared-db-url", "keyshelf__myapp__web__staging__DB", "9")).toEqual({
+      bare: false,
+      ref: "shared-db-url",
+      version: 9
+    });
+  });
+
+  it("stays floating (no version) when the adapter reports no version", () => {
+    expect(
+      secretRefForm("keyshelf__myapp__web__staging__DB", "keyshelf__myapp__web__staging__DB", undefined)
+    ).toEqual({ bare: true });
+  });
 });
 
 describe("setConfigValue", () => {
@@ -85,6 +105,30 @@ describe("setSecretRef", () => {
     // The written form must round-trip back through the loader's !secret parsing.
     expect(reparsed.toString()).toContain("!secret");
     expect(reparsed.toString()).toContain("shared-db-url");
+  });
+
+  it("writes !secret { version: N } for a pinned convention reference (ADR-0009)", () => {
+    const doc = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setSecretRef(doc, "DB", { bare: true, version: 4 });
+    const node = (
+      parseDocument(doc.toString()).get("keys", true) as {
+        get(k: string, keep: boolean): { tag?: string; toJSON(): unknown };
+      }
+    ).get("DB", true);
+    expect(node.tag).toBe("!secret");
+    expect(node.toJSON()).toEqual({ version: 4 });
+  });
+
+  it("writes !secret { ref, version } for a pinned foreign reference", () => {
+    const doc = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setSecretRef(doc, "DB", { bare: false, ref: "shared-db-url", version: 9 });
+    const node = (
+      parseDocument(doc.toString()).get("keys", true) as {
+        get(k: string, keep: boolean): { tag?: string; toJSON(): unknown };
+      }
+    ).get("DB", true);
+    expect(node.tag).toBe("!secret");
+    expect(node.toJSON()).toEqual({ ref: "shared-db-url", version: 9 });
   });
 });
 

@@ -108,7 +108,7 @@ export function runAdapterContractSuite(harness: AdapterHarness): void {
       it("resolves a foreign value through an explicit ref returned by write", async () => {
         // A write may return a reference that names the stored value; resolving
         // with that ref must locate the same value even under a different key.
-        const ref = await adapter.write("CANONICAL_KEY", "foreign-value");
+        const { ref } = await adapter.write("CANONICAL_KEY", "foreign-value");
         const resolved = await adapter.resolve("A_DIFFERENT_KEY", ref ?? "CANONICAL_KEY");
         expect(resolved).toBe("foreign-value");
       });

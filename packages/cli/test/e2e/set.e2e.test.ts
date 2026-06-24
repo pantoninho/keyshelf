@@ -223,6 +223,67 @@ describe("keyshelf set <KEY> <shelf>/<stage> --secret", () => {
     expect(JSON.parse(stdout)).toMatchObject({ environment: "web/staging", valid: true });
   });
 
+  it("set --secret on a non-versioned provider (fake) records a floating bare !secret", async () => {
+    // The fake adapter does not version its store, so it reports no version and
+    // the reference stays floating — no version: line, even by default (ADR-0009).
+    await scaffold();
+    const { code, stdout } = await runKeyshelf(
+      ["set", "DATABASE_PASSWORD", "web/staging", "--secret", "--json"],
+      { cwd, input: "pw" }
+    );
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout).version).toBeUndefined();
+    const env = await read(".keyshelf/web/staging.yaml");
+    expect(env).toContain("DATABASE_PASSWORD: !secret");
+    expect(env).not.toContain("version");
+  });
+
+  it("set --secret --floating records a bare !secret (no version)", async () => {
+    await scaffold();
+    const { code } = await runKeyshelf(
+      ["set", "DATABASE_PASSWORD", "web/staging", "--secret", "--floating"],
+      { cwd, input: "pw" }
+    );
+    expect(code).toBe(0);
+    const env = await read(".keyshelf/web/staging.yaml");
+    expect(env).toContain("!secret");
+    expect(env).not.toContain("version");
+  });
+
+  it("rejects --pin-latest on a non-versioned provider (fake) with ADAPTER_ERROR", async () => {
+    await scaffold();
+    await runKeyshelf(["set", "DATABASE_PASSWORD", "web/staging", "--secret"], {
+      cwd,
+      input: "pw"
+    });
+    const { code, stdout } = await runKeyshelf(
+      ["set", "DATABASE_PASSWORD", "web/staging", "--pin-latest", "--json"],
+      { cwd }
+    );
+    expect(code).not.toBe(0);
+    expect(JSON.parse(stdout).error.code).toBe("ADAPTER_ERROR");
+  });
+
+  it("rejects --pin-latest on a key that is not a !secret with UNKNOWN_KEY", async () => {
+    await scaffold();
+    // REGION is plaintext config, not a secret.
+    const { code, stdout } = await runKeyshelf(
+      ["set", "REGION", "web/staging", "--pin-latest", "--json"],
+      { cwd }
+    );
+    expect(code).not.toBe(0);
+    expect(JSON.parse(stdout).error.code).toBe("UNKNOWN_KEY");
+  });
+
+  it("rejects --secret combined with --pin-latest", async () => {
+    await scaffold();
+    const { code } = await runKeyshelf(
+      ["set", "DATABASE_PASSWORD", "web/staging", "--secret", "--pin-latest"],
+      { cwd, input: "pw" }
+    );
+    expect(code).not.toBe(0);
+  });
+
   it("rejects --secret on a provider whose adapter is unregistered with ADAPTER_UNAVAILABLE", async () => {
     await scaffold();
     // The `bogus` provider names an adapter no branch in the registry handles.

@@ -4,7 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { KeyshelfError } from "../errors.js";
-import type { Adapter } from "./adapter.js";
+import type { Adapter, WriteResult } from "./adapter.js";
 import { firstLine, refName } from "./shared.js";
 import { resolveSopsBinary } from "./sops-binary.js";
 
@@ -66,7 +66,7 @@ export class SopsAdapter implements Adapter {
     return store[name];
   }
 
-  async write(key: string, value: string): Promise<unknown> {
+  async write(key: string, value: string): Promise<WriteResult> {
     await this.ensureStore();
     // `sops set` mutates the encrypted file in place, re-encrypting under the
     // recipients its `.sops.yaml` creation rules define. The value is carried as
@@ -74,10 +74,12 @@ export class SopsAdapter implements Adapter {
     await this.sops(["set", this.storePath, `["${jsonPathSegment(key)}"]`, JSON.stringify(value)]);
     // The value is stored under the key itself, which is exactly how `resolve`
     // finds it by convention — so a convention write records a *bare* `!secret`
-    // (the contract lets `write` return `undefined` for this). A foreign
+    // (the contract lets `write` return `ref: undefined` for this). A foreign
     // environment can still reference the value explicitly via
-    // `!secret { ref: <key> }`, which `resolve` honours.
-    return undefined;
+    // `!secret { ref: <key> }`, which `resolve` honours. sops does not version its
+    // store (a sibling file holds one value, already deploy-gated, ADR-0009), so
+    // no concrete version is reported and `set` records no pin.
+    return { ref: undefined };
   }
 
   /**

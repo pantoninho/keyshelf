@@ -16,8 +16,21 @@ import type { KeyshelfError } from "../errors.js";
  * discriminated union lets each consumer destructure the one it expects.
  */
 export type AdapterMetadata =
-  /** The full `projects/.../secrets/.../versions/latest` Secret Manager resource. */
+  /** The full `projects/.../secrets/.../versions/{latest|N}` Secret Manager resource. */
   { adapter: "gcp"; resource: string };
+
+/**
+ * What an adapter's {@link Adapter.write} reports back. `ref` is the reference to
+ * record for the key (the prior `write` return: the stored name, or `undefined`
+ * for a convention write). `version` is the **concrete backend version** the
+ * write created, set only by adapters that version their store (gcp); `undefined`
+ * elsewhere (sops, fake). It is what lets `set` record a pinned `version: N`
+ * (ADR-0009).
+ */
+export interface WriteResult {
+  ref: unknown;
+  version?: string;
+}
 
 /**
  * The sole seam for backend-specific behavior (ADR-0002). An adapter is the code
@@ -49,9 +62,11 @@ export interface Adapter {
    * @param key  the environment key name. By convention it locates the value in
    *   the store (the reference adapters compose it as `keyshelf__{project}__{shelf}__{stage}__{key}`).
    * @param ref  the optional explicit reference payload from a
-   *   `!secret { ref: ... }`, which overrides the convention to resolve a
-   *   differently-named or foreign stored value. `undefined` means
-   *   convention resolution.
+   *   `!secret { ref: ..., version: ... }`, which overrides the convention to
+   *   resolve a differently-named or foreign stored value and may pin a concrete
+   *   `version` (ADR-0009). `undefined` means convention resolution at `latest`.
+   *   A versioned adapter honors a pinned `version`; one that does not version
+   *   ignores it.
    * @returns the value's plaintext, byte-exact.
    * @throws {KeyshelfError} `SECRET_NOT_FOUND` when no value is stored; other
    *   codes per the mapping above.
@@ -63,11 +78,27 @@ export interface Adapter {
    *
    * @param key    the environment key name (the convention location).
    * @param value  the plaintext to store, preserved byte-exactly.
-   * @returns the reference to record for this key in the environment file. A
-   *   convention-resolvable write may return `undefined` (bare `!secret`); a
-   *   foreign/explicit write returns the payload to embed under `{ ref: ... }`.
+   * @returns a {@link WriteResult}: the reference to record (the stored name, or
+   *   `undefined` for a convention write), plus the concrete `version` the write
+   *   created for adapters that version their store (gcp) — `undefined`
+   *   otherwise. `set` records the version as a pin per ADR-0009.
    */
-  write(key: string, value: string): Promise<unknown>;
+  write(key: string, value: string): Promise<WriteResult>;
+
+  /**
+   * Read the **current latest version** of a key without writing a new one
+   * (ADR-0009, `set --pin-latest`). Optional: only adapters that version their
+   * store implement it. The returned string is the concrete version identifier to
+   * record as a pin.
+   *
+   * @param key  the environment key name (the convention location).
+   * @param ref  the optional explicit `!secret { ref: ... }` payload to read the
+   *   latest version of a foreign/explicit secret; `undefined` means convention.
+   * @returns the current latest version identifier.
+   * @throws {KeyshelfError} `SECRET_NOT_FOUND` when no version exists; other codes
+   *   per the mapping above.
+   */
+  latestVersion?(key: string, ref?: unknown): Promise<string>;
 
   /**
    * Compute this key's backend **address** — its storage location, never its

@@ -1,7 +1,7 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { KeyshelfError } from "../errors.js";
 import type { Adapter, AdapterMetadata } from "./adapter.js";
-import { conventionName, firstLine, refName } from "./shared.js";
+import { conventionName, firstLine, hasExplicitName, refName, refVersion } from "./shared.js";
 
 /**
  * The gcp adapter (ADR-0002, ADR-0006). It stores each key as its own Google
@@ -73,12 +73,26 @@ export interface SecretsClient {
   addSecretVersion(request: {
     parent: string;
     payload: { data: Buffer };
-  }): Promise<[unknown, ...unknown[]]>;
+  }): Promise<[VersionResponse, ...unknown[]]>;
 }
 
 /** The fields of an accessSecretVersion response the adapter reads. */
 interface AccessResponse {
+  /** The resolved version resource (`.../versions/N`); how `latest` reveals N. */
+  name?: string | null;
   payload?: { data?: Uint8Array | string | null } | null;
+}
+
+/** The fields of an addSecretVersion response the adapter reads. */
+interface VersionResponse {
+  /** The created version resource (`.../versions/N`); its tail is the version. */
+  name?: string | null;
+}
+
+/** The trailing version segment of a `.../versions/N` resource, if present. */
+function versionFromResource(resource: string | null | undefined): string | undefined {
+  const match = (resource ?? "").match(/\/versions\/([^/]+)$/);
+  return match ? match[1] : undefined;
 }
 
 /** A Secret Manager replication policy: automatic, or pinned to one region. */
@@ -106,7 +120,7 @@ export class GcpAdapter implements Adapter {
 
   async resolve(key: string, ref?: unknown): Promise<string> {
     const name = this.storedName(key, ref);
-    const version = this.versionResource(name);
+    const version = this.versionResource(name, refVersion(ref));
     let response: AccessResponse;
     try {
       [response] = await this.client.accessSecretVersion({ name: version });
@@ -137,7 +151,7 @@ export class GcpAdapter implements Adapter {
       : Buffer.from(data).toString("utf8");
   }
 
-  async write(key: string, value: string): Promise<unknown> {
+  async write(key: string, value: string): Promise<{ ref: unknown; version?: string }> {
     if (value === "") {
       // Secret Manager rejects an empty payload, and an empty secret has no form
       // a native consumer (Cloud Run mount, gcloud) could read. Rather than
@@ -151,8 +165,9 @@ export class GcpAdapter implements Adapter {
 
     const name = conventionName(this.namespace, key);
     await this.ensureSecret(name);
+    let response: VersionResponse;
     try {
-      await this.client.addSecretVersion({
+      [response] = await this.client.addSecretVersion({
         parent: this.secretResource(name),
         payload: { data: Buffer.from(value, "utf8") }
       });
@@ -163,7 +178,37 @@ export class GcpAdapter implements Adapter {
     // The value is stored under the convention secret id, which is exactly the
     // name `set` resolves by — returning it records a bare `!secret`, and a
     // foreign environment can reference it explicitly via `!secret { ref: name }`.
-    return name;
+    // The created version is surfaced so `set` can pin `version: N` (ADR-0009).
+    return { ref: name, version: versionFromResource(response.name) };
+  }
+
+  /**
+   * Read the current latest version number of a key without writing (ADR-0009,
+   * `set --pin-latest`). Accesses `.../versions/latest`; the API echoes the
+   * concrete resolved version in the response `name`, which is the version to
+   * pin. A key with no version is `SECRET_NOT_FOUND` (uniform, ADR-0005).
+   */
+  async latestVersion(key: string, ref?: unknown): Promise<string> {
+    const name = this.storedName(key, ref);
+    let response: AccessResponse;
+    try {
+      [response] = await this.client.accessSecretVersion({
+        name: this.versionResource(name, undefined)
+      });
+    } catch (error) {
+      throw mapGcpError(error, { key, ref: name });
+    }
+
+    const version = versionFromResource(response.name);
+    if (version === undefined) {
+      throw new KeyshelfError(
+        "ADAPTER_ERROR",
+        `Secret Manager did not report a version for '${name}'.`,
+        { key, ref: name }
+      );
+    }
+
+    return version;
   }
 
   /**
@@ -174,16 +219,20 @@ export class GcpAdapter implements Adapter {
    * location is composed.
    */
   metadata(key: string, ref?: unknown): AdapterMetadata {
-    return { adapter: "gcp", resource: this.versionResource(this.storedName(key, ref)) };
+    return {
+      adapter: "gcp",
+      resource: this.versionResource(this.storedName(key, ref), refVersion(ref))
+    };
   }
 
   /**
-   * The stored secret name for a key: the convention `{namespace}__{key}` when no
-   * explicit ref is given, otherwise the coerced ref payload. Shared by `resolve`
-   * (which then accesses it) and `metadata` (which only addresses it).
+   * The stored secret name for a key: the convention `{namespace}__{key}` unless
+   * the ref carries an explicit foreign name, in which case the coerced ref
+   * payload. A ref that is *only* a pin (`{ version: N }`, no name) still resolves
+   * by convention. Shared by `resolve`, `latestVersion`, and `metadata`.
    */
   private storedName(key: string, ref: unknown): string {
-    return ref === undefined ? conventionName(this.namespace, key) : refName("gcp", ref);
+    return hasExplicitName(ref) ? refName("gcp", ref) : conventionName(this.namespace, key);
   }
 
   /** Create the secret container if it does not already exist (idempotent). */
@@ -215,13 +264,18 @@ export class GcpAdapter implements Adapter {
     return name.startsWith("projects/") ? name : `projects/${this.projectId}/secrets/${name}`;
   }
 
-  /** The `.../versions/latest` resource to access for a name. */
-  private versionResource(name: string): string {
+  /**
+   * The `.../versions/{selector}` resource to access for a name. `version` pins a
+   * concrete version (ADR-0009); absent ⇒ `latest`. A foreign full-resource name
+   * that already pins a version is honored verbatim (its pin wins).
+   */
+  private versionResource(name: string, version: number | undefined): string {
+    const selector = version === undefined ? "latest" : String(version);
     if (name.startsWith("projects/")) {
-      return name.includes("/versions/") ? name : `${name}/versions/latest`;
+      return name.includes("/versions/") ? name : `${name}/versions/${selector}`;
     }
 
-    return `projects/${this.projectId}/secrets/${name}/versions/latest`;
+    return `projects/${this.projectId}/secrets/${name}/versions/${selector}`;
   }
 }
 

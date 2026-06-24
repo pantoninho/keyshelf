@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { KeyshelfError } from "../errors.js";
-import type { Adapter } from "./adapter.js";
+import type { Adapter, WriteResult } from "./adapter.js";
 import { conventionName, refName } from "./shared.js";
 
 /**
@@ -104,11 +104,13 @@ export class FakeAdapter implements Adapter {
     return value;
   }
 
-  async write(key: string, value: string): Promise<unknown> {
+  async write(key: string, value: string): Promise<WriteResult> {
     const name = conventionName(this.namespace, key);
     this.store.put(name, value);
     // Return the canonical stored name so a foreign environment can reference
-    // this value explicitly via `!secret { ref: <name> }`.
-    return name;
+    // this value explicitly via `!secret { ref: <name> }`. The fake does not
+    // version its store, so it reports no concrete version (ADR-0009): a `set`
+    // against the fake records a bare/floating `!secret`.
+    return { ref: name };
   }
 }
