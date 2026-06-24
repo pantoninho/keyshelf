@@ -68,16 +68,23 @@ export function runAdapterContractSuite(harness: AdapterHarness): void {
     });
 
     describe("error-code mapping", () => {
-      it("maps a missing secret to SECRET_NOT_FOUND", async () => {
+      it("maps a missing secret to SECRET_NOT_FOUND, naming the key not the storage address", async () => {
         const error = await captureError(() => adapter.resolve("ABSENT_KEY"));
         expect(error.code).toBe("SECRET_NOT_FOUND");
+        // The human message names the env-var key the user wrote, never the
+        // backend storage address (e.g. a namespaced convention name).
+        expect(error.message).toContain("ABSENT_KEY");
+        expect(error.fields.key).toBe("ABSENT_KEY");
       });
 
-      it("maps a missing secret behind an explicit ref to SECRET_NOT_FOUND", async () => {
+      it("maps a missing secret behind an explicit ref to SECRET_NOT_FOUND, naming the ref", async () => {
         const error = await captureError(() =>
           adapter.resolve("SOME_KEY", { ref: "nonexistent-foreign-name" })
         );
         expect(error.code).toBe("SECRET_NOT_FOUND");
+        // An explicit ref is the user's own string and the precise thing missing,
+        // so the message names it.
+        expect(error.message).toContain("nonexistent-foreign-name");
       });
     });
 

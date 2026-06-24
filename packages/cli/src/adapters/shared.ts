@@ -13,6 +13,37 @@ export function conventionName(namespace: string, key: string): string {
 }
 
 /**
+ * The uniform `SECRET_NOT_FOUND` for an absent value (ADR-0005). The human
+ * message names the env-var `key` the user actually wrote — never the backend
+ * storage address (the convention-namespaced
+ * `keyshelf__{project}__{shelf}__{stage}__{key}`), which is an implementation
+ * detail: illegible in a terminal and a leak of the naming scheme. The full
+ * stored name is still preserved in the structured `ref` field, where `--json`
+ * consumers and `ls` read the backend address. When the user supplied an explicit
+ * `!secret { ref: NAME }`, the message names NAME instead, since that string is
+ * the user's own and is the precise thing missing.
+ *
+ * `where` is an optional, human-only locator clause (e.g. a sops file path) the
+ * caller appends for backends where it aids debugging; structured locators still
+ * go in `fields`.
+ */
+export function secretNotFound(opts: {
+  key: string;
+  storedName: string;
+  explicit: boolean;
+  where?: string;
+  fields?: Record<string, unknown>;
+}): KeyshelfError {
+  const subject = opts.explicit ? opts.storedName : opts.key;
+  const where = opts.where === undefined ? "" : ` in ${opts.where}`;
+  return new KeyshelfError("SECRET_NOT_FOUND", `No secret stored for '${subject}'${where}.`, {
+    key: opts.key,
+    ref: opts.storedName,
+    ...opts.fields
+  });
+}
+
+/**
  * Coerce an explicit `!secret` ref payload to the stored name string. Accepts a
  * bare string or a `{ ref: string }` object; anything else is an `ADAPTER_ERROR`
  * tagged with the calling adapter's name.

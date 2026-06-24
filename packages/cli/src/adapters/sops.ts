@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { KeyshelfError } from "../errors.js";
 import type { Adapter, WriteResult } from "./adapter.js";
-import { firstLine, hasExplicitName, refName } from "./shared.js";
+import { firstLine, hasExplicitName, refName, secretNotFound } from "./shared.js";
 import { resolveSopsBinary } from "./sops-binary.js";
 
 const execFileAsync = promisify(execFile);
@@ -56,15 +56,13 @@ export class SopsAdapter implements Adapter {
     const name = hasExplicitName(ref) ? refName("sops", ref) : key;
     const store = await this.decryptStore();
     if (!Object.prototype.hasOwnProperty.call(store, name)) {
-      throw new KeyshelfError(
-        "SECRET_NOT_FOUND",
-        `No secret stored for '${name}' in '${this.storePath}'.`,
-        {
-          key,
-          ref: name,
-          file: this.storePath
-        }
-      );
+      throw secretNotFound({
+        key,
+        storedName: name,
+        explicit: hasExplicitName(ref),
+        where: `'${this.storePath}'`,
+        fields: { file: this.storePath }
+      });
     }
 
     return store[name];
