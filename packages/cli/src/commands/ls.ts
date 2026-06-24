@@ -32,8 +32,11 @@ interface EnvironmentViewResult {
 }
 
 /**
- * `keyshelf ls` has two offline, value-free modes (ADR-0008). Both are pure file
- * reads — neither builds a provider, touches a backend, nor prints a key value.
+ * `keyshelf ls` has two offline, value-free modes (ADR-0008). Both are pure
+ * reads — they touch no backend and print no key value. The environment view may
+ * build the environment's adapter, but only to compute a key's offline backend
+ * **address** (never its value): adapter construction and `metadata()` are
+ * synchronous and credential-free, so this stays offline.
  *
  * - `keyshelf ls` (no argument) prints a project map: every shelf, its schema's
  *   key count, and the environments under it, as a tree.
@@ -41,6 +44,10 @@ interface EnvironmentViewResult {
  *   every declared key, in declaration order, annotated with its schema
  *   **presence** and this environment's **status** (`config` / `secret` /
  *   `ref → target` / `default` / `missing` / `unset`).
+ *
+ * Each secret key's offline backend address is carried in `--json` always, and
+ * shown in the human table only behind `--metadata` (the default table stays
+ * lean).
  *
  * Colour is applied semantically via {@link ux.colorize} and auto-disables on a
  * non-TTY and when `NO_COLOR` is set. Column alignment uses `string-width` so the
@@ -57,6 +64,7 @@ export default class Ls extends BaseCommand {
     "<%= config.bin %> ls",
     "<%= config.bin %> ls --json",
     "<%= config.bin %> ls backend/production",
+    "<%= config.bin %> ls backend/production --metadata",
     "<%= config.bin %> ls backend/production --json"
   ];
 
