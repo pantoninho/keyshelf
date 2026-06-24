@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.3.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.3.0...keyshelf-v6.3.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* **adapters:** make SECRET_NOT_FOUND legible, stop leaking storage address ([#247](https://github.com/pantoninho/keyshelf/issues/247)) ([0ef113d](https://github.com/pantoninho/keyshelf/commit/0ef113d0b122b1558e46ef430905c5c3cebda701))
+
 ## [6.3.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.2.0...keyshelf-v6.3.0) (2026-06-24)
 
 
