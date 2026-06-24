@@ -126,7 +126,33 @@ export default class Run extends BaseCommand {
     const status = await new Promise<number>((resolve, reject) => {
       const child = spawn(cmd, args, { stdio: "inherit", env: childEnv });
 
+      // Act as a well-mannered supervisor/init: relay termination signals sent to
+      // the keyshelf process *alone* (a process manager, `kill <pid>`, or a
+      // container platform like Cloud Run sending SIGTERM to PID 1) on to the
+      // child, which would otherwise never see them. Node cannot execve-replace
+      // the process, so spawn + explicit forwarding is the correct approach.
+      const forwarded: NodeJS.Signals[] = ["SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT"];
+      const forward = (signal: NodeJS.Signals) => {
+        // Best-effort: the child may have already exited (ESRCH), or be unkillable;
+        // never let a failed relay crash keyshelf.
+        try {
+          if (child.pid !== undefined) child.kill(signal);
+        } catch {
+          // ignore — child already gone
+        }
+      };
+      const handlers = new Map<NodeJS.Signals, () => void>();
+      for (const signal of forwarded) {
+        const handler = () => forward(signal);
+        handlers.set(signal, handler);
+        process.on(signal, handler);
+      }
+      const removeHandlers = () => {
+        for (const [signal, handler] of handlers) process.removeListener(signal, handler);
+      };
+
       child.on("error", (error) => {
+        removeHandlers();
         reject(
           new KeyshelfError("EXEC_FAILED", `Could not start command '${cmd}': ${error.message}`, {
             command: cmd,
@@ -136,6 +162,9 @@ export default class Run extends BaseCommand {
       });
 
       child.on("exit", (code, signal) => {
+        // The child is reaped by the time `exit` fires; drop the signal handlers
+        // so a late signal does not target a recycled PID.
+        removeHandlers();
         // Propagate the wrapped command's status. A signal-terminated child maps
         // to the conventional 128 + signal number.
         resolve(signal === null ? (code ?? 0) : 128 + signalNumber(signal));
