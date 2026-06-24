@@ -97,32 +97,38 @@ export default class Set extends BaseCommand {
     const { shelf, stage } = parseTarget(args.target);
     const { key } = args;
 
+    // Three mutually-exclusive authoring modes dispatch first; the default is a
+    // value write (plaintext, or --secret through the provider).
     if (flags.ref !== undefined) {
       return this.authorReference(shelf, stage, key, flags.ref, flags["ref-key"]);
     }
-
     if (flags["pin-latest"]) {
       return this.pinLatest(shelf, stage, key);
     }
+    return this.writeValue(shelf, stage, key, flags.secret, flags.floating);
+  }
 
+  /**
+   * The default `set` path: write a value into the environment file. Plaintext
+   * lands as a config scalar; `--secret` hands the value to the provider and
+   * records only a `!secret` reference (pinned by default on a versioned
+   * provider, ADR-0009). The value is read from stdin/prompt, never argv.
+   */
+  private async writeValue(
+    shelf: string,
+    stage: string,
+    key: string,
+    secret: boolean,
+    floating: boolean
+  ): Promise<SetResult> {
     // The value is never taken from argv. A TTY prompts; otherwise stdin is read
     // raw (byte-exact), and an empty stdin is NO_INPUT.
     const value = await this.readValue(key);
-
     const { loaded, projectDir, file, doc } = await this.loadForEdit(shelf, stage, key);
 
     let version: number | undefined;
-    if (flags.secret) {
-      version = await this.writeSecret(
-        loaded,
-        projectDir,
-        shelf,
-        stage,
-        key,
-        value,
-        doc,
-        flags.floating
-      );
+    if (secret) {
+      version = await this.writeSecret(loaded, projectDir, shelf, stage, key, value, doc, floating);
     } else {
       setConfigValue(doc, key, value);
     }
@@ -132,13 +138,13 @@ export default class Set extends BaseCommand {
     const result: SetResult = {
       key,
       environment: `${shelf}/${stage}`,
-      secret: flags.secret,
+      secret,
       ref: false,
       ...(version === undefined ? {} : { version })
     };
     if (!this.jsonEnabled()) {
       const pinNote = version === undefined ? "" : ` (pinned v${version})`;
-      this.log(`Set ${result.environment} ${key}${flags.secret ? " (secret)" : ""}${pinNote}.`);
+      this.log(`Set ${result.environment} ${key}${secret ? " (secret)" : ""}${pinNote}.`);
     }
 
     return result;
