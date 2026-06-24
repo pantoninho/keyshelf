@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.2.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.1.1...keyshelf-v6.2.0) (2026-06-24)
+
+
+### Features
+
+* **ls:** surface adapter metadata (offline secret address) ([#237](https://github.com/pantoninho/keyshelf/issues/237)) ([2e267d9](https://github.com/pantoninho/keyshelf/commit/2e267d9c4f68e533e33d723b9e07a796ef543a2a))
+
 ## [6.1.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.1.0...keyshelf-v6.1.1) (2026-06-24)
 
 
