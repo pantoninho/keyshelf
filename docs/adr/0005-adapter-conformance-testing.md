@@ -22,7 +22,10 @@ Both suites bake in two cross-cutting dimensions every adapter must satisfy:
   `PROVIDER_AUTH`, sops absent → `ADAPTER_UNAVAILABLE`, etc.), uniformly.
 - **Value fidelity** — write/resolve round-trips are byte-exact for adversarial
   values: newlines, trailing whitespace, `=`, quotes, unicode, multi-KB blobs,
-  empty string.
+  and the empty string. A backend that cannot represent an empty value declares
+  `supportsEmptyValue: false` on its harness and must instead reject it with
+  `ADAPTER_ERROR` — the one sanctioned per-backend divergence (the `gcp` adapter,
+  ADR-0006).
 
 The matrix:
 

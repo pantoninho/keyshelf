@@ -305,7 +305,10 @@ ADR-0005 for rationale.
   Both enforce two cross-cutting dimensions: **error-code mapping** (every adapter
   maps the same conditions to the same codes above) and **value fidelity**
   (byte-exact round-trip of adversarial values — newlines, whitespace, `=`,
-  quotes, unicode, multi-KB, empty).
+  quotes, unicode, multi-KB, and the empty string). A backend that cannot hold an
+  empty value (the `gcp` adapter — Secret Manager rejects empty payloads) instead
+  rejects it with `ADAPTER_ERROR`; this is the contract's one sanctioned
+  per-backend divergence.
 
 Matrix execution:
 

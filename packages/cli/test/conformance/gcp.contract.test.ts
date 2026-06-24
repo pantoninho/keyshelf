@@ -24,6 +24,9 @@ if (testProject) {
 
   runAdapterContractSuite({
     name: "gcp",
+    // Secret Manager rejects an empty payload and an empty secret has no native
+    // form to mount, so the gcp adapter refuses empty values (ADR-0006).
+    supportsEmptyValue: false,
     async setup() {
       counter += 1;
       namespace = `${runPrefix}-${counter}`;

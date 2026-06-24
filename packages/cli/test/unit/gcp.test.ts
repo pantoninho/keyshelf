@@ -48,7 +48,13 @@ function fakeClient() {
     }
   };
 
-  return { client, createCalls };
+  // Plant a secret directly in the backend (bypassing the adapter) so a test can
+  // model a foreign or hand-created secret whose bytes Keyshelf never wrote.
+  function seed(id: string, bytes: Buffer): void {
+    secrets.set(id, { replication: { automatic: {} }, versions: [bytes] });
+  }
+
+  return { client, createCalls, seed };
 }
 
 /** A client whose every call rejects with the given error — for error mapping. */
@@ -104,6 +110,16 @@ describe("GcpAdapter", () => {
       expect(await a.resolve("A_DIFFERENT_KEY", ref)).toBe("foreign-value");
     });
 
+    it("resolves a foreign/hand-created secret holding raw (non-JSON) bytes", async () => {
+      // A secret Keyshelf never wrote holds its literal value, not a JSON
+      // envelope. Raw storage must read it back verbatim — the JSON-envelope
+      // scheme used to reject this as ADAPTER_ERROR (ADR-0006).
+      const { client, seed } = fakeClient();
+      seed("foreign-token", Buffer.from("raw-token-no-quotes", "utf8"));
+      const a = adapter(client);
+      expect(await a.resolve("ANY_KEY", { ref: "foreign-token" })).toBe("raw-token-no-quotes");
+    });
+
     it("overwrites with the latest version on a repeated write", async () => {
       const { client } = fakeClient();
       const a = adapter(client);
@@ -120,8 +136,7 @@ describe("GcpAdapter", () => {
       ["equals signs", "postgres://h?a=b=c&d=e"],
       ["quotes", `it's a "quoted" 'value'`],
       ["unicode", "café — 日本語 — 🔐 — Ω"],
-      ["multi-KB blob", "x".repeat(8192)],
-      ["empty string", ""]
+      ["multi-KB blob", "x".repeat(8192)]
     ];
 
     for (const [label, value] of cases) {
@@ -133,13 +148,28 @@ describe("GcpAdapter", () => {
       });
     }
 
-    it("stores an empty string as a non-empty payload (Secret Manager rejects empty)", async () => {
+    it("stores the raw value verbatim, with no JSON envelope (native-mountable)", async () => {
+      // The payload bytes must BE the value, so Cloud Run / gcloud read it
+      // without unwrapping a JSON quote.
       const { client } = fakeClient();
-      // The fake captures the raw bytes; JSON.stringify('') is `""`, two bytes.
-      const a = adapter(client);
-      await a.write("EMPTY", "");
-      // Resolving proves the bytes were a valid non-empty JSON-encoded empty string.
-      expect(await a.resolve("EMPTY")).toBe("");
+      const captured: Buffer[] = [];
+      const spy: SecretsClient = {
+        ...client,
+        async addSecretVersion(request) {
+          captured.push(request.payload.data);
+          return client.addSecretVersion(request);
+        }
+      };
+      await adapter(spy).write("TOKEN", "plain-value");
+      expect(captured[0].toString("utf8")).toBe("plain-value");
+    });
+
+    it("rejects an empty value with ADAPTER_ERROR (Secret Manager forbids empty payloads)", async () => {
+      const { client, createCalls } = fakeClient();
+      const error = await captureError(() => adapter(client).write("EMPTY", ""));
+      expect(error.code).toBe("ADAPTER_ERROR");
+      // It refuses up front — no secret container is ever created.
+      expect(createCalls).toHaveLength(0);
     });
   });
 

@@ -40,13 +40,31 @@ Concrete choices:
   with a v5 one and does not auto-resolve v5 secrets — migration is handled
   separately (#180).
 
-- **Value encoding: JSON string, mirroring `sops`.** Secret Manager payloads are
-  raw bytes, but it **rejects an empty payload** — and the contract requires an
-  empty string to round-trip byte-exactly. So every value is carried as
-  `JSON.stringify(value)` on `write` and `JSON.parse`d on `resolve`, exactly as
-  the sops adapter does. An empty string becomes the two-byte `""`; all
-  adversarial values (newlines, whitespace, quotes, unicode, multi-KB) round-trip
-  byte-exactly.
+- **Value encoding: raw bytes (the payload _is_ the value).** `write` stores
+  `Buffer.from(value, "utf8")` and `resolve` returns the bytes verbatim. Secret
+  Manager stores an opaque byte blob, so raw bytes round-trip byte-exactly for
+  every value (newlines, whitespace, quotes, unicode, multi-KB) with no envelope.
+  Storing the literal value is what lets **native consumers** — Cloud Run secret
+  mounts, `gcloud`, Terraform data sources, other services — read the secret
+  directly, which is the whole point of putting it in a _shared_ backend.
+
+  > **Superseded.** This adapter originally carried values as `JSON.stringify(value)`,
+  > mirroring `sops`. That was reversed (#233): the envelope poisoned every native
+  > consumer (they received `"value"` with literal quotes) and broke the
+  > foreign-secret feature below (a hand-created secret holds raw bytes, so
+  > `JSON.parse` threw `ADAPTER_ERROR`). The envelope was solving only the empty-
+  > string edge case — raw UTF-8 already round-trips everything else — at a cost
+  > that defeats the reason to choose Secret Manager. Unlike `sops` (which still
+  > needs the envelope to survive YAML's implicit typing, and has no native
+  > external consumer), `gcp` keeps values raw.
+
+  The one value with no raw representation is the **empty string**: Secret Manager
+  rejects an empty payload, and an empty secret has no native form to mount
+  anyway. So `write` **rejects an empty value** with `ADAPTER_ERROR` up front,
+  rather than smuggle it through an envelope no native consumer could read. This
+  is the adapter contract's single sanctioned divergence from the uniform
+  empty-string round-trip (ADR-0005); the conformance harness marks it with
+  `supportsEmptyValue: false`.
 
 - **Versions: write adds, resolve reads `latest`.** Each `write` adds a new secret
   version; `resolve` accesses the `latest` version, so a repeated write overwrites
@@ -72,9 +90,12 @@ per-platform binary, which the SDK is not.
 One-secret-per-key with the fixed `keyshelf__{project}__{shelf}__{stage}__{key}` convention is the
 same model `fake` already implements and `set` already resolves by, so the gcp
 adapter slots into the existing reference-adapter behaviour with no new wiring in
-callers. Carrying values as JSON strings reuses the proven sops trick and is the
-cleanest way to satisfy both byte-fidelity and Secret Manager's no-empty-payload
-rule with one mechanism.
+callers. Storing the raw value keeps the payload identical to what any native GCP
+consumer expects, so the secret Keyshelf writes is the secret Cloud Run mounts —
+no decode step, no `JSON.parse` that a foreign secret would fail. The empty
+string is the only value Secret Manager cannot hold, and an empty secret is a
+smell with no native representation, so rejecting it is a cleaner contract than an
+envelope that breaks every other reader.
 
 ## Consequences
 
@@ -88,10 +109,15 @@ credentials are configured. Per-PR signal still rests on the hermetic `fake` +
 error mapping) which is unit-tested hermetically against an in-memory client
 double (`test/unit/gcp.test.ts`).
 
-The adapter assumes it owns the secrets under its namespace; values written
-outside Keyshelf that are not JSON strings surface as `ADAPTER_ERROR` on resolve.
-Old secret versions accumulate (Keyshelf never destroys them); lifecycle/rotation
-of superseded versions is left to the backend's own policies.
+Because values are stored raw, a foreign or hand-created secret resolves
+correctly through `!secret { ref: ... }` — its literal bytes are the value, with
+no envelope to parse (this is the bug the JSON-string scheme caused, now fixed).
+Secrets Keyshelf writes are also directly mountable into Cloud Run and readable
+by `gcloud`/Terraform without unwrapping. The tradeoff: the gcp adapter cannot
+store an empty value (rejected on `write`), the one place it diverges from the
+otherwise-uniform value contract. Old secret versions accumulate (Keyshelf never
+destroys them); lifecycle/rotation of superseded versions is left to the
+backend's own policies.
 
 ## Running the gated suite locally
 

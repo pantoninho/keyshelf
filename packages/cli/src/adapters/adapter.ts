@@ -18,7 +18,10 @@ import type { KeyshelfError } from "../errors.js";
  * - map other backend op failures to `ADAPTER_ERROR`;
  * - round-trip values byte-exactly (write then resolve yields the same bytes,
  *   including embedded newlines, surrounding whitespace, `=`, quotes, unicode,
- *   multi-KB blobs, and the empty string).
+ *   and multi-KB blobs). The empty string round-trips too, with one sanctioned
+ *   exception: a backend that cannot represent an empty value (the gcp adapter —
+ *   Secret Manager rejects empty payloads, ADR-0006) instead rejects it on
+ *   `write` with `ADAPTER_ERROR`.
  *
  * These obligations are proven by the shared adapter-contract conformance suite
  * (ADR-0005), which every adapter runs by supplying a harness.

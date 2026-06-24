@@ -18,13 +18,21 @@ import { conventionName, firstLine, refName } from "./shared.js";
  * the replication policy: absent or `global` ⇒ automatic replication; any other
  * value ⇒ user-managed replication pinned to that single region.
  *
- * **Value encoding.** Secret Manager payloads are raw bytes but reject an *empty*
- * payload, and the contract demands an empty string round-trip byte-exactly. So,
- * exactly as the sops adapter does, every value is carried as a JSON string:
- * `write` stores `JSON.stringify(value)` and `resolve` `JSON.parse`s it back. An
- * empty string becomes the two-byte `""`, and the write→resolve round-trip stays
- * byte-exact for adversarial values (newlines, whitespace, quotes, unicode,
- * multi-KB blobs).
+ * **Value encoding.** The value is stored as its raw UTF-8 bytes —
+ * `write` writes `Buffer.from(value, "utf8")` and `resolve` returns the bytes
+ * verbatim. Unlike the sops adapter (which carries a JSON string to survive
+ * YAML's implicit typing), Secret Manager stores an opaque byte blob, so raw
+ * bytes round-trip byte-exactly for every value — newlines, whitespace, quotes,
+ * unicode, multi-KB blobs — with no envelope. Storing the literal value is what
+ * lets *native* consumers (Cloud Run secret mounts, `gcloud`, Terraform, other
+ * services) read the secret directly without unwrapping a JSON quote.
+ *
+ * The one value with no raw representation is the **empty string**: Secret
+ * Manager rejects an empty payload, and an empty payload has no native form to
+ * mount anyway. So `write` rejects an empty value with `ADAPTER_ERROR` rather
+ * than smuggle it through an envelope no native consumer could read. This is the
+ * single, deliberate divergence from the uniform empty-string round-trip the
+ * adapter contract otherwise requires (ADR-0005, ADR-0006).
  *
  * **Reference.** Convention resolution is by key name: `write(key, value)` stores
  * under the composed secret id and returns that id, which equals the convention
@@ -32,6 +40,8 @@ import { conventionName, firstLine, refName } from "./shared.js";
  * `!secret { ref: NAME }` resolves a differently-named secret; a `NAME` that is a
  * full `projects/.../secrets/...` resource path resolves a foreign secret (any
  * project), otherwise it is a bare secret id in the configured `projectId`.
+ * Because values are stored raw, a foreign or hand-created secret (which holds
+ * its own literal bytes, not a JSON envelope) resolves correctly.
  *
  * **Error mapping** (uniform across adapters, ADR-0005):
  * - secret/version absent → `SECRET_NOT_FOUND`;
@@ -118,23 +128,33 @@ export class GcpAdapter implements Adapter {
       );
     }
 
-    // Values were stored via JSON.stringify; recover the exact original. `data`
-    // is bytes (a Buffer) for our writes, but the API may hand back a base64
-    // string in some transports — Buffer.from handles both via the right coding.
-    const json =
-      typeof data === "string"
-        ? Buffer.from(data, "base64").toString("utf8")
-        : Buffer.from(data).toString("utf8");
-    return decodeValue(json, name);
+    // The value is stored as its raw UTF-8 bytes, so the payload *is* the value.
+    // `data` is bytes (a Buffer) for our writes, but the API may hand back a
+    // base64 string in some transports — Buffer.from handles both via the right
+    // coding.
+    return typeof data === "string"
+      ? Buffer.from(data, "base64").toString("utf8")
+      : Buffer.from(data).toString("utf8");
   }
 
   async write(key: string, value: string): Promise<unknown> {
+    if (value === "") {
+      // Secret Manager rejects an empty payload, and an empty secret has no form
+      // a native consumer (Cloud Run mount, gcloud) could read. Rather than
+      // smuggle it through an envelope, refuse it up front with a clear message.
+      throw new KeyshelfError(
+        "ADAPTER_ERROR",
+        "The gcp adapter cannot store an empty value: Google Cloud Secret Manager rejects empty secret payloads.",
+        { key }
+      );
+    }
+
     const name = conventionName(this.namespace, key);
     await this.ensureSecret(name);
     try {
       await this.client.addSecretVersion({
         parent: this.secretResource(name),
-        payload: { data: Buffer.from(JSON.stringify(value), "utf8") }
+        payload: { data: Buffer.from(value, "utf8") }
       });
     } catch (error) {
       throw mapGcpError(error, { key, ref: name });
@@ -183,24 +203,6 @@ export class GcpAdapter implements Adapter {
 
     return `projects/${this.projectId}/secrets/${name}/versions/latest`;
   }
-}
-
-/** Parse a JSON-encoded stored value back to its plaintext, defensively. */
-function decodeValue(json: string, name: string): string {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch (error) {
-    throw new KeyshelfError(
-      "ADAPTER_ERROR",
-      `Secret '${name}' holds a value Keyshelf did not write: ${String(error)}`,
-      {
-        ref: name
-      }
-    );
-  }
-
-  return typeof parsed === "string" ? parsed : String(parsed);
 }
 
 /** A gRPC/GoogleError, narrowed to the fields we map on. */
