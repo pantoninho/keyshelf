@@ -209,6 +209,73 @@ keys:
   });
 });
 
+describe("loadEnvironment: !secret version pinning (ADR-0009)", () => {
+  it("parses a pinned convention !secret { version: N }", async () => {
+    await scaffold();
+    await write(
+      ".keyshelf/web/staging.yaml",
+      `provider: local
+keys:
+  DATABASE_PASSWORD: !secret { version: 3 }
+`
+    );
+    const loaded = await loadEnvironment(root, "web", "staging");
+    expect(loaded.environment.keys.DATABASE_PASSWORD).toEqual({
+      kind: "secret",
+      ref: { version: 3 },
+      version: 3
+    });
+  });
+
+  it("parses a pinned foreign !secret { ref: NAME, version: N }", async () => {
+    await scaffold();
+    await write(
+      ".keyshelf/web/staging.yaml",
+      `provider: local
+keys:
+  DATABASE_PASSWORD: !secret { ref: shared-token, version: 7 }
+`
+    );
+    const loaded = await loadEnvironment(root, "web", "staging");
+    expect(loaded.environment.keys.DATABASE_PASSWORD).toEqual({
+      kind: "secret",
+      ref: { ref: "shared-token", version: 7 },
+      version: 7
+    });
+  });
+
+  it("leaves a bare !secret floating (no version recorded)", async () => {
+    await scaffold();
+    const loaded = await loadEnvironment(root, "web", "staging");
+    expect(loaded.environment.keys.DATABASE_PASSWORD).toEqual({ kind: "secret" });
+    expect(loaded.environment.keys.DATABASE_PASSWORD.version).toBeUndefined();
+  });
+
+  it("throws MALFORMED_FILE for a non-integer version", async () => {
+    await scaffold();
+    await write(
+      ".keyshelf/web/staging.yaml",
+      `provider: local
+keys:
+  DATABASE_PASSWORD: !secret { version: latest }
+`
+    );
+    await expectCode(loadEnvironment(root, "web", "staging"), "MALFORMED_FILE", {});
+  });
+
+  it("throws MALFORMED_FILE for a zero/negative version", async () => {
+    await scaffold();
+    await write(
+      ".keyshelf/web/staging.yaml",
+      `provider: local
+keys:
+  DATABASE_PASSWORD: !secret { version: 0 }
+`
+    );
+    await expectCode(loadEnvironment(root, "web", "staging"), "MALFORMED_FILE", {});
+  });
+});
+
 describe("listEnvironments", () => {
   it("throws NOT_INITIALIZED when no .keyshelf exists", async () => {
     await expectCode(listEnvironments(root), "NOT_INITIALIZED");

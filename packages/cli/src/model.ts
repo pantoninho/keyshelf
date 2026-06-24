@@ -48,6 +48,14 @@ export interface EnvironmentValue {
   value?: string;
   /** Adapter-defined `!secret` reference payload, when explicitly given. */
   ref?: unknown;
+  /**
+   * The pinned backend version for a `!secret`, when the reference carries
+   * `version: N` (ADR-0009). Absent ⇒ the reference floats (resolves `latest`).
+   * The full payload (including any `ref:` name) travels in {@link ref} for the
+   * adapter to interpret; this is the parsed, validated version surfaced for
+   * offline visibility (`ls`).
+   */
+  version?: number;
   /** The key reference, present only for `kind === 'ref'`. */
   reference?: KeyReference;
 }
