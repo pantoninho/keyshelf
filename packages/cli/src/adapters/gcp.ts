@@ -1,6 +1,6 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { KeyshelfError } from "../errors.js";
-import type { Adapter } from "./adapter.js";
+import type { Adapter, AdapterMetadata } from "./adapter.js";
 import { conventionName, firstLine, refName } from "./shared.js";
 
 /**
@@ -105,7 +105,7 @@ export class GcpAdapter implements Adapter {
   }
 
   async resolve(key: string, ref?: unknown): Promise<string> {
-    const name = ref === undefined ? conventionName(this.namespace, key) : refName("gcp", ref);
+    const name = this.storedName(key, ref);
     const version = this.versionResource(name);
     let response: AccessResponse;
     try {
@@ -164,6 +164,26 @@ export class GcpAdapter implements Adapter {
     // name `set` resolves by — returning it records a bare `!secret`, and a
     // foreign environment can reference it explicitly via `!secret { ref: name }`.
     return name;
+  }
+
+  /**
+   * The offline Secret Manager address of a key — the `.../versions/latest`
+   * resource `resolve` would read, computed by the same pure naming the adapter
+   * already does (convention or explicit ref) plus {@link versionResource}. No
+   * client call, no credentials (ADR-0008): the value is never fetched, only its
+   * location is composed.
+   */
+  metadata(key: string, ref?: unknown): AdapterMetadata {
+    return { adapter: "gcp", resource: this.versionResource(this.storedName(key, ref)) };
+  }
+
+  /**
+   * The stored secret name for a key: the convention `{namespace}__{key}` when no
+   * explicit ref is given, otherwise the coerced ref payload. Shared by `resolve`
+   * (which then accesses it) and `metadata` (which only addresses it).
+   */
+  private storedName(key: string, ref: unknown): string {
+    return ref === undefined ? conventionName(this.namespace, key) : refName("gcp", ref);
   }
 
   /** Create the secret container if it does not already exist (idempotent). */
