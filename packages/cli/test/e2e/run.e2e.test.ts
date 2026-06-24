@@ -1,5 +1,5 @@
-import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -334,5 +334,98 @@ describe("keyshelf run <shelf>/<stage> -- <cmd>", () => {
     const { code, stdout } = await runKeyshelf(["run", "--help"], { cwd });
     expect(code).toBe(0);
     expect(stdout).toContain("run");
+  });
+
+  // Signal forwarding: a SIGTERM (or SIGINT/SIGHUP/SIGQUIT) sent to the keyshelf
+  // process alone — not the whole foreground process group — must be relayed to
+  // the wrapped child so it can shut down gracefully. This is the container
+  // entrypoint / supervised-process path, where the interactive Ctrl-C masking
+  // does not apply.
+  for (const signal of ["SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT"] as const) {
+    it(`forwards ${signal} to the wrapped child so it can shut down gracefully`, async () => {
+      await scaffold();
+      const marker = path.join(cwd, `${signal}.marker`);
+      // The child traps the signal, writes a marker, and exits 0. A child that
+      // never received the signal would instead run for the full 30s and the
+      // test would time out / read no marker.
+      const childScript = [
+        `process.on(${JSON.stringify(signal)}, () => {`,
+        `  require('fs').writeFileSync(${JSON.stringify(marker)}, 'caught');`,
+        `  process.exit(0);`,
+        `});`,
+        // Signal readiness on stdout so the test sends the signal only once the
+        // handler is installed, then idle long enough to require forwarding.
+        `process.stdout.write('ready');`,
+        `setTimeout(() => process.exit(1), 30000);`
+      ].join("\n");
+
+      const child = spawn("node", [BIN, "run", "web/staging", "--", "node", "-e", childScript], {
+        cwd,
+        env: { ...process.env },
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+
+      // Wait until the wrapped child has installed its handler and printed
+      // 'ready' on stdout (relayed through keyshelf's inherited stdio).
+      await new Promise<void>((resolve, reject) => {
+        let out = "";
+        child.stdout.on("data", (chunk: Buffer) => {
+          out += chunk.toString();
+          if (out.includes("ready")) resolve();
+        });
+        child.on("error", reject);
+        child.on("exit", () => {
+          if (!out.includes("ready")) reject(new Error("child exited before becoming ready"));
+        });
+      });
+
+      // Send the signal to the keyshelf process *alone*.
+      child.kill(signal);
+
+      const code = await new Promise<number>((resolve) => {
+        child.on("exit", (exitCode) => resolve(exitCode ?? -1));
+      });
+
+      // The wrapped child caught the signal and shut down gracefully.
+      expect(await readFile(marker, "utf8")).toBe("caught");
+      // keyshelf propagates the child's own exit status (0 here).
+      expect(code).toBe(0);
+    });
+  }
+
+  it("maps a signal-terminated child to 128 + signum after forwarding", async () => {
+    await scaffold();
+    // The child installs *no* handler, so the forwarded SIGTERM terminates it.
+    // keyshelf must report the conventional 128 + 15 = 143.
+    const child = spawn(
+      "node",
+      [
+        BIN,
+        "run",
+        "web/staging",
+        "--",
+        "node",
+        "-e",
+        "process.stdout.write('ready'); setTimeout(() => {}, 30000);"
+      ],
+      { cwd, env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"] }
+    );
+
+    await new Promise<void>((resolve, reject) => {
+      let out = "";
+      child.stdout.on("data", (chunk: Buffer) => {
+        out += chunk.toString();
+        if (out.includes("ready")) resolve();
+      });
+      child.on("error", reject);
+    });
+
+    child.kill("SIGTERM");
+
+    const code = await new Promise<number>((resolve) => {
+      child.on("exit", (exitCode) => resolve(exitCode ?? -1));
+    });
+
+    expect(code).toBe(143);
   });
 });
