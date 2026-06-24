@@ -117,9 +117,15 @@ jobs:
       # created (the common case — just maintaining the release PR) this step is
       # skipped and nothing is dispatched. Output keys are path-prefixed for a
       # manifest config and the path contains a slash, so bracket access is required.
+      # This job has no actions/checkout step, so there is no local git repo for
+      # `gh` to infer the target from — without an explicit repo it fails with
+      # `fatal: not a git repository` and the publish is silently never
+      # dispatched. Pass the repo explicitly (github.repository, e.g.
+      # `pantoninho/keyshelf`) via --repo so the dispatch works without a checkout.
       - name: Dispatch Publish workflow for the new release tag
         if: ${{ steps.release.outputs['packages/cli--release_created'] }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ steps.release.outputs['packages/cli--tag_name'] }}
-        run: gh workflow run publish.yml --ref "$TAG_NAME"
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run publish.yml --ref "$TAG_NAME" --repo "$GH_REPO"
