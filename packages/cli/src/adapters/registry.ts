@@ -87,7 +87,17 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
       // The store is a per-environment encrypted sibling file; recipients come
       // from the project's `.sops.yaml`, which sops discovers by walking up from
       // the store path — so the adapter runs sops with the project root as cwd.
-      return new SopsAdapter({ storePath: sopsStorePath(provider, ctx), cwd: ctx.projectDir });
+      // An optional `ageKeyFile` locates the decryption identity per-environment
+      // (ADR-0010); it is resolved relative to the project root, like `store`.
+      const ageKeyFile =
+        typeof provider.ageKeyFile === "string"
+          ? path.resolve(ctx.projectDir, provider.ageKeyFile)
+          : undefined;
+      return new SopsAdapter({
+        storePath: sopsStorePath(provider, ctx),
+        cwd: ctx.projectDir,
+        ageKeyFile
+      });
     }
 
     case "gcp": {
