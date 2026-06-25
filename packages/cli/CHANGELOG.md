@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.5.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.4.0...keyshelf-v6.5.0) (2026-06-25)
+
+
+### Features
+
+* **sops:** expand ~/ in ageKeyFile to the user's home directory ([#252](https://github.com/pantoninho/keyshelf/issues/252)) ([e2e8de9](https://github.com/pantoninho/keyshelf/commit/e2e8de9d028e741806d202562a4af71837d71259))
+
 ## [6.4.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.3.1...keyshelf-v6.4.0) (2026-06-25)
 
 
