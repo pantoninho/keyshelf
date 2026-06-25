@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.4.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.3.1...keyshelf-v6.4.0) (2026-06-25)
+
+
+### Features
+
+* **sops:** add ageKeyFile provider field to locate the age decryption identity ([#250](https://github.com/pantoninho/keyshelf/issues/250)) ([60455ba](https://github.com/pantoninho/keyshelf/commit/60455baa853794befec8cc3886aece6b47170736))
+
 ## [6.3.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.3.0...keyshelf-v6.3.1) (2026-06-24)
 
 
