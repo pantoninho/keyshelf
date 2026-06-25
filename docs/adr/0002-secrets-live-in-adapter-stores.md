@@ -38,3 +38,9 @@ Keyshelf does not manage sops recipients — adding or rotating who can decrypt 
 done by editing `.sops.yaml` and re-encrypting, outside keyshelf. `delete`,
 `list`, and `rotate` are not part of the adapter contract in the MVP; nothing in
 the `set`/`run` loop needs them.
+
+The "authentication is delegated to the backend's native mechanism" principle is
+narrowed, not broken, by ADR-0010: a `ageKeyFile` provider field lets keyshelf
+_locate_ the sops age identity per-environment and hand it to sops as
+`SOPS_AGE_KEY_FILE`. keyshelf still manages no keys and no recipients — it only
+sets sops's own env var. The "locate, don't manage" boundary lives there.

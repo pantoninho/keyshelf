@@ -31,6 +31,13 @@ const execFileAsync = promisify(execFile);
  * records a bare `!secret`. An explicit `!secret { ref: NAME }` resolves a
  * differently-named entry in the same store.
  *
+ * **Identity.** Encryption recipients are always the project's `.sops.yaml`'s
+ * concern (ADR-0002). The *decryption* identity is sops's own
+ * `SOPS_AGE_KEY_FILE` mechanism; an optional `ageKeyFile` provider field lets a
+ * project *locate* that age key per-environment (ADR-0010) — keyshelf only sets
+ * the env var, it never reads or manages the key. Absent, sops falls back to the
+ * ambient `SOPS_AGE_KEY_FILE` and its other native key sources.
+ *
  * **Error mapping** (uniform across adapters, ADR-0005):
  * - binary missing/unusable → `ADAPTER_UNAVAILABLE`;
  * - decryption-key/credential failure → `PROVIDER_AUTH`;
@@ -42,10 +49,13 @@ export class SopsAdapter implements Adapter {
   private readonly storePath: string;
   /** Directory sops runs in, so it discovers the project's `.sops.yaml`. */
   private readonly cwd: string;
+  /** Absolute path to an age identity, exported to sops as `SOPS_AGE_KEY_FILE`. */
+  private readonly ageKeyFile?: string;
 
-  constructor(opts: { storePath: string; cwd: string }) {
+  constructor(opts: { storePath: string; cwd: string; ageKeyFile?: string }) {
     this.storePath = opts.storePath;
     this.cwd = opts.cwd;
+    this.ageKeyFile = opts.ageKeyFile;
   }
 
   async resolve(key: string, ref?: unknown): Promise<string> {
@@ -138,9 +148,17 @@ export class SopsAdapter implements Adapter {
   /** Run sops, translating spawn/exit failures into the structured error codes. */
   private async sops(args: string[]): Promise<{ stdout: string; stderr: string }> {
     const bin = resolveSopsBinary();
+    // A configured `ageKeyFile` overlays sops's own `SOPS_AGE_KEY_FILE`; keyshelf
+    // sets the env var and lets sops do the key handling (ADR-0010). Absent, the
+    // ambient environment (and sops's other native sources) governs as before.
+    const env =
+      this.ageKeyFile === undefined
+        ? process.env
+        : { ...process.env, SOPS_AGE_KEY_FILE: this.ageKeyFile };
     try {
       const { stdout, stderr } = await execFileAsync(bin, args, {
         cwd: this.cwd,
+        env,
         maxBuffer: 64 * 1024 * 1024
       });
       return { stdout, stderr };
