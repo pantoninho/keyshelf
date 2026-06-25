@@ -1,3 +1,4 @@
+import os from "node:os";
 import path from "node:path";
 import { KeyshelfError } from "../errors.js";
 import { loadEnvironment } from "../loader.js";
@@ -28,6 +29,20 @@ export interface AdapterContext {
 
 /** Where the file-backed fake store lives, relative to the project root. */
 const FAKE_STORE_FILE = path.join(".keyshelf", ".fake-store.json");
+
+/**
+ * Expand a leading `~` or `~/` in a config path to the user's home directory.
+ * Tilde expansion is a shell convenience, not a filesystem feature: `path.resolve`
+ * treats `~` as a literal segment, so an unexpanded `~/key` silently resolves to
+ * `<projectDir>/~/key` — a path that almost never exists, with a baffling error.
+ * Only a bare `~` or a `~/`-prefixed path is expanded; `~user` is left untouched,
+ * since resolving another user's home needs a passwd lookup keyshelf does not do.
+ */
+function expandHome(p: string): string {
+  if (p === "~") return os.homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(os.homedir(), p.slice(2));
+  return p;
+}
 
 /**
  * Read a required string field from a provider's config, or fail with a
@@ -88,10 +103,11 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
       // from the project's `.sops.yaml`, which sops discovers by walking up from
       // the store path — so the adapter runs sops with the project root as cwd.
       // An optional `ageKeyFile` locates the decryption identity per-environment
-      // (ADR-0010); it is resolved relative to the project root, like `store`.
+      // (ADR-0010); a leading `~`/`~/` expands to the user's home, then it is
+      // resolved relative to the project root, like `store`.
       const ageKeyFile =
         typeof provider.ageKeyFile === "string"
-          ? path.resolve(ctx.projectDir, provider.ageKeyFile)
+          ? path.resolve(ctx.projectDir, expandHome(provider.ageKeyFile))
           : undefined;
       return new SopsAdapter({
         storePath: sopsStorePath(provider, ctx),

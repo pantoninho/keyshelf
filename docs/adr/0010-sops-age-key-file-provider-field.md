@@ -56,7 +56,11 @@ boundary.
   still maps to `PROVIDER_AUTH` via the adapter's existing error mapping
   (ADR-0005). `ageKeyFile` adds no new error code.
 - The field is resolved relative to the project root, mirroring `store`; an
-  absolute path is honored as-is (`path.resolve`).
+  absolute path is honored as-is (`path.resolve`). A leading `~` or `~/` expands
+  to the user's home directory first — tilde expansion is a shell convenience that
+  `path.resolve` does not perform, so without it `~/key` would resolve literally to
+  `<projectDir>/~/key`. `~user` (another user's home) is left untouched, as that
+  needs a passwd lookup keyshelf does not do.
 - keyshelf still does not manage recipients, rotation, or any non-age sops key
   source; those remain `.sops.yaml` / native-mechanism concerns (ADR-0002).
 - The conformance suite proves the field drives decryption end-to-end with **no

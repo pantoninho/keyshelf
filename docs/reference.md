@@ -29,7 +29,8 @@ providers:
     adapter: sops # only required field for sops
     # store: "{shelf}/{stage}.secrets.yaml"   # optional layout override (default shown)
     # ageKeyFile: ".keyshelf/age.key"         # optional; locates the age decryption identity
-    #                                         # (resolved relative to project root; ADR-0010).
+    #                                         # (relative to project root; ~ and ~/ expand to $HOME;
+    #                                         # absolute honored as-is; ADR-0010).
     #                                         # Absent ⇒ ambient SOPS_AGE_KEY_FILE / native sops sources.
   gcp-staging:
     adapter: gcp

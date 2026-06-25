@@ -42,6 +42,25 @@ d("sops ageKeyFile provider field", () => {
     expect(await adapter.resolve("DATABASE_PASSWORD")).toBe("sekret");
   });
 
+  it("expands a leading ~/ in ageKeyFile to the user's home directory", async () => {
+    const ctx = { projectDir: fixture.dir, project: "myapp", shelf: "app", stage: "staging" };
+    // Point HOME at the fixture dir so `~/age-key.txt` resolves to the fixture's
+    // key. A successful round-trip proves the tilde was expanded to $HOME, not
+    // resolved literally against projectDir (which would be `<dir>/~/age-key.txt`).
+    const savedHome = process.env.HOME;
+    process.env.HOME = fixture.dir;
+    try {
+      const tildeKey = `~/${path.relative(fixture.dir, fixture.ageKeyFile)}`;
+      const adapter = createAdapter({ adapter: "sops", ageKeyFile: tildeKey }, ctx);
+
+      await adapter.write("DATABASE_PASSWORD", "sekret");
+      expect(await adapter.resolve("DATABASE_PASSWORD")).toBe("sekret");
+    } finally {
+      if (savedHome === undefined) delete process.env.HOME;
+      else process.env.HOME = savedHome;
+    }
+  });
+
   it("fails PROVIDER_AUTH when no ageKeyFile is configured and no ambient key exists", async () => {
     const ctx = { projectDir: fixture.dir, project: "myapp", shelf: "app", stage: "staging" };
     const adapter = createAdapter({ adapter: "sops" }, ctx);
