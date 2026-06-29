@@ -234,7 +234,9 @@ describe("keyshelf set <KEY> <shelf>/<stage> --secret", () => {
     expect(code).toBe(0);
     expect(JSON.parse(stdout).version).toBeUndefined();
     const env = await read(".keyshelf/web/staging.yaml");
-    expect(env).toContain("DATABASE_PASSWORD: !secret");
+    // Exactly a bare tag — no `null` token, no trailing whitespace (issue #254).
+    expect(env).toMatch(/^ {2}DATABASE_PASSWORD: !secret$/m);
+    expect(env).not.toContain("!secret null");
     expect(env).not.toContain("version");
   });
 
@@ -246,7 +248,9 @@ describe("keyshelf set <KEY> <shelf>/<stage> --secret", () => {
     );
     expect(code).toBe(0);
     const env = await read(".keyshelf/web/staging.yaml");
-    expect(env).toContain("!secret");
+    // Exactly a bare tag — no `null` token, no trailing whitespace (issue #254).
+    expect(env).toMatch(/^ {2}DATABASE_PASSWORD: !secret$/m);
+    expect(env).not.toContain("!secret null");
     expect(env).not.toContain("version");
   });
 

@@ -4,7 +4,13 @@ import path from "node:path";
 import { parseDocument } from "yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadEnvironment } from "../../src/loader.js";
-import { secretRefForm, setConfigValue, setKeyReference, setSecretRef } from "../../src/set.js";
+import {
+  secretRefForm,
+  serializeEnvDoc,
+  setConfigValue,
+  setKeyReference,
+  setSecretRef
+} from "../../src/set.js";
 
 describe("secretRefForm", () => {
   it("is bare when the adapter ref equals the convention name", () => {
@@ -96,9 +102,13 @@ describe("setSecretRef", () => {
   it("writes a bare !secret tag, never the value, preserving other keys", () => {
     const doc = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
     setSecretRef(doc, "DB", { bare: true });
-    const text = doc.toString();
+    const text = serializeEnvDoc(doc);
     expect(text).toContain("REGION: eu");
-    expect(text).toContain("!secret");
+    // The bare floating secret must serialize as exactly `DB: !secret` — no
+    // explicit `null` token and no trailing whitespace (issue #254).
+    expect(text).toMatch(/^ {2}DB: !secret$/m);
+    expect(text).not.toContain("!secret null");
+    expect(text).not.toContain("!secret ");
     expect(text).not.toContain("s3cr3t");
   });
 
@@ -133,6 +143,23 @@ describe("setSecretRef", () => {
     ).get("DB", true);
     expect(node.tag).toBe("!secret");
     expect(node.toJSON()).toEqual({ ref: "shared-db-url", version: 9 });
+  });
+
+  // serializeEnvDoc only strips the bare-secret trailing-space artifact; for every
+  // other form it must be a byte-for-byte no-op. This locks the invariant so a
+  // future loosened anchor can't silently corrupt mapping-form (or any) lines.
+  it("serializeEnvDoc is a no-op for non-bare !secret mapping forms", () => {
+    const ref = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setSecretRef(ref, "DB", { bare: false, ref: "shared-db-url" });
+    expect(serializeEnvDoc(ref)).toBe(ref.toString());
+
+    const version = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setSecretRef(version, "DB", { bare: true, version: 4 });
+    expect(serializeEnvDoc(version)).toBe(version.toString());
+
+    const both = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setSecretRef(both, "DB", { bare: false, ref: "shared-db-url", version: 9 });
+    expect(serializeEnvDoc(both)).toBe(both.toString());
   });
 });
 
