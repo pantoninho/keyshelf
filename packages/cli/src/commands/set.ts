@@ -8,7 +8,13 @@ import { conventionName, hasExplicitName, refName } from "../adapters/shared.js"
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
 import { loadEnvironment } from "../loader.js";
-import { secretRefForm, setConfigValue, setKeyReference, setSecretRef } from "../set.js";
+import {
+  secretRefForm,
+  serializeEnvDoc,
+  setConfigValue,
+  setKeyReference,
+  setSecretRef
+} from "../set.js";
 import { parseTarget } from "../target.js";
 import type { KeyReference } from "../model.js";
 
@@ -133,7 +139,7 @@ export default class Set extends BaseCommand {
       setConfigValue(doc, key, value);
     }
 
-    await writeFile(file, doc.toString(), "utf8");
+    await writeFile(file, serializeEnvDoc(doc), "utf8");
 
     const result: SetResult = {
       key,
@@ -188,7 +194,7 @@ export default class Set extends BaseCommand {
     );
     const name = hasExplicitName(existing.ref) ? refName("set", existing.ref) : conventionRef;
     setSecretRef(doc, key, secretRefForm(name, conventionRef, String(version)));
-    await writeFile(file, doc.toString(), "utf8");
+    await writeFile(file, serializeEnvDoc(doc), "utf8");
 
     const result: SetResult = {
       key,
@@ -232,7 +238,7 @@ export default class Set extends BaseCommand {
     // No provider/config beyond what loadForEdit reads — no adapter is created.
     const { file, doc } = await this.loadForEdit(shelf, stage, key);
     setKeyReference(doc, key, reference);
-    await writeFile(file, doc.toString(), "utf8");
+    await writeFile(file, serializeEnvDoc(doc), "utf8");
 
     const result: SetResult = {
       key,

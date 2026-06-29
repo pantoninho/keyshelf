@@ -87,6 +87,13 @@ export function setSecretRef(doc: Document, key: string, form: SecretRefForm): v
   if (form.bare && form.version === undefined) {
     const scalar = new Scalar(null);
     scalar.tag = "!secret";
+    // Force an empty plain representation so `yaml` emits the tag with no `null`
+    // token (`!secret ` rather than `!secret null`), per issue #254. The yaml
+    // serializer still hardcodes a single space between a tag and its (empty)
+    // value, so the bare line lands as `!secret ` with one trailing space;
+    // serializeEnvDoc() trims that to a clean bare `!secret`.
+    scalar.source = "";
+    scalar.type = Scalar.PLAIN;
     map.set(key, scalar);
     return;
   }
@@ -98,6 +105,22 @@ export function setSecretRef(doc: Document, key: string, form: SecretRefForm): v
   const node = doc.createNode(payload) as YAMLMap;
   node.tag = "!secret";
   map.set(key, node);
+}
+
+/**
+ * Serialize an environment document to its on-disk YAML text. Use this instead
+ * of `doc.toString()` for any document that may carry a bare `!secret`.
+ *
+ * The `yaml` serializer hardcodes a single space between a tag and its value
+ * token, so a bare, value-less `!secret` (see {@link setSecretRef}) emits as
+ * `KEY: !secret ` with one trailing space. This trims that lone trailing space
+ * so a floating secret serializes as exactly `KEY: !secret` (issue #254). The
+ * pattern is anchored to a tag at end of line, so payload forms
+ * (`!secret`\n`    ref:`/`version:`) and any string value that merely contains
+ * the text `!secret` (which `yaml` quotes) are left untouched.
+ */
+export function serializeEnvDoc(doc: Document): string {
+  return doc.toString().replace(/^(\s*[\w.-]+: !secret) +$/gm, "$1");
 }
 
 /**
