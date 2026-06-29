@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.5.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.5.0...keyshelf-v6.5.1) (2026-06-29)
+
+
+### Bug Fixes
+
+* **set:** serialize a floating !secret as a bare tag, not `!secret null` ([#255](https://github.com/pantoninho/keyshelf/issues/255)) ([24977d4](https://github.com/pantoninho/keyshelf/commit/24977d4f71f7dd5a5e54f7c1522b301842ba54df))
+
 ## [6.5.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.4.0...keyshelf-v6.5.0) (2026-06-25)
 
 
