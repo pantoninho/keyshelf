@@ -114,13 +114,19 @@ export function setSecretRef(doc: Document, key: string, form: SecretRefForm): v
  * The `yaml` serializer hardcodes a single space between a tag and its value
  * token, so a bare, value-less `!secret` (see {@link setSecretRef}) emits as
  * `KEY: !secret ` with one trailing space. This trims that lone trailing space
- * so a floating secret serializes as exactly `KEY: !secret` (issue #254). The
- * pattern is anchored to a tag at end of line, so payload forms
- * (`!secret`\n`    ref:`/`version:`) and any string value that merely contains
- * the text `!secret` (which `yaml` quotes) are left untouched.
+ * so a floating secret serializes as exactly `KEY: !secret` (issue #254).
+ *
+ * The pattern anchors on the `: !secret` tag immediately followed by spaces at
+ * end of line (`(?=\r?$)`, so LF and CRLF both match, and a final line with no
+ * trailing newline is handled too) — independent of the key, so unusual keys
+ * (`API:KEY`, a quoted key with a space) are cleaned as well. Because it
+ * requires the tag to be trailed only by spaces, payload forms
+ * (`!secret`\n`    ref:`/`version:`), a tag followed by content (`!secret foo`),
+ * and any string value that merely contains the text `!secret` (which `yaml`
+ * quotes) are all left untouched.
  */
 export function serializeEnvDoc(doc: Document): string {
-  return doc.toString().replace(/^(\s*[\w.-]+: !secret) +$/gm, "$1");
+  return doc.toString().replace(/(: !secret) +(?=\r?$)/gm, "$1");
 }
 
 /**

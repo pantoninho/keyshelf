@@ -144,6 +144,23 @@ describe("setSecretRef", () => {
     expect(node.tag).toBe("!secret");
     expect(node.toJSON()).toEqual({ ref: "shared-db-url", version: 9 });
   });
+
+  // serializeEnvDoc only strips the bare-secret trailing-space artifact; for every
+  // other form it must be a byte-for-byte no-op. This locks the invariant so a
+  // future loosened anchor can't silently corrupt mapping-form (or any) lines.
+  it("serializeEnvDoc is a no-op for non-bare !secret mapping forms", () => {
+    const ref = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setSecretRef(ref, "DB", { bare: false, ref: "shared-db-url" });
+    expect(serializeEnvDoc(ref)).toBe(ref.toString());
+
+    const version = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setSecretRef(version, "DB", { bare: true, version: 4 });
+    expect(serializeEnvDoc(version)).toBe(version.toString());
+
+    const both = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
+    setSecretRef(both, "DB", { bare: false, ref: "shared-db-url", version: 9 });
+    expect(serializeEnvDoc(both)).toBe(both.toString());
+  });
 });
 
 describe("setKeyReference", () => {
