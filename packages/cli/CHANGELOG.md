@@ -1,5 +1,14 @@
 # Changelog
 
+## [6.6.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.5.1...keyshelf-v6.6.0) (2026-06-30)
+
+
+### Features
+
+* move environment files into environments/ folder ([#259](https://github.com/pantoninho/keyshelf/issues/259)) ([#267](https://github.com/pantoninho/keyshelf/issues/267)) ([bb693ed](https://github.com/pantoninho/keyshelf/commit/bb693ed4afbc23a1ff53dd032f173ff8a01fa135))
+* run keyshelf from any subfolder of a project ([#262](https://github.com/pantoninho/keyshelf/issues/262)) ([effb517](https://github.com/pantoninho/keyshelf/commit/effb5175dd3f5594d963f35e6ccc805df1012441))
+* **sops:** move the default store into a secrets/ folder ([#260](https://github.com/pantoninho/keyshelf/issues/260)) ([#266](https://github.com/pantoninho/keyshelf/issues/266)) ([406d759](https://github.com/pantoninho/keyshelf/commit/406d7592f69ca0b1f9e804a37b2f6ebe24c2ed32))
+
 ## [6.5.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.5.0...keyshelf-v6.5.1) (2026-06-29)
 
 
