@@ -30,11 +30,11 @@ async function write(rel: string, contents: string): Promise<void> {
   await writeFile(full, contents, "utf8");
 }
 
-/** Write `{shelf}/schema.yaml` and one or more `{shelf}/{stage}.yaml`. */
+/** Write `{shelf}/schema.yaml` and one or more `{shelf}/environments/{stage}.yaml`. */
 async function shelf(name: string, schema: string, envs: Record<string, string>): Promise<void> {
   await write(`.keyshelf/${name}/schema.yaml`, schema);
   for (const [stage, contents] of Object.entries(envs)) {
-    await write(`.keyshelf/${name}/${stage}.yaml`, contents);
+    await write(`.keyshelf/${name}/environments/${stage}.yaml`, contents);
   }
 }
 

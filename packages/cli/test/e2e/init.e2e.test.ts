@@ -59,7 +59,7 @@ describe("keyshelf init", () => {
     expect(result).toMatchObject({
       project: path.basename(cwd),
       shelf: "app",
-      created: ["config.yaml", "app/schema.yaml"]
+      created: ["config.yaml", "app/schema.yaml", "app/environments/"]
     });
   });
 

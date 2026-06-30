@@ -79,7 +79,10 @@ export function runSecretRoundtripSuite(harness: E2EHarness): void {
       });
 
       // The env file records only a !secret reference — never the plaintext.
-      const envText = await readFile(path.join(cwd, ".keyshelf", "app", "staging.yaml"), "utf8");
+      const envText = await readFile(
+        path.join(cwd, ".keyshelf", "app", "environments", "staging.yaml"),
+        "utf8"
+      );
       expect(envText).toContain("!secret");
       expect(envText).not.toContain("café");
 
@@ -157,8 +160,10 @@ async function scaffold(cwd: string, harness: E2EHarness): Promise<void> {
 }
 
 async function writeEnv(cwd: string, contents: string): Promise<void> {
-  const { writeFile } = await import("node:fs/promises");
-  await writeFile(path.join(cwd, ".keyshelf", "app", "staging.yaml"), contents, "utf8");
+  const { writeFile, mkdir } = await import("node:fs/promises");
+  const envDir = path.join(cwd, ".keyshelf", "app", "environments");
+  await mkdir(envDir, { recursive: true });
+  await writeFile(path.join(envDir, "staging.yaml"), contents, "utf8");
 }
 
 /**

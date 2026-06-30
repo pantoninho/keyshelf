@@ -43,7 +43,7 @@ async function scaffold(): Promise<void> {
 `
   );
   await write(
-    ".keyshelf/backend/production.yaml",
+    ".keyshelf/backend/environments/production.yaml",
     `provider: local
 keys:
   DATABASE_URL: !secret
@@ -56,7 +56,7 @@ keys:
   // follows the reference, so its contents are irrelevant to the view.
   await write(".keyshelf/supabase/schema.yaml", "keys:\n  SUPABASE_KEY: !required\n");
   await write(
-    ".keyshelf/supabase/production.yaml",
+    ".keyshelf/supabase/environments/production.yaml",
     "provider: local\nkeys:\n  SUPABASE_KEY: !secret\n"
   );
 }
@@ -116,7 +116,7 @@ describe("keyshelf ls <shelf>/<stage> (environment key view)", () => {
   it("prints 'No keys declared.' for an empty schema", async () => {
     await write(".keyshelf/config.yaml", CONFIG);
     await write(".keyshelf/empty/schema.yaml", "keys: {}\n");
-    await write(".keyshelf/empty/production.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/empty/environments/production.yaml", "provider: local\nkeys: {}\n");
     const { code, stdout } = await runKeyshelf(["ls", "empty/production"], { cwd });
     expect(code).toBe(0);
     expect(stdout.trim()).toBe("No keys declared.");
@@ -125,7 +125,7 @@ describe("keyshelf ls <shelf>/<stage> (environment key view)", () => {
   it("emits an empty keys array for an empty schema under --json", async () => {
     await write(".keyshelf/config.yaml", CONFIG);
     await write(".keyshelf/empty/schema.yaml", "keys: {}\n");
-    await write(".keyshelf/empty/production.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/empty/environments/production.yaml", "provider: local\nkeys: {}\n");
     const { code, stdout } = await runKeyshelf(["ls", "empty/production", "--json"], { cwd });
     expect(code).toBe(0);
     expect(JSON.parse(stdout)).toEqual({ shelf: "empty", stage: "production", keys: [] });
@@ -163,7 +163,10 @@ describe("keyshelf ls <shelf>/<stage> (environment key view)", () => {
   it("fails fast with MALFORMED_FILE for a broken environment file", async () => {
     await write(".keyshelf/config.yaml", CONFIG);
     await write(".keyshelf/backend/schema.yaml", "keys:\n  A: !required\n");
-    await write(".keyshelf/backend/production.yaml", "provider: local\nkeys:\n  A: : :\n");
+    await write(
+      ".keyshelf/backend/environments/production.yaml",
+      "provider: local\nkeys:\n  A: : :\n"
+    );
     const { code, stdout } = await runKeyshelf(["ls", "backend/production", "--json"], { cwd });
     expect(code).not.toBe(0);
     expect(JSON.parse(stdout).error.code).toBe("MALFORMED_FILE");
@@ -201,7 +204,7 @@ providers:
 `
   );
   await write(
-    ".keyshelf/backend/production.yaml",
+    ".keyshelf/backend/environments/production.yaml",
     `provider: cloud
 keys:
   DATABASE_PASSWORD: !secret
@@ -246,7 +249,7 @@ describe("keyshelf ls <shelf>/<stage> (adapter metadata, offline)", () => {
     await scaffoldGcp();
     // Pin DATABASE_PASSWORD to version 3 and the foreign SHARED_TOKEN to 7.
     await write(
-      ".keyshelf/backend/production.yaml",
+      ".keyshelf/backend/environments/production.yaml",
       `provider: cloud
 keys:
   DATABASE_PASSWORD: !secret { version: 3 }

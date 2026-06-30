@@ -60,7 +60,7 @@ export interface EnvironmentValue {
   reference?: KeyReference;
 }
 
-/** An environment, parsed from `{shelf}/{stage}.yaml`. */
+/** An environment, parsed from `{shelf}/environments/{stage}.yaml`. */
 export interface Environment {
   /** The shelf this environment belongs to (its directory name). */
   shelf: string;

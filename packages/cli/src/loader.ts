@@ -383,26 +383,30 @@ export interface EnvironmentRef {
 }
 
 /**
- * Discover every `{shelf}/{stage}` in a project by walking `.keyshelf/`. A shelf is
- * a directory; an environment is a `*.yaml` file in it that is neither
- * `schema.yaml` nor a `*.secrets.yaml` store. Throws `NOT_INITIALIZED` when the
- * project is not initialized.
+ * The environments declared in a single shelf directory: every `*.yaml` in the
+ * shelf's `environments/` folder, its stage being the file's basename. There is
+ * no exclusion rule — the schema lives outside that folder (ADR-0011). A missing
+ * or empty `environments/` folder means zero environments, not an error.
  */
-/** Whether a directory entry is an environment file (a `*.yaml` that is neither schema nor a secrets store). */
-function isEnvironmentFile(name: string): boolean {
-  if (name === SCHEMA_FILE) return false;
-  if (name.endsWith(".secrets.yaml")) return false;
-  return name.endsWith(".yaml");
-}
-
-/** The environments declared in a single shelf directory. */
 async function listShelfEnvironments(root: string, shelf: string): Promise<EnvironmentRef[]> {
-  const files = await readdir(shelfEnvDir(root, shelf), { withFileTypes: true });
+  let files;
+  try {
+    files = await readdir(shelfEnvDir(root, shelf), { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
   return files
-    .filter((file) => file.isFile() && isEnvironmentFile(file.name))
+    .filter((file) => file.isFile() && file.name.endsWith(".yaml"))
     .map((file) => ({ shelf, stage: file.name.slice(0, -".yaml".length) }));
 }
 
+/**
+ * Discover every `{shelf}/{stage}` in a project by walking `.keyshelf/`. A shelf is
+ * a directory; its environments are every `*.yaml` file in its reserved
+ * `environments/` folder (ADR-0011). Throws `NOT_INITIALIZED` when the project is
+ * not initialized.
+ */
 export async function listEnvironments(projectDir: string): Promise<EnvironmentRef[]> {
   const root = keyshelfRoot(projectDir);
   const shelves = await readdir(root, { withFileTypes: true });

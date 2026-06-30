@@ -11,17 +11,17 @@ and want to know how the old concepts map onto the new model.
 
 ## How the model changed
 
-| v5                                                        | v6                                                                                         |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `keyshelf.config.ts` / `keyshelf.yaml` (`defineConfig`)   | `.keyshelf/config.yaml` (project + providers) — no TypeScript, no code                     |
-| One config declaring every key                            | One **shelf** per schema: `.keyshelf/{shelf}/schema.yaml`                                  |
-| `envs` list                                               | One file per environment: `.keyshelf/{shelf}/{stage}.yaml`, addressed as `{shelf}/{stage}` |
-| `config(...)` / `secret(...)` records                     | Keys declared in `schema.yaml`; plaintext-vs-`!secret` chosen per environment              |
-| `value` / `default`                                       | A schema default (a bare value in `schema.yaml`)                                           |
-| per-env `values`                                          | Per-environment overrides in `{stage}.yaml`                                                |
-| Object-literal **namespaces** flattening to `/`-paths     | Flat keys matching `^[A-Z_][A-Z0-9_]*$` (UPPER_SNAKE)                                      |
-| `.env.keyshelf` (`ENV_VAR=key/path`)                      | Gone — keys are env-var names already (see [Keys](#keys))                                  |
-| Providers: `age`, `aws-sm`, `gcp-sm`, `sops`, `plaintext` | Adapters: `gcp`, `sops` (plus the self-contained `fake` for examples/tests)                |
+| v5                                                        | v6                                                                                                      |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `keyshelf.config.ts` / `keyshelf.yaml` (`defineConfig`)   | `.keyshelf/config.yaml` (project + providers) — no TypeScript, no code                                  |
+| One config declaring every key                            | One **shelf** per schema: `.keyshelf/{shelf}/schema.yaml`                                               |
+| `envs` list                                               | One file per environment: `.keyshelf/{shelf}/environments/{stage}.yaml`, addressed as `{shelf}/{stage}` |
+| `config(...)` / `secret(...)` records                     | Keys declared in `schema.yaml`; plaintext-vs-`!secret` chosen per environment                           |
+| `value` / `default`                                       | A schema default (a bare value in `schema.yaml`)                                                        |
+| per-env `values`                                          | Per-environment overrides in `{stage}.yaml`                                                             |
+| Object-literal **namespaces** flattening to `/`-paths     | Flat keys matching `^[A-Z_][A-Z0-9_]*$` (UPPER_SNAKE)                                                   |
+| `.env.keyshelf` (`ENV_VAR=key/path`)                      | Gone — keys are env-var names already (see [Keys](#keys))                                               |
+| Providers: `age`, `aws-sm`, `gcp-sm`, `sops`, `plaintext` | Adapters: `gcp`, `sops` (plus the self-contained `fake` for examples/tests)                             |
 
 Identity in v6 is **filesystem-derived**: the shelf is its directory name, the
 environment is its filename, the schema is the shelf's `schema.yaml`. There are
@@ -63,7 +63,7 @@ keys:
 ```
 
 ```text
-# .keyshelf/app/dev.yaml — one environment implementing the schema
+# .keyshelf/app/environments/dev.yaml — one environment implementing the schema
 provider: local
 keys:
   LOG_LEVEL: debug # overrides the schema default
@@ -222,7 +222,7 @@ keys:
 ```
 
 ```yaml
-# .keyshelf/supabase/production.yaml — seeded once (step 3)
+# .keyshelf/supabase/environments/production.yaml — seeded once (step 3)
 provider: local
 keys:
   SUPABASE_URL: https://xyz.supabase.co # plaintext config
@@ -243,7 +243,7 @@ keyshelf set SUPABASE_SERVICE_ROLE_KEY website/production --ref supabase
 ```
 
 ```yaml
-# .keyshelf/backend/production.yaml — a mapping environment; no provider needed
+# .keyshelf/backend/environments/production.yaml — a mapping environment; no provider needed
 keys:
   SUPABASE_URL: !ref { shelf: supabase } # same name, current stage
   SUPABASE_SERVICE_ROLE_KEY: !ref { shelf: supabase } # same name, current stage
@@ -258,7 +258,7 @@ keyshelf set SUPABASE_KEY ci/production --ref supabase --ref-key SUPABASE_SERVIC
 ```
 
 ```yaml
-# .keyshelf/ci/production.yaml
+# .keyshelf/ci/environments/production.yaml
 keys:
   SUPABASE_URL: !ref { shelf: supabase } # same-name default
   SUPABASE_KEY: !ref { shelf: supabase, key: SUPABASE_SERVICE_ROLE_KEY } # renamed target

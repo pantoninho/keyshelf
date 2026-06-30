@@ -50,7 +50,7 @@ keys:
 async function scaffold(): Promise<void> {
   await write(".keyshelf/config.yaml", CONFIG);
   await write(".keyshelf/web/schema.yaml", SCHEMA);
-  await write(".keyshelf/web/staging.yaml", ENV);
+  await write(".keyshelf/web/environments/staging.yaml", ENV);
 }
 
 describe("keyshelf set <KEY> <shelf>/<stage>", () => {
@@ -70,7 +70,7 @@ describe("keyshelf set <KEY> <shelf>/<stage>", () => {
       secret: false
     });
 
-    const envText = await read(".keyshelf/web/staging.yaml");
+    const envText = await read(".keyshelf/web/environments/staging.yaml");
     // In-place edit preserves the other keys and the provider line.
     expect(envText).toContain("provider: store");
     expect(envText).toContain("LOG_LEVEL: debug");
@@ -82,7 +82,7 @@ describe("keyshelf set <KEY> <shelf>/<stage>", () => {
     await scaffold();
     // An env that already satisfies the required keys, so run resolves cleanly.
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       "provider: store\nkeys:\n  REGION: eu-west-1\n  DATABASE_PASSWORD: pw\n"
     );
     const value = 'a "quoted" = value with spaces';
@@ -115,7 +115,7 @@ describe("keyshelf set <KEY> <shelf>/<stage>", () => {
     // Schema file is byte-for-byte unchanged.
     expect(await read(".keyshelf/web/schema.yaml")).toBe(schemaBefore);
     // The env file is not given the rejected key either.
-    expect(await read(".keyshelf/web/staging.yaml")).not.toContain("NOT_DECLARED");
+    expect(await read(".keyshelf/web/environments/staging.yaml")).not.toContain("NOT_DECLARED");
   });
 
   it("fails with NO_INPUT when stdin provides no value", async () => {
@@ -173,7 +173,7 @@ describe("keyshelf set <KEY> <shelf>/<stage> --secret", () => {
       secret: true
     });
 
-    const envText = await read(".keyshelf/web/staging.yaml");
+    const envText = await read(".keyshelf/web/environments/staging.yaml");
     // The plaintext value never lands in the environment file — only a !secret reference.
     expect(envText).not.toContain(secret);
     expect(envText).toContain("!secret");
@@ -233,7 +233,7 @@ describe("keyshelf set <KEY> <shelf>/<stage> --secret", () => {
     );
     expect(code).toBe(0);
     expect(JSON.parse(stdout).version).toBeUndefined();
-    const env = await read(".keyshelf/web/staging.yaml");
+    const env = await read(".keyshelf/web/environments/staging.yaml");
     // Exactly a bare tag — no `null` token, no trailing whitespace (issue #254).
     expect(env).toMatch(/^ {2}DATABASE_PASSWORD: !secret$/m);
     expect(env).not.toContain("!secret null");
@@ -247,7 +247,7 @@ describe("keyshelf set <KEY> <shelf>/<stage> --secret", () => {
       { cwd, input: "pw" }
     );
     expect(code).toBe(0);
-    const env = await read(".keyshelf/web/staging.yaml");
+    const env = await read(".keyshelf/web/environments/staging.yaml");
     // Exactly a bare tag — no `null` token, no trailing whitespace (issue #254).
     expect(env).toMatch(/^ {2}DATABASE_PASSWORD: !secret$/m);
     expect(env).not.toContain("!secret null");
@@ -291,7 +291,10 @@ describe("keyshelf set <KEY> <shelf>/<stage> --secret", () => {
   it("rejects --secret on a provider whose adapter is unregistered with ADAPTER_UNAVAILABLE", async () => {
     await scaffold();
     // The `bogus` provider names an adapter no branch in the registry handles.
-    await write(".keyshelf/web/staging.yaml", "provider: bogus\nkeys:\n  REGION: eu-west-1\n");
+    await write(
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: bogus\nkeys:\n  REGION: eu-west-1\n"
+    );
     const { code, stdout } = await runKeyshelf(
       ["set", "DATABASE_PASSWORD", "web/staging", "--secret", "--json"],
       {
@@ -302,6 +305,6 @@ describe("keyshelf set <KEY> <shelf>/<stage> --secret", () => {
     expect(code).not.toBe(0);
     expect(JSON.parse(stdout).error.code).toBe("ADAPTER_UNAVAILABLE");
     // Nothing recorded in the environment file on a failed write.
-    expect(await read(".keyshelf/web/staging.yaml")).not.toContain("!secret");
+    expect(await read(".keyshelf/web/environments/staging.yaml")).not.toContain("!secret");
   });
 });
