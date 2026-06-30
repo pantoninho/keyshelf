@@ -3,7 +3,7 @@ import stringWidth from "string-width";
 import { adapterForEnvironment } from "../adapters/registry.js";
 import { BaseCommand } from "../base-command.js";
 import { environmentKeyView, formatStatus, type KeyView } from "../env-view.js";
-import { loadEnvironment, loadProjectMap, type ProjectMap } from "../loader.js";
+import { findProjectDir, loadEnvironment, loadProjectMap, type ProjectMap } from "../loader.js";
 import { parseTarget } from "../target.js";
 
 /** Render an {@link KeyView.metadata} address as a single-line table cell. */
@@ -85,18 +85,20 @@ export default class Ls extends BaseCommand {
 
   async run(): Promise<ProjectMapResult | EnvironmentViewResult> {
     const { args, flags } = await this.parse(Ls);
-    const cwd = process.cwd();
+    // Discover the project root by walking up from the working directory, so
+    // `ls` works from any subfolder of a project.
+    const projectDir = await findProjectDir(process.cwd());
 
     if (args.target === undefined) {
-      return this.runProjectMap(cwd);
+      return this.runProjectMap(projectDir);
     }
 
-    return this.runEnvironmentView(cwd, args.target, flags.metadata);
+    return this.runEnvironmentView(projectDir, args.target, flags.metadata);
   }
 
   /** `keyshelf ls` — the whole-project map. */
-  private async runProjectMap(cwd: string): Promise<ProjectMapResult> {
-    const map = await loadProjectMap(cwd);
+  private async runProjectMap(projectDir: string): Promise<ProjectMapResult> {
+    const map = await loadProjectMap(projectDir);
 
     if (!this.jsonEnabled()) {
       this.renderTree(map);
@@ -107,18 +109,18 @@ export default class Ls extends BaseCommand {
 
   /** `keyshelf ls <shelf>/<stage>` — one environment's key contract. */
   private async runEnvironmentView(
-    cwd: string,
+    projectDir: string,
     target: string,
     showMetadata: boolean
   ): Promise<EnvironmentViewResult> {
     const { shelf, stage } = parseTarget(target);
-    const loaded = await loadEnvironment(cwd, shelf, stage);
+    const loaded = await loadEnvironment(projectDir, shelf, stage);
     // Build the environment's adapter to compute offline secret addresses. This
     // stays offline and credential-free: construction never reaches the backend,
     // and metadata() is synchronous and network-free (ADR-0008). Adapter address
     // metadata is always carried in --json; the human table shows it only behind
     // --metadata.
-    const adapter = adapterForEnvironment(cwd, loaded);
+    const adapter = adapterForEnvironment(projectDir, loaded);
     const keys = environmentKeyView(loaded, adapter);
 
     if (!this.jsonEnabled()) {

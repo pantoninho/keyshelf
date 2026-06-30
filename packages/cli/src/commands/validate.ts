@@ -2,7 +2,7 @@ import { Args } from "@oclif/core";
 import { resolveDepsFor } from "../adapters/registry.js";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
-import { listEnvironments, loadEnvironment } from "../loader.js";
+import { findProjectDir, listEnvironments, loadEnvironment } from "../loader.js";
 import type { LoadedEnvironment } from "../model.js";
 import { resolveEnvironment } from "../resolve.js";
 import { parseTarget } from "../target.js";
@@ -97,19 +97,21 @@ export default class Validate extends BaseCommand {
 
   async run(): Promise<SingleResult | ProjectResult> {
     const { args } = await this.parse(Validate);
-    const cwd = process.cwd();
+    // Discover the project root by walking up from the working directory, so
+    // `validate` works from any subfolder of a project.
+    const projectDir = await findProjectDir(process.cwd());
 
     if (args.target === undefined) {
-      return this.validateProject(cwd);
+      return this.validateProject(projectDir);
     }
 
-    return this.validateSingle(cwd, args.target);
+    return this.validateSingle(projectDir, args.target);
   }
 
-  private async validateSingle(cwd: string, target: string): Promise<SingleResult> {
+  private async validateSingle(projectDir: string, target: string): Promise<SingleResult> {
     const { shelf, stage } = parseTarget(target);
-    const loaded = await loadEnvironment(cwd, shelf, stage);
-    await verify(cwd, loaded);
+    const loaded = await loadEnvironment(projectDir, shelf, stage);
+    await verify(projectDir, loaded);
 
     const environment = `${shelf}/${stage}`;
     if (!this.jsonEnabled()) {
@@ -119,14 +121,14 @@ export default class Validate extends BaseCommand {
     return { shelf, environment, valid: true };
   }
 
-  private async validateProject(cwd: string): Promise<ProjectResult> {
-    const refs = await listEnvironments(cwd);
+  private async validateProject(projectDir: string): Promise<ProjectResult> {
+    const refs = await listEnvironments(projectDir);
     refs.sort((a, b) => `${a.shelf}/${a.stage}`.localeCompare(`${b.shelf}/${b.stage}`));
 
     const results: EnvironmentResult[] = [];
     for (const ref of refs) {
       const environment = `${ref.shelf}/${ref.stage}`;
-      const error = await checkOne(cwd, ref.shelf, ref.stage);
+      const error = await checkOne(projectDir, ref.shelf, ref.stage);
       results.push(
         error ? { environment, valid: false, error: error.toJSON() } : { environment, valid: true }
       );

@@ -18,13 +18,46 @@ const ROOT_DIR = ".keyshelf";
 const CONFIG_FILE = "config.yaml";
 const SCHEMA_FILE = "schema.yaml";
 
+/** Whether `dir` directly holds a `.keyshelf/config.yaml` (an initialized project root). */
+function hasProject(dir: string): boolean {
+  return existsSync(path.join(dir, ROOT_DIR, CONFIG_FILE));
+}
+
+/**
+ * Discover the project root by walking up from `startDir` toward the filesystem
+ * root, returning the nearest ancestor directory that holds
+ * `.keyshelf/config.yaml` — the way git/npm find their marker. This lets every
+ * read/write command run from any subfolder of a project. The traversal stops at
+ * the filesystem root; if no ancestor is initialized it throws `NOT_INITIALIZED`,
+ * stating that the working directory and its parents were searched.
+ *
+ * The discovered root replaces `process.cwd()` as the `projectDir` everywhere it
+ * flows (reads, `set` writes, adapter relative paths, dependency resolution), so
+ * everything anchors to the real project root rather than the raw cwd.
+ */
+export async function findProjectDir(startDir: string): Promise<string> {
+  let dir = path.resolve(startDir);
+  for (;;) {
+    if (hasProject(dir)) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // reached the filesystem root
+    dir = parent;
+  }
+
+  throw new KeyshelfError(
+    "NOT_INITIALIZED",
+    `No Keyshelf project found in '${startDir}' or any parent directory. Run 'keyshelf init' first.`,
+    { path: path.join(startDir, ROOT_DIR) }
+  );
+}
+
 /** Resolve the `.keyshelf` root for a project, asserting it is initialized. */
 function keyshelfRoot(projectDir: string): string {
   const root = path.join(projectDir, ROOT_DIR);
   if (!existsSync(path.join(root, CONFIG_FILE))) {
     throw new KeyshelfError(
       "NOT_INITIALIZED",
-      `No Keyshelf project found in '${projectDir}'. Run 'keyshelf init' first.`,
+      `No Keyshelf project found in '${projectDir}' or any parent directory. Run 'keyshelf init' first.`,
       {
         path: root
       }

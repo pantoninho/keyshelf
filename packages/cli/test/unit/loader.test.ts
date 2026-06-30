@@ -3,7 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { KeyshelfError } from "../../src/errors.js";
-import { listEnvironments, loadEnvironment, loadProjectMap } from "../../src/loader.js";
+import {
+  findProjectDir,
+  listEnvironments,
+  loadEnvironment,
+  loadProjectMap
+} from "../../src/loader.js";
 
 let root: string;
 
@@ -60,6 +65,46 @@ function expectCode(p: Promise<unknown>, code: string, fields?: Record<string, u
     }
   );
 }
+
+describe("findProjectDir", () => {
+  it("returns the start directory when it directly holds .keyshelf/config.yaml", async () => {
+    await scaffold();
+    expect(await findProjectDir(root)).toBe(root);
+  });
+
+  it("walks up from a nested subfolder to the nearest ancestor project root", async () => {
+    await scaffold();
+    const nested = path.join(root, "services", "api", "src");
+    await mkdir(nested, { recursive: true });
+    expect(await findProjectDir(nested)).toBe(root);
+  });
+
+  it("returns the nearest ancestor when projects are nested (stops at the first match)", async () => {
+    await scaffold();
+    const inner = path.join(root, "inner");
+    await mkdir(path.join(inner, ".keyshelf"), { recursive: true });
+    await writeFile(path.join(inner, ".keyshelf", "config.yaml"), CONFIG, "utf8");
+    const deep = path.join(inner, "src");
+    await mkdir(deep, { recursive: true });
+    expect(await findProjectDir(deep)).toBe(inner);
+  });
+
+  it("throws NOT_INITIALIZED when no ancestor holds a project, stopping at the filesystem root", async () => {
+    // root is a fresh tmp dir with no .keyshelf anywhere up to the fs root.
+    await expectCode(findProjectDir(root), "NOT_INITIALIZED");
+  });
+
+  it("mentions the start directory and its parents in the NOT_INITIALIZED message", async () => {
+    let err: KeyshelfError | undefined;
+    await findProjectDir(root).catch((e: KeyshelfError) => {
+      err = e;
+    });
+    expect(err).toBeInstanceOf(KeyshelfError);
+    expect(err!.code).toBe("NOT_INITIALIZED");
+    expect(err!.message).toContain(root);
+    expect(err!.message).toContain("parent");
+  });
+});
 
 describe("loadEnvironment", () => {
   it("loads config, schema, and environment into a model with filesystem-derived identity", async () => {
