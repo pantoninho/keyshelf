@@ -7,7 +7,7 @@ import { adapterForEnvironment } from "../adapters/registry.js";
 import { conventionName, hasExplicitName, refName } from "../adapters/shared.js";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
-import { loadEnvironment } from "../loader.js";
+import { findProjectDir, loadEnvironment } from "../loader.js";
 import {
   secretRefForm,
   serializeEnvDoc,
@@ -272,7 +272,10 @@ export default class Set extends BaseCommand {
     file: string;
     doc: ReturnType<typeof parseDocument>;
   }> {
-    const projectDir = process.cwd();
+    // Discover the project root by walking up from the working directory, so
+    // `set` writes under the real project root — not `cwd/.keyshelf/...` — when
+    // invoked from a subfolder.
+    const projectDir = await findProjectDir(process.cwd());
     const loaded = await loadEnvironment(projectDir, shelf, stage);
     this.assertDeclared(loaded.schema.keys, key, shelf, stage);
 

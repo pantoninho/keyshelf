@@ -3,7 +3,7 @@ import { Args, Flags } from "@oclif/core";
 import { resolveDepsFor } from "../adapters/registry.js";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
-import { loadEnvironment } from "../loader.js";
+import { findProjectDir, loadEnvironment } from "../loader.js";
 import { buildChildEnv, parseSet, resolveEnvironment } from "../resolve.js";
 import { parseTarget } from "../target.js";
 import { validateEnvironment } from "../validate.js";
@@ -68,8 +68,10 @@ export default class Run extends BaseCommand {
       sets[key] = value;
     }
 
-    // Fail-fast: load + structurally validate + resolve before exec.
-    const projectDir = process.cwd();
+    // Fail-fast: load + structurally validate + resolve before exec. The
+    // project root is discovered by walking up from the working directory, so
+    // `run` works from any subfolder of a project.
+    const projectDir = await findProjectDir(process.cwd());
     const loaded = await loadEnvironment(projectDir, shelf, stage);
     validateEnvironment(loaded);
 
