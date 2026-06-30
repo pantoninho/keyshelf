@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createAdapter } from "../../src/adapters/registry.js";
+import { createAdapter, sopsStorePath } from "../../src/adapters/registry.js";
 import { KeyshelfError } from "../../src/errors.js";
 
 let dir: string;
@@ -39,6 +39,22 @@ describe("createAdapter", () => {
     await prod.write("TOKEN", "prod-token");
     expect(await staging.resolve("TOKEN")).toBe("staging-token");
     expect(await prod.resolve("TOKEN")).toBe("prod-token");
+  });
+
+  it("defaults a sops store to .keyshelf/{shelf}/secrets/{stage}.yaml under the project root", () => {
+    const resolved = sopsStorePath(
+      { adapter: "sops" },
+      { projectDir: dir, project: "myapp", shelf: "web", stage: "staging" }
+    );
+    expect(resolved).toBe(path.join(dir, ".keyshelf", "web", "secrets", "staging.yaml"));
+  });
+
+  it("lets a provider's store: template override the sops default", () => {
+    const resolved = sopsStorePath(
+      { adapter: "sops", store: path.join(".keyshelf", "{shelf}", "{stage}.enc.yaml") },
+      { projectDir: dir, project: "myapp", shelf: "web", stage: "staging" }
+    );
+    expect(resolved).toBe(path.join(dir, ".keyshelf", "web", "staging.enc.yaml"));
   });
 
   it("rejects an unknown adapter name with a structured ADAPTER_UNAVAILABLE error", () => {

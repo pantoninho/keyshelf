@@ -12,7 +12,8 @@ keyshelf v5? See [Migrating from v5](./migrating-from-v5.md).
 └── {shelf}/                        # one shelf per schema
     ├── schema.yaml                 # the shelf's closed validation contract
     ├── {stage}.yaml                # an environment implementing the shelf's schema
-    └── {stage}.secrets.yaml        # sops store for that environment (encrypted; committed)
+    └── secrets/
+        └── {stage}.yaml            # sops store for that environment (encrypted; committed)
 ```
 
 Identity is **filesystem-derived**: the shelf is its directory name, the
@@ -27,7 +28,7 @@ project: myapp # required; namespaces secrets in shared backends
 providers:
   local:
     adapter: sops # only required field for sops
-    # store: "{shelf}/{stage}.secrets.yaml"   # optional layout override (default shown)
+    # store: "{shelf}/secrets/{stage}.yaml"   # optional layout override (default shown)
     # ageKeyFile: ".keyshelf/age.key"         # optional; locates the age decryption identity
     #                                         # (relative to project root; ~ and ~/ expand to $HOME;
     #                                         # absolute honored as-is; ADR-0010).
@@ -92,7 +93,7 @@ keys:
   another.
 - Values are **strings** only.
 - Secret _values_ never appear here — only `!secret` references. Values live in
-  the adapter's store (sops: `{shelf}/{stage}.secrets.yaml`; gcp: the backend).
+  the adapter's store (sops: `{shelf}/secrets/{stage}.yaml`; gcp: the backend).
 - `!secret` payload shape is adapter-defined; bare = convention, optional explicit
   `{ ref: ... }` overrides.
 - **Version pinning (ADR-0009).** On a versioned backend (gcp), a `!secret` may pin

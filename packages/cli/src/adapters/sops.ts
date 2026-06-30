@@ -17,8 +17,10 @@ const execFileAsync = promisify(execFile);
  * fallback ({@link resolveSopsBinary}). Recipients are governed entirely by the
  * project's native `.sops.yaml`; Keyshelf never writes or mutates it.
  *
- * **Store.** A per-environment sibling encrypted file
- * `.keyshelf/{shelf}/{stage}.secrets.yaml`, committed and encrypted. It holds a
+ * **Store.** A per-environment encrypted file in the shelf's own `secrets/`
+ * directory, `.keyshelf/{shelf}/secrets/{stage}.yaml` by default (ADR-0011; the
+ * registry computes the path and a provider `store:` template can override it),
+ * committed and encrypted. It holds a
  * flat `key -> value` mapping. Because sops and YAML can mangle multiline and
  * whitespace-bearing scalars, every value is carried as a JSON string inside the
  * store: `write` uses `sops set` with `JSON.stringify(value)` and `resolve`

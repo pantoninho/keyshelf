@@ -150,7 +150,7 @@ export async function scaffoldSopsProject(dir: string): Promise<{ ageKeyFile: st
 
   await writeFile(
     path.join(dir, ".sops.yaml"),
-    `creation_rules:\n  - path_regex: .*\\.secrets\\.yaml$\n    age: ${recipient}\n`,
+    `creation_rules:\n  - path_regex: secrets/.*\\.yaml$\n    age: ${recipient}\n`,
     "utf8"
   );
 
