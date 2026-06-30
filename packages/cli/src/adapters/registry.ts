@@ -61,16 +61,21 @@ function requireStringField(provider: Provider, field: string, ctx: AdapterConte
 }
 
 /**
- * The sops store's default layout: a per-environment sibling encrypted file
- * `.keyshelf/{shelf}/{stage}.secrets.yaml` (docs/reference.md, ADR-0002). A
- * provider may override the layout with a `store:` template using `{shelf}` and
- * `{stage}` placeholders, resolved relative to the project root.
+ * The sops store's default layout when a provider declares no `store:` template:
+ * a per-environment sibling encrypted file `.keyshelf/{shelf}/{stage}.secrets.yaml`
+ * (docs/reference.md, ADR-0002). Kept as a single template so the default's base
+ * directory is redirectable in one place (ADR-0011 moves it under `secrets/`).
+ */
+const SOPS_DEFAULT_STORE_TEMPLATE = path.join(".keyshelf", "{shelf}", "{stage}.secrets.yaml");
+
+/**
+ * Resolve a sops provider's store path for an environment. A provider may override
+ * the default with a `store:` template using `{shelf}` and `{stage}` placeholders,
+ * resolved relative to the project root.
  */
 function sopsStorePath(provider: Provider, ctx: AdapterContext): string {
   const template =
-    typeof provider.store === "string"
-      ? provider.store
-      : path.join(".keyshelf", "{shelf}", "{stage}.secrets.yaml");
+    typeof provider.store === "string" ? provider.store : SOPS_DEFAULT_STORE_TEMPLATE;
   const rel = template.replaceAll("{shelf}", ctx.shelf).replaceAll("{stage}", ctx.stage);
   return path.resolve(ctx.projectDir, rel);
 }

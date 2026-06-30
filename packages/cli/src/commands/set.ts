@@ -8,6 +8,7 @@ import { conventionName, hasExplicitName, refName } from "../adapters/shared.js"
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
 import { findProjectDir, loadEnvironment } from "../loader.js";
+import { envFilePath, ROOT_DIR } from "../paths.js";
 import {
   secretRefForm,
   serializeEnvDoc,
@@ -279,7 +280,7 @@ export default class Set extends BaseCommand {
     const loaded = await loadEnvironment(projectDir, shelf, stage);
     this.assertDeclared(loaded.schema.keys, key, shelf, stage);
 
-    const file = path.join(projectDir, ".keyshelf", shelf, `${stage}.yaml`);
+    const file = envFilePath(path.join(projectDir, ROOT_DIR), shelf, stage);
     const doc = parseDocument(await readFile(file, "utf8"));
     return { loaded, projectDir, file, doc };
   }

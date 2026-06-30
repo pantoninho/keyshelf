@@ -13,10 +13,15 @@ import type {
   Schema,
   SchemaKey
 } from "./model.js";
-
-const ROOT_DIR = ".keyshelf";
-const CONFIG_FILE = "config.yaml";
-const SCHEMA_FILE = "schema.yaml";
+import {
+  CONFIG_FILE,
+  envFilePath,
+  ROOT_DIR,
+  SCHEMA_FILE,
+  schemaFilePath,
+  shelfDir,
+  shelfEnvDir
+} from "./paths.js";
 
 /** Whether `dir` directly holds a `.keyshelf/config.yaml` (an initialized project root). */
 function hasProject(dir: string): boolean {
@@ -172,7 +177,7 @@ function readKeysMap<T>(
 }
 
 async function loadSchema(root: string, shelf: string): Promise<Schema> {
-  const file = path.join(root, shelf, SCHEMA_FILE);
+  const file = schemaFilePath(root, shelf);
   const doc = parse(await readFile(file, "utf8"), file);
 
   const keys = readKeysMap<SchemaKey>(doc, file, (node) => {
@@ -268,7 +273,7 @@ async function loadEnvironmentFile(
   shelf: string,
   name: string
 ): Promise<Environment> {
-  const file = path.join(root, shelf, `${name}.yaml`);
+  const file = envFilePath(root, shelf, name);
   const doc = parse(await readFile(file, "utf8"), file);
 
   const top = doc.contents;
@@ -344,18 +349,17 @@ export async function loadEnvironment(
   const root = keyshelfRoot(projectDir);
   const config = await loadConfig(root);
 
-  const shelfDir = path.join(root, shelf);
-  if (!existsSync(shelfDir)) {
+  if (!existsSync(shelfDir(root, shelf))) {
     throw new KeyshelfError("SHELF_NOT_FOUND", `Shelf '${shelf}' does not exist.`, { shelf });
   }
 
-  if (!existsSync(path.join(shelfDir, SCHEMA_FILE))) {
+  if (!existsSync(schemaFilePath(root, shelf))) {
     throw new KeyshelfError("SCHEMA_NOT_FOUND", `Shelf '${shelf}' has no ${SCHEMA_FILE}.`, {
       shelf
     });
   }
 
-  if (!existsSync(path.join(shelfDir, `${stage}.yaml`))) {
+  if (!existsSync(envFilePath(root, shelf, stage))) {
     throw new KeyshelfError(
       "ENVIRONMENT_NOT_FOUND",
       `Environment '${shelf}/${stage}' does not exist.`,
@@ -393,7 +397,7 @@ function isEnvironmentFile(name: string): boolean {
 
 /** The environments declared in a single shelf directory. */
 async function listShelfEnvironments(root: string, shelf: string): Promise<EnvironmentRef[]> {
-  const files = await readdir(path.join(root, shelf), { withFileTypes: true });
+  const files = await readdir(shelfEnvDir(root, shelf), { withFileTypes: true });
   return files
     .filter((file) => file.isFile() && isEnvironmentFile(file.name))
     .map((file) => ({ shelf, stage: file.name.slice(0, -".yaml".length) }));
@@ -448,7 +452,7 @@ export async function loadProjectMap(projectDir: string): Promise<ProjectMap> {
 
   const shelves: ShelfMap[] = [];
   for (const shelf of shelfNames) {
-    if (!existsSync(path.join(root, shelf, SCHEMA_FILE))) {
+    if (!existsSync(schemaFilePath(root, shelf))) {
       throw new KeyshelfError("SCHEMA_NOT_FOUND", `Shelf '${shelf}' has no ${SCHEMA_FILE}.`, {
         shelf
       });
