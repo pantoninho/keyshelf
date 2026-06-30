@@ -37,7 +37,7 @@ describe("sops adapter binary resolution", () => {
   it("maps a missing/unusable sops binary to ADAPTER_UNAVAILABLE at write time", async () => {
     process.env.KEYSHELF_SOPS_BIN = "/definitely/not/a/real/sops/binary";
     const adapter = new SopsAdapter({
-      storePath: path.join("/tmp", "x", "app", "staging.secrets.yaml"),
+      storePath: path.join("/tmp", "x", "app", "secrets", "staging.yaml"),
       cwd: "/tmp/x"
     });
     let thrown: unknown;

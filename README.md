@@ -70,7 +70,7 @@ keyshelf run app/production -- node server.js
 ```
 
 After step 4, `.keyshelf/app/production.yaml` holds a `DATABASE_PASSWORD: !secret`
-reference (the encrypted value lives in `.keyshelf/app/production.secrets.yaml`),
+reference (the encrypted value lives in `.keyshelf/app/secrets/production.yaml`),
 and `keyshelf run` resolves it into `DATABASE_PASSWORD` in the child process's
 environment.
 
@@ -90,8 +90,9 @@ full flag surface, error codes, and resolution precedence.
 
 ## Adapters
 
-- **sops** — stores each environment's secrets in an encrypted sibling file
-  (`{shelf}/{stage}.secrets.yaml`), committed to the repo. Self-contained: the
+- **sops** — stores each environment's secrets in an encrypted file under the
+  shelf's `secrets/` directory (`{shelf}/secrets/{stage}.yaml`), committed to the
+  repo. Self-contained: the
   `sops` binary ships with keyshelf. See [ADR-0003](./docs/adr/0003-typescript-with-bundled-sops-binary.md).
 - **gcp** — stores each secret in Google Cloud Secret Manager, one secret per key
   under the deterministic name `keyshelf__{project}__{shelf}__{stage}__{key}`,

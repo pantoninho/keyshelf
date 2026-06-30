@@ -36,7 +36,7 @@ if (sopsAvailable()) {
       // from the store path to find it at the project root.
       await writeFile(
         path.join(dir, ".sops.yaml"),
-        `creation_rules:\n  - path_regex: .*\\.secrets\\.yaml$\n    age: ${match[1]}\n`,
+        `creation_rules:\n  - path_regex: secrets/.*\\.yaml$\n    age: ${match[1]}\n`,
         "utf8"
       );
     },
@@ -44,7 +44,7 @@ if (sopsAvailable()) {
       return { SOPS_AGE_KEY_FILE: ageKeyFile };
     },
     async inspectStore(dir) {
-      return readFile(path.join(dir, ".keyshelf", "app", "staging.secrets.yaml"), "utf8");
+      return readFile(path.join(dir, ".keyshelf", "app", "secrets", "staging.yaml"), "utf8");
     },
     expectEncrypted: true,
     async teardown() {

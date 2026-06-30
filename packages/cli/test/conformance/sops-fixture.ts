@@ -29,7 +29,8 @@ function onPath(bin: string): boolean {
 /**
  * A hermetic sops backend for the conformance suites: a throwaway temp directory
  * holding a freshly-generated **age** keypair, a fixture `.sops.yaml` whose
- * creation rules point at that age recipient for `*.secrets.yaml`, and an
+ * creation rules point at that age recipient for stores under a `secrets/`
+ * directory (the sops default, ADR-0011), and an
  * isolated store directory. `SOPS_AGE_KEY_FILE` is set so sops can decrypt. Tear
  * down by removing the directory.
  *
@@ -50,12 +51,14 @@ export interface SopsFixture {
 
 /**
  * Create a hermetic sops backend. `pathRegex` governs which files the creation
- * rule matches (default: any `*.secrets.yaml`). The caller is responsible for
- * setting `process.env.SOPS_AGE_KEY_FILE` if it spawns sops in a child process;
- * for in-process adapter use, set it from {@link SopsFixture.ageKeyFile}.
+ * rule matches (default: any `*.yaml` under a `secrets/` directory, matching the
+ * sops default store layout `.keyshelf/{shelf}/secrets/{stage}.yaml`, ADR-0011).
+ * The caller is responsible for setting `process.env.SOPS_AGE_KEY_FILE` if it
+ * spawns sops in a child process; for in-process adapter use, set it from
+ * {@link SopsFixture.ageKeyFile}.
  */
 export async function makeSopsFixture(
-  pathRegex = String.raw`.*\.secrets\.yaml$`
+  pathRegex = String.raw`secrets/.*\.yaml$`
 ): Promise<SopsFixture> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "keyshelf-sops-"));
   const ageKeyFile = path.join(dir, "age-key.txt");

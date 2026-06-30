@@ -18,15 +18,16 @@ if (sopsAvailable()) {
 
   runAdapterContractSuite({
     name: "sops",
-    // sops does not version its store — a sibling encrypted file holds one value,
-    // already deploy-gated by being committed (ADR-0009). Pinning is N/A, so the
+    // sops does not version its store — an encrypted file in the shelf's
+    // `secrets/` directory holds one value, already deploy-gated by being
+    // committed (ADR-0009). Pinning is N/A, so the
     // pinning cases are skipped for sops.
     supportsVersionPinning: false,
     async setup() {
       fixture = await makeSopsFixture();
       // Decryption needs the fixture's throwaway age key in the environment.
       process.env.SOPS_AGE_KEY_FILE = fixture.ageKeyFile;
-      const storePath = path.join(fixture.dir, ".keyshelf", "app", "staging.secrets.yaml");
+      const storePath = path.join(fixture.dir, ".keyshelf", "app", "secrets", "staging.yaml");
       return { adapter: new SopsAdapter({ storePath, cwd: fixture.dir }) };
     },
     async teardown() {
