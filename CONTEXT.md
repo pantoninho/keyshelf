@@ -72,10 +72,11 @@ The same key may be config in one environment and secret in another.
 _Avoid_: credential, password
 
 **Store**:
-Where an adapter physically persists secret values, always outside the
-environment file. For the sops adapter, a sibling encrypted file
-(`{shelf}/{stage}.secrets.yaml`); for a remote adapter (gcp), the backend itself.
-The environment file holds `!secret` references _into_ the store, never the values.
+Where an adapter physically persists secret values, always outside the shelf's
+`environments/` folder. For the sops adapter, an encrypted file in the shelf's
+`secrets/` directory (`{shelf}/secrets/{stage}.yaml`); for a remote adapter (gcp),
+the backend itself. The environment file holds `!secret` references _into_ the
+store, never the values.
 _Avoid_: vault, backend, storage
 
 **Reference**:

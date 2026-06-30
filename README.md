@@ -59,7 +59,8 @@ keyshelf init --project myapp --shelf app
 echo "debug" | keyshelf set LOG_LEVEL app/production
 
 # 4. Set a secret. The value is read from stdin and stored encrypted in the
-#    sops sibling file — never written to the environment file in plaintext.
+#    sops store under the shelf's secrets/ folder — never written to the
+#    environment file in plaintext.
 echo "s3cr3t" | keyshelf set DATABASE_PASSWORD app/production --secret
 
 # 5. Validate the environment against its schema (offline; resolves no secrets).
@@ -216,8 +217,9 @@ echo "rotated" | keyshelf set DATABASE_PASSWORD backend/production --secret --fl
 keyshelf set DATABASE_PASSWORD backend/production --pin-latest
 ```
 
-Pinning is **N/A for sops** — its value lives in the committed encrypted sibling
-file and is already deploy-gated by construction. The mapping to Cloud Run is
+Pinning is **N/A for sops** — its value lives in the committed encrypted store
+file (under the shelf's `secrets/` folder) and is already deploy-gated by
+construction. The mapping to Cloud Run is
 direct: a pinned `!secret { version: N }` corresponds to `secretKeyRef.key: "N"`
 (or the wrapper resolving version `N`); a bare floating `!secret` corresponds to
 `secretKeyRef.key: latest` (or the wrapper resolving latest).

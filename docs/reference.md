@@ -11,15 +11,41 @@ keyshelf v5? See [Migrating from v5](./migrating-from-v5.md).
 ├── config.yaml                     # project + providers (required)
 └── {shelf}/                        # one shelf per schema
     ├── schema.yaml                 # the shelf's closed validation contract
-    ├── {stage}.yaml                # an environment implementing the shelf's schema
-    └── secrets/
-        └── {stage}.yaml            # sops store for that environment (encrypted; committed)
+    ├── environments/               # the one folder core scans for environments
+    │   └── {stage}.yaml            # an environment implementing the shelf's schema
+    └── secrets/                    # sops adapter's default store (sops only)
+        └── {stage}.yaml            # store for that environment (encrypted; committed)
 ```
 
 Identity is **filesystem-derived**: the shelf is its directory name, the
-environment is its filename (the stage), the schema is the shelf's `schema.yaml`.
+environment is its filename under `environments/` (the stage), the schema is the
+shelf's `schema.yaml`.
 No `name:` or `schema:` fields anywhere. An environment is addressed as
 `{shelf}/{stage}` (e.g. `web-service/staging`).
+
+`environments/` is the **only** folder name core reserves: core reads it
+directly and treats every `*.yaml` inside it as an environment (no exclusion
+rule, no `isEnvironmentFile` predicate). `secrets/` is not a core concept — it is
+merely the sops adapter's _default_ store directory, and the provider's `store:`
+template stays configurable (ADR-0011). The store may live anywhere under the
+shelf **except inside `environments/`**.
+
+### Migrating a `next`-channel layout (6.x)
+
+This folder layout (ADR-0011) lands as a `feat` on the 6.x `next` pre-release
+line; the stable 5.x `latest` line is unaffected, so it is **non-breaking** and
+there is **no automated migration**. If you adopted an earlier 6.x `next` build
+with the previous flat layout, move two sets of files by hand, per shelf:
+
+- **Environment files** — move `{shelf}/{stage}.yaml` into
+  `{shelf}/environments/{stage}.yaml`.
+- **sops stores** — move `{shelf}/{stage}.secrets.yaml` into
+  `{shelf}/secrets/{stage}.yaml` (the `.secrets` suffix is dropped — within its
+  own `secrets/` folder it no longer needs to disambiguate from environment
+  files).
+
+If you overrode the sops `store:` template, update it to match (the new default
+is `{shelf}/secrets/{stage}.yaml`). No file _contents_ change — only their paths.
 
 ## config.yaml
 
@@ -104,8 +130,9 @@ keys:
   value becomes a committed env-file diff that gates rollout: the new value can't
   take effect until the manifest change ships. `version` is a positive integer; a
   non-integer or non-positive `version` is a `MALFORMED_FILE`. Pinning is **N/A for
-  sops** — its value lives in the committed sibling encrypted file, already
-  deploy-gated — and a `version` on a sops `!secret` is inert.
+  sops** — its value lives in the committed encrypted store file (under the
+  shelf's `secrets/` folder), already deploy-gated — and a `version` on a sops
+  `!secret` is inert.
 
 ## Key references (`!ref`)
 
@@ -171,7 +198,7 @@ runs six checks:
    rule (`UNKNOWN_KEY` otherwise). Supplying a `!ref` **discharges** a `!required`
    key, exactly as a config or `!secret` value would.
 2. Target shelf `S` exists — else `REFERENCE_NOT_FOUND`.
-3. Target stage exists, i.e. `S/{G}.yaml` is present — else `REFERENCE_NOT_FOUND`.
+3. Target stage exists, i.e. `S/environments/{G}.yaml` is present — else `REFERENCE_NOT_FOUND`.
 4. Target key `T` is declared in `S`'s schema — else `REFERENCE_NOT_FOUND`.
 5. `T` is **present** in the target environment — supplied there, or covered by a
    schema config default — else `REFERENCE_NOT_FOUND`.
