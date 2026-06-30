@@ -113,7 +113,7 @@ e2e("Tier 1: file:-installed bundled binary drives a real keyshelf run", () => {
   async function scaffoldKeyshelf(dir: string): Promise<{ ageKeyFile: string }> {
     const out = await scaffoldSopsProject(dir);
     const root = path.join(dir, ".keyshelf");
-    await mkdir(path.join(root, "app"), { recursive: true });
+    await mkdir(path.join(root, "app", "environments"), { recursive: true });
     await writeFile(
       path.join(root, "config.yaml"),
       "project: tier1\nproviders:\n  local:\n    adapter: sops\n",
@@ -121,7 +121,7 @@ e2e("Tier 1: file:-installed bundled binary drives a real keyshelf run", () => {
     );
     await writeFile(path.join(root, "app", "schema.yaml"), "keys:\n  TOKEN: !required\n", "utf8");
     await writeFile(
-      path.join(root, "app", "staging.yaml"),
+      path.join(root, "app", "environments", "staging.yaml"),
       "provider: local\nkeys:\n  TOKEN: !required\n",
       "utf8"
     );

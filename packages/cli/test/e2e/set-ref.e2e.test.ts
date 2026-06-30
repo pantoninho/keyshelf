@@ -62,7 +62,7 @@ describe("keyshelf set <KEY> <shelf>/<stage> --ref", () => {
   it("writes !ref { shelf } for a same-name, current-stage reference", async () => {
     await write(
       cwd,
-      ".keyshelf/web/production.yaml",
+      ".keyshelf/web/environments/production.yaml",
       "provider: local\nkeys:\n  AUDIT_KEY: keep\n"
     );
     const { code, stdout } = await runKeyshelf(
@@ -77,45 +77,57 @@ describe("keyshelf set <KEY> <shelf>/<stage> --ref", () => {
     });
 
     expect(
-      await refNode(cwd, ".keyshelf/web/production.yaml", "SUPABASE_SERVICE_ROLE_KEY")
+      await refNode(cwd, ".keyshelf/web/environments/production.yaml", "SUPABASE_SERVICE_ROLE_KEY")
     ).toEqual({
       shelf: "supabase"
     });
     // In-place edit: the provider line and other keys survive, value is a !ref.
-    const text = await read(cwd, ".keyshelf/web/production.yaml");
+    const text = await read(cwd, ".keyshelf/web/environments/production.yaml");
     expect(text).toContain("provider: local");
     expect(text).toContain("AUDIT_KEY: keep");
     expect(text).toContain("!ref");
   });
 
   it("writes an explicit stage: for --ref <shelf>/<stage>", async () => {
-    await write(cwd, ".keyshelf/web/staging.yaml", "provider: local\nkeys:\n  DB_PASSWORD: x\n");
+    await write(
+      cwd,
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: local\nkeys:\n  DB_PASSWORD: x\n"
+    );
     const { code } = await runKeyshelf(
       ["set", "AUDIT_KEY", "web/staging", "--ref", "shared/production"],
       { cwd }
     );
     expect(code).toBe(0);
-    expect(await refNode(cwd, ".keyshelf/web/staging.yaml", "AUDIT_KEY")).toEqual({
+    expect(await refNode(cwd, ".keyshelf/web/environments/staging.yaml", "AUDIT_KEY")).toEqual({
       shelf: "shared",
       stage: "production"
     });
   });
 
   it("writes a key: for a rename with --ref-key", async () => {
-    await write(cwd, ".keyshelf/web/staging.yaml", "provider: local\nkeys:\n  AUDIT_KEY: x\n");
+    await write(
+      cwd,
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: local\nkeys:\n  AUDIT_KEY: x\n"
+    );
     const { code } = await runKeyshelf(
       ["set", "DB_PASSWORD", "web/staging", "--ref", "supabase", "--ref-key", "SERVICE_ROLE_KEY"],
       { cwd }
     );
     expect(code).toBe(0);
-    expect(await refNode(cwd, ".keyshelf/web/staging.yaml", "DB_PASSWORD")).toEqual({
+    expect(await refNode(cwd, ".keyshelf/web/environments/staging.yaml", "DB_PASSWORD")).toEqual({
       shelf: "supabase",
       key: "SERVICE_ROLE_KEY"
     });
   });
 
   it("omits key: when --ref-key equals the consuming key (same-name)", async () => {
-    await write(cwd, ".keyshelf/web/staging.yaml", "provider: local\nkeys:\n  AUDIT_KEY: x\n");
+    await write(
+      cwd,
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: local\nkeys:\n  AUDIT_KEY: x\n"
+    );
     const { code } = await runKeyshelf(
       [
         "set",
@@ -129,7 +141,9 @@ describe("keyshelf set <KEY> <shelf>/<stage> --ref", () => {
       { cwd }
     );
     expect(code).toBe(0);
-    expect(await refNode(cwd, ".keyshelf/web/staging.yaml", "SUPABASE_SERVICE_ROLE_KEY")).toEqual({
+    expect(
+      await refNode(cwd, ".keyshelf/web/environments/staging.yaml", "SUPABASE_SERVICE_ROLE_KEY")
+    ).toEqual({
       shelf: "supabase"
     });
   });
@@ -143,22 +157,30 @@ describe("keyshelf set <KEY> <shelf>/<stage> --ref", () => {
       ".keyshelf/config.yaml",
       "project: myapp\nproviders:\n  local:\n    adapter: fake\n  bogus:\n    adapter: no-such-adapter\n"
     );
-    await write(cwd, ".keyshelf/web/staging.yaml", "provider: bogus\nkeys:\n  DB_PASSWORD: x\n");
+    await write(
+      cwd,
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: bogus\nkeys:\n  DB_PASSWORD: x\n"
+    );
     const { code, stdout } = await runKeyshelf(
       ["set", "AUDIT_KEY", "web/staging", "--ref", "shared", "--json"],
       { cwd } // note: no `input` — set --ref reads nothing from stdin
     );
     expect(code, stdout).toBe(0);
-    expect(await refNode(cwd, ".keyshelf/web/staging.yaml", "AUDIT_KEY")).toEqual({
+    expect(await refNode(cwd, ".keyshelf/web/environments/staging.yaml", "AUDIT_KEY")).toEqual({
       shelf: "shared"
     });
     // No fake store file is created — nothing was written to any backend.
-    const text = await read(cwd, ".keyshelf/web/staging.yaml");
+    const text = await read(cwd, ".keyshelf/web/environments/staging.yaml");
     expect(text).toContain("provider: bogus");
   });
 
   it("rejects a key not in the consuming shelf's schema with UNKNOWN_KEY", async () => {
-    await write(cwd, ".keyshelf/web/staging.yaml", "provider: local\nkeys:\n  DB_PASSWORD: x\n");
+    await write(
+      cwd,
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: local\nkeys:\n  DB_PASSWORD: x\n"
+    );
     const { code, stdout } = await runKeyshelf(
       ["set", "NOPE", "web/staging", "--ref", "shared", "--json"],
       { cwd }
@@ -168,7 +190,11 @@ describe("keyshelf set <KEY> <shelf>/<stage> --ref", () => {
   });
 
   it("rejects --ref together with --secret", async () => {
-    await write(cwd, ".keyshelf/web/staging.yaml", "provider: local\nkeys:\n  DB_PASSWORD: x\n");
+    await write(
+      cwd,
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: local\nkeys:\n  DB_PASSWORD: x\n"
+    );
     const { code } = await runKeyshelf(
       ["set", "AUDIT_KEY", "web/staging", "--ref", "shared", "--secret"],
       { cwd, input: "x" }
@@ -177,7 +203,11 @@ describe("keyshelf set <KEY> <shelf>/<stage> --ref", () => {
   });
 
   it("rejects --ref-key without --ref", async () => {
-    await write(cwd, ".keyshelf/web/staging.yaml", "provider: local\nkeys:\n  DB_PASSWORD: x\n");
+    await write(
+      cwd,
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: local\nkeys:\n  DB_PASSWORD: x\n"
+    );
     const { code } = await runKeyshelf(["set", "AUDIT_KEY", "web/staging", "--ref-key", "OTHER"], {
       cwd,
       input: "x"
@@ -206,13 +236,13 @@ describe("set --ref round-trips: authored reference resolves at run", () => {
     await write(cwd, ".keyshelf/shared/schema.yaml", "keys:\n  DATABASE_PASSWORD: !required\n");
     await write(
       cwd,
-      ".keyshelf/shared/staging.yaml",
+      ".keyshelf/shared/environments/staging.yaml",
       "provider: local\nkeys:\n  DATABASE_PASSWORD: !secret\n"
     );
     await write(cwd, ".keyshelf/web/schema.yaml", "keys:\n  DATABASE_PASSWORD: !required\n");
     await write(
       cwd,
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       "provider: local\nkeys:\n  DATABASE_PASSWORD: placeholder\n"
     );
 
@@ -239,13 +269,13 @@ describe("set --ref round-trips: authored reference resolves at run", () => {
     await write(cwd, ".keyshelf/shared/schema.yaml", "keys:\n  SERVICE_ROLE_KEY: !required\n");
     await write(
       cwd,
-      ".keyshelf/shared/staging.yaml",
+      ".keyshelf/shared/environments/staging.yaml",
       "provider: local\nkeys:\n  SERVICE_ROLE_KEY: !secret\n"
     );
     await write(cwd, ".keyshelf/web/schema.yaml", "keys:\n  DB_PASSWORD: !required\n");
     await write(
       cwd,
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       "provider: local\nkeys:\n  DB_PASSWORD: placeholder\n"
     );
 
@@ -270,13 +300,13 @@ describe("set --ref round-trips: authored reference resolves at run", () => {
     await write(cwd, ".keyshelf/shared/schema.yaml", "keys:\n  AUDIT_KEY: !required\n");
     await write(
       cwd,
-      ".keyshelf/shared/production.yaml",
+      ".keyshelf/shared/environments/production.yaml",
       "provider: local\nkeys:\n  AUDIT_KEY: !secret\n"
     );
     await write(cwd, ".keyshelf/web/schema.yaml", "keys:\n  AUDIT_KEY: !required\n");
     await write(
       cwd,
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       "provider: local\nkeys:\n  AUDIT_KEY: placeholder\n"
     );
 

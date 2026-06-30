@@ -64,7 +64,7 @@ keys:
 Presence only — `default value` / `!required` / `!optional`. Never decides
 plaintext vs secret. Closed contract: environments may only use declared keys.
 
-## {shelf}/{stage}.yaml
+## {shelf}/environments/{stage}.yaml
 
 ```yaml
 provider: gcp-staging # references a provider in config.yaml; required iff a local !secret
@@ -131,8 +131,9 @@ Fields:
 
 Resolution (at `run`/`validate`, in `resolve.ts`, above the adapter seam):
 
-- **Lazy, single-key.** The target shelf's `schema.yaml` and `{shelf}/{stage}.yaml`
-  are loaded and **only** the referenced key is resolved — never the whole target
+- **Lazy, single-key.** The target shelf's `schema.yaml` and
+  `{shelf}/environments/{stage}.yaml` are loaded and **only** the referenced key is
+  resolved — never the whole target
   environment.
 - **Through the target's own provider.** The value lives in the target
   environment's store, so a `!secret` target resolves via the **target**
@@ -156,7 +157,7 @@ the value resolves through the target's provider.
 `keyshelf validate` checks every `!ref` **statically and offline** — a dangling
 or chained reference fails before any `run`, with **no backend access**.
 Validation reaches across shelves: it loads the target shelf's `schema.yaml` and
-`{shelf}/{stage}.yaml` (filesystem reads only) to confirm the reference would
+`{shelf}/environments/{stage}.yaml` (filesystem reads only) to confirm the reference would
 resolve in principle, but it never resolves the target's value through any
 provider (no decrypt, no network — a secret target is confirmed to _be_ a secret,
 not fetched).

@@ -54,7 +54,7 @@ keys:
 async function scaffold(): Promise<void> {
   await write(".keyshelf/config.yaml", CONFIG);
   await write(".keyshelf/web/schema.yaml", SCHEMA);
-  await write(".keyshelf/web/staging.yaml", CONFIG_ENV);
+  await write(".keyshelf/web/environments/staging.yaml", CONFIG_ENV);
 }
 
 /** Seed the file-backed fake store the `fake` adapter reads (storedName -> value). */
@@ -112,7 +112,10 @@ describe("keyshelf run <shelf>/<stage> -- <cmd>", () => {
 
   it("contributes a schema default for a key the environment omits", async () => {
     await scaffold();
-    await write(".keyshelf/web/staging.yaml", "provider: local\nkeys:\n  REGION: eu\n");
+    await write(
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: local\nkeys:\n  REGION: eu\n"
+    );
     const { code, stdout } = await runWrapped(printEnv("LOG_LEVEL"));
     expect(code).toBe(0);
     expect(stdout).toBe("info");
@@ -222,7 +225,10 @@ describe("keyshelf run <shelf>/<stage> -- <cmd>", () => {
 
   it("aborts before exec on a validation failure (MISSING_REQUIRED), command never runs", async () => {
     await scaffold();
-    await write(".keyshelf/web/staging.yaml", "provider: local\nkeys:\n  LOG_LEVEL: debug\n"); // REGION missing
+    await write(
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: local\nkeys:\n  LOG_LEVEL: debug\n"
+    ); // REGION missing
     const sentinel = path.join(cwd, "ran.txt");
     const { code, stdout } = await runWrapped([
       "run",
@@ -245,7 +251,7 @@ describe("keyshelf run <shelf>/<stage> -- <cmd>", () => {
     // Namespace mirrors the registry convention keyshelf__{project}__{shelf}__{stage}.
     await seedFakeStore({ keyshelf__myapp__web__staging__EXTRA_SECRET: "s3cr3t-value" });
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       "provider: store\nkeys:\n  REGION: eu\n  EXTRA_SECRET: !secret\n"
     );
     const { code, stdout } = await runWrapped(printEnv("EXTRA_SECRET"));
@@ -257,7 +263,7 @@ describe("keyshelf run <shelf>/<stage> -- <cmd>", () => {
     await scaffold();
     await seedFakeStore({ "shared-db-url": "postgres://shared/db" });
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       "provider: store\nkeys:\n  REGION: eu\n  DATABASE_URL: !secret { ref: shared-db-url }\n"
     );
     const { code, stdout } = await runWrapped(printEnv("DATABASE_URL"));
@@ -268,7 +274,7 @@ describe("keyshelf run <shelf>/<stage> -- <cmd>", () => {
   it("aborts with SECRET_NOT_FOUND when a !secret has no stored value", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       "provider: store\nkeys:\n  REGION: eu\n  EXTRA_SECRET: !secret\n"
     );
     const sentinel = path.join(cwd, "ran.txt");
@@ -291,7 +297,7 @@ describe("keyshelf run <shelf>/<stage> -- <cmd>", () => {
     await scaffold();
     // The `bogus` provider names an adapter no branch in the registry handles.
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       "provider: bogus\nkeys:\n  REGION: eu\n  EXTRA_SECRET: !secret\n"
     );
     const { code, stdout } = await runWrapped([

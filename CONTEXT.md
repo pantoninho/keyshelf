@@ -49,7 +49,7 @@ _Avoid_: env, env slug, tier
 
 **Environment**:
 A shelf at a stage: the implementation of a shelf's schema for one stage, held in
-`{shelf}/{stage}.yaml`. Supplies the actual values (and a provider when it holds a
+`{shelf}/environments/{stage}.yaml`. Supplies the actual values (and a provider when it holds a
 local secret). Implicitly bound to its shelf's schema (no schema reference field).
 Addressed as `{shelf}/{stage}` (e.g. `backend/production`).
 _Avoid_: env, target

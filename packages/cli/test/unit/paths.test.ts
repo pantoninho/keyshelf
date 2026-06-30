@@ -13,12 +13,10 @@ describe("layout path helpers", () => {
     expect(schemaFilePath(root, "api")).toBe(path.join("/proj", ".keyshelf", "api", "schema.yaml"));
   });
 
-  it("places environment files in the shelf directory (flat layout)", () => {
-    // Pins the current flat layout. ADR-0011 redirects this into an
-    // `environments/` subfolder — that change must update this expectation.
-    expect(shelfEnvDir(root, "api")).toBe(path.join("/proj", ".keyshelf", "api"));
+  it("places environment files in the shelf's environments/ folder (ADR-0011)", () => {
+    expect(shelfEnvDir(root, "api")).toBe(path.join("/proj", ".keyshelf", "api", "environments"));
     expect(envFilePath(root, "api", "production")).toBe(
-      path.join("/proj", ".keyshelf", "api", "production.yaml")
+      path.join("/proj", ".keyshelf", "api", "environments", "production.yaml")
     );
   });
 });

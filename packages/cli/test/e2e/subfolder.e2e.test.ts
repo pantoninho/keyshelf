@@ -46,7 +46,7 @@ keys:
 async function scaffold(): Promise<void> {
   await write(".keyshelf/config.yaml", CONFIG);
   await write(".keyshelf/web/schema.yaml", SCHEMA);
-  await write(".keyshelf/web/staging.yaml", ENV);
+  await write(".keyshelf/web/environments/staging.yaml", ENV);
 }
 
 describe("running keyshelf from a subfolder", () => {
@@ -89,7 +89,9 @@ describe("running keyshelf from a subfolder", () => {
     expect(code).toBe(0);
 
     // The write landed in the discovered project root...
-    const env = parse(await readFile(path.join(root, ".keyshelf", "web", "staging.yaml"), "utf8"));
+    const env = parse(
+      await readFile(path.join(root, ".keyshelf", "web", "environments", "staging.yaml"), "utf8")
+    );
     expect(env.keys.LOG_LEVEL).toBe("trace");
 
     // ...and never created a stray .keyshelf under the subfolder.

@@ -43,7 +43,7 @@ async function scaffold(): Promise<void> {
   await write(".keyshelf/config.yaml", CONFIG);
   await write(".keyshelf/web/schema.yaml", SCHEMA);
   await write(
-    ".keyshelf/web/staging.yaml",
+    ".keyshelf/web/environments/staging.yaml",
     `provider: local
 keys:
   REGION: eu-west-1
@@ -139,7 +139,7 @@ describe("loadEnvironment", () => {
   it("throws SCHEMA_NOT_FOUND when the shelf has no schema.yaml", async () => {
     await scaffold();
     await mkdir(path.join(root, ".keyshelf", "noschema"), { recursive: true });
-    await write(".keyshelf/noschema/dev.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/noschema/environments/dev.yaml", "provider: local\nkeys: {}\n");
     await expectCode(loadEnvironment(root, "noschema", "dev"), "SCHEMA_NOT_FOUND", {
       shelf: "noschema"
     });
@@ -167,7 +167,7 @@ describe("loadEnvironment", () => {
 
   it("throws MALFORMED_FILE for an unparseable environment file", async () => {
     await scaffold();
-    await write(".keyshelf/web/staging.yaml", "provider: local\nkeys: {bad\n");
+    await write(".keyshelf/web/environments/staging.yaml", "provider: local\nkeys: {bad\n");
     await expectCode(loadEnvironment(root, "web", "staging"), "MALFORMED_FILE", {});
   });
 
@@ -175,7 +175,7 @@ describe("loadEnvironment", () => {
     // provider: is optional at load time; the conditional rule (required iff a
     // local !secret) is enforced in validate, not the loader.
     await scaffold();
-    await write(".keyshelf/web/staging.yaml", "keys:\n  REGION: eu\n");
+    await write(".keyshelf/web/environments/staging.yaml", "keys:\n  REGION: eu\n");
     const loaded = await loadEnvironment(root, "web", "staging");
     expect(loaded.environment.provider).toBeUndefined();
     expect(loaded.environment.keys.REGION).toEqual({ kind: "config", value: "eu" });
@@ -184,7 +184,7 @@ describe("loadEnvironment", () => {
   it("throws MALFORMED_FILE for a present-but-empty provider field", async () => {
     // A provider key that is present but not a non-empty string is still malformed.
     await scaffold();
-    await write(".keyshelf/web/staging.yaml", "provider:\nkeys:\n  REGION: eu\n");
+    await write(".keyshelf/web/environments/staging.yaml", "provider:\nkeys:\n  REGION: eu\n");
     await expectCode(loadEnvironment(root, "web", "staging"), "MALFORMED_FILE", {});
   });
 
@@ -199,7 +199,7 @@ describe("loadEnvironment: !ref key references", () => {
   it("parses !ref { shelf } into a key reference with shelf only (key/stage default later)", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       `provider: local
 keys:
   REGION: eu-west-1
@@ -216,7 +216,7 @@ keys:
   it("captures explicit key and stage on a !ref", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       `provider: local
 keys:
   DATABASE_PASSWORD: !ref { shelf: shared, key: SHARED_DB, stage: production }
@@ -232,7 +232,7 @@ keys:
   it("throws MALFORMED_FILE for a !ref missing the required shelf field", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       `provider: local
 keys:
   DATABASE_PASSWORD: !ref { key: SHARED_DB }
@@ -244,7 +244,7 @@ keys:
   it("throws MALFORMED_FILE for a scalar !ref (it must be a mapping)", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       `provider: local
 keys:
   DATABASE_PASSWORD: !ref shared
@@ -258,7 +258,7 @@ describe("loadEnvironment: !secret version pinning (ADR-0009)", () => {
   it("parses a pinned convention !secret { version: N }", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       `provider: local
 keys:
   DATABASE_PASSWORD: !secret { version: 3 }
@@ -275,7 +275,7 @@ keys:
   it("parses a pinned foreign !secret { ref: NAME, version: N }", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       `provider: local
 keys:
   DATABASE_PASSWORD: !secret { ref: shared-token, version: 7 }
@@ -299,7 +299,7 @@ keys:
   it("throws MALFORMED_FILE for a non-integer version", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       `provider: local
 keys:
   DATABASE_PASSWORD: !secret { version: latest }
@@ -311,7 +311,7 @@ keys:
   it("throws MALFORMED_FILE for a zero/negative version", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       `provider: local
 keys:
   DATABASE_PASSWORD: !secret { version: 0 }
@@ -326,16 +326,25 @@ describe("listEnvironments", () => {
     await expectCode(listEnvironments(root), "NOT_INITIALIZED");
   });
 
-  it("lists every {shelf}/{stage} across all shelves, ignoring schema and secrets files", async () => {
+  it("lists every {shelf}/{stage} from environments/, never files outside that folder", async () => {
+    // Discovery reads only the shelf's environments/ folder (ADR-0011), so a
+    // schema at the shelf root and a store under secrets/ are structurally
+    // outside the scan — no exclusion rule needed.
     await scaffold();
-    await write(".keyshelf/web/prod.yaml", "provider: local\nkeys: {}\n");
-    await write(".keyshelf/web/staging.secrets.yaml", "enc: stuff\n");
+    await write(".keyshelf/web/environments/prod.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/web/secrets/staging.yaml", "enc: stuff\n");
     await write(".keyshelf/api/schema.yaml", "keys: {}\n");
-    await write(".keyshelf/api/dev.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/api/environments/dev.yaml", "provider: local\nkeys: {}\n");
 
     const envs = await listEnvironments(root);
     const ids = envs.map((e) => `${e.shelf}/${e.stage}`).sort();
     expect(ids).toEqual(["api/dev", "web/prod", "web/staging"]);
+  });
+
+  it("treats a shelf with no environments/ folder as having zero environments", async () => {
+    await write(".keyshelf/config.yaml", CONFIG);
+    await write(".keyshelf/web/schema.yaml", SCHEMA);
+    await expect(listEnvironments(root)).resolves.toEqual([]);
   });
 });
 
@@ -346,9 +355,9 @@ describe("loadProjectMap", () => {
 
   it("maps every shelf to its schema key count and its sorted environments", async () => {
     await scaffold(); // web: 4 keys, staging
-    await write(".keyshelf/web/prod.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/web/environments/prod.yaml", "provider: local\nkeys: {}\n");
     await write(".keyshelf/api/schema.yaml", "keys:\n  TOKEN: !required\n  HOST: localhost\n");
-    await write(".keyshelf/api/dev.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/api/environments/dev.yaml", "provider: local\nkeys: {}\n");
 
     const map = await loadProjectMap(root);
 
@@ -383,7 +392,7 @@ describe("loadProjectMap", () => {
 
   it("fails fast with SCHEMA_NOT_FOUND when a shelf has no schema.yaml", async () => {
     await scaffold();
-    await write(".keyshelf/broken/dev.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/broken/environments/dev.yaml", "provider: local\nkeys: {}\n");
     await expectCode(loadProjectMap(root), "SCHEMA_NOT_FOUND", { shelf: "broken" });
   });
 

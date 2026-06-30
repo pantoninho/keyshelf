@@ -43,7 +43,7 @@ keys:
 async function scaffold(): Promise<void> {
   await write(".keyshelf/config.yaml", CONFIG);
   await write(".keyshelf/web/schema.yaml", SCHEMA);
-  await write(".keyshelf/web/staging.yaml", GOOD_ENV);
+  await write(".keyshelf/web/environments/staging.yaml", GOOD_ENV);
   // "valid means would run": the declared secret must be resolvable.
   await seedFakeStore({
     keyshelf__myapp__web__staging__DATABASE_PASSWORD: "pw",
@@ -72,7 +72,7 @@ describe("keyshelf validate <shelf>/<stage>", () => {
 
   it("reports UNKNOWN_KEY for an undeclared key", async () => {
     await scaffold();
-    await write(".keyshelf/web/staging.yaml", `${GOOD_ENV}  EXTRA: nope\n`);
+    await write(".keyshelf/web/environments/staging.yaml", `${GOOD_ENV}  EXTRA: nope\n`);
     const { code, stdout } = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
     expect(code).not.toBe(0);
     expect(errorOf(stdout)).toMatchObject({ code: "UNKNOWN_KEY", key: "EXTRA" });
@@ -80,7 +80,10 @@ describe("keyshelf validate <shelf>/<stage>", () => {
 
   it("reports MISSING_REQUIRED for an absent required key", async () => {
     await scaffold();
-    await write(".keyshelf/web/staging.yaml", "provider: local\nkeys:\n  REGION: eu\n");
+    await write(
+      ".keyshelf/web/environments/staging.yaml",
+      "provider: local\nkeys:\n  REGION: eu\n"
+    );
     const { code, stdout } = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
     expect(code).not.toBe(0);
     expect(errorOf(stdout)).toMatchObject({ code: "MISSING_REQUIRED", key: "DATABASE_PASSWORD" });
@@ -88,7 +91,7 @@ describe("keyshelf validate <shelf>/<stage>", () => {
 
   it("reports INVALID_KEY_NAME for a non-identifier key", async () => {
     await scaffold();
-    await write(".keyshelf/web/staging.yaml", `${GOOD_ENV}  "bad-key": x\n`);
+    await write(".keyshelf/web/environments/staging.yaml", `${GOOD_ENV}  "bad-key": x\n`);
     const { code, stdout } = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
     expect(code).not.toBe(0);
     expect(errorOf(stdout)).toMatchObject({ code: "INVALID_KEY_NAME", key: "bad-key" });
@@ -97,7 +100,7 @@ describe("keyshelf validate <shelf>/<stage>", () => {
   it("reports PROVIDER_NOT_FOUND for an undefined provider", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       GOOD_ENV.replace("provider: store", "provider: ghost")
     );
     const { code, stdout } = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
@@ -114,7 +117,7 @@ describe("keyshelf validate <shelf>/<stage>", () => {
 
   it("reports SCHEMA_NOT_FOUND for a shelf without a schema", async () => {
     await scaffold();
-    await write(".keyshelf/noschema/dev.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/noschema/environments/dev.yaml", "provider: local\nkeys: {}\n");
     const { code, stdout } = await runKeyshelf(["validate", "noschema/dev", "--json"], { cwd });
     expect(code).not.toBe(0);
     expect(errorOf(stdout)).toMatchObject({ code: "SCHEMA_NOT_FOUND", shelf: "noschema" });
@@ -132,7 +135,7 @@ describe("keyshelf validate <shelf>/<stage>", () => {
 
   it("reports MALFORMED_FILE with file + reason for an unparseable environment", async () => {
     await scaffold();
-    await write(".keyshelf/web/staging.yaml", "provider: local\nkeys: {bad\n");
+    await write(".keyshelf/web/environments/staging.yaml", "provider: local\nkeys: {bad\n");
     const { code, stdout } = await runKeyshelf(["validate", "web/staging", "--json"], { cwd });
     expect(code).not.toBe(0);
     const err = errorOf(stdout);
@@ -165,7 +168,7 @@ describe("keyshelf validate <shelf>/<stage>", () => {
   it("validates a resolvable explicit { ref } override secret", async () => {
     await scaffold();
     await write(
-      ".keyshelf/web/staging.yaml",
+      ".keyshelf/web/environments/staging.yaml",
       "provider: store\nkeys:\n  REGION: eu\n  DATABASE_PASSWORD: !secret { ref: shared-pw }\n"
     );
     await seedFakeStore({ "shared-pw": "pw" });
@@ -178,9 +181,12 @@ describe("keyshelf validate <shelf>/<stage>", () => {
 describe("keyshelf validate (whole project)", () => {
   it("validates every environment and reports an all-valid aggregate", async () => {
     await scaffold();
-    await write(".keyshelf/web/prod.yaml", GOOD_ENV);
+    await write(".keyshelf/web/environments/prod.yaml", GOOD_ENV);
     await write(".keyshelf/api/schema.yaml", "keys:\n  TOKEN: !required\n");
-    await write(".keyshelf/api/dev.yaml", "provider: store\nkeys:\n  TOKEN: !secret\n");
+    await write(
+      ".keyshelf/api/environments/dev.yaml",
+      "provider: store\nkeys:\n  TOKEN: !secret\n"
+    );
 
     const { code, stdout } = await runKeyshelf(["validate", "--json"], { cwd });
     expect(code).toBe(0);
@@ -193,9 +199,12 @@ describe("keyshelf validate (whole project)", () => {
 
   it("aggregates per-environment failures and exits non-zero", async () => {
     await scaffold();
-    await write(".keyshelf/web/prod.yaml", "provider: local\nkeys:\n  REGION: eu\n"); // missing required
+    await write(".keyshelf/web/environments/prod.yaml", "provider: local\nkeys:\n  REGION: eu\n"); // missing required
     await write(".keyshelf/api/schema.yaml", "keys:\n  TOKEN: !required\n");
-    await write(".keyshelf/api/dev.yaml", "provider: ghost\nkeys:\n  TOKEN: !secret\n"); // bad provider
+    await write(
+      ".keyshelf/api/environments/dev.yaml",
+      "provider: ghost\nkeys:\n  TOKEN: !secret\n"
+    ); // bad provider
 
     const { code, stdout } = await runKeyshelf(["validate", "--json"], { cwd });
     expect(code).not.toBe(0);
@@ -213,7 +222,10 @@ describe("keyshelf validate (whole project)", () => {
   it("marks an environment invalid when its declared secret is unresolvable", async () => {
     await scaffold();
     await write(".keyshelf/api/schema.yaml", "keys:\n  TOKEN: !required\n");
-    await write(".keyshelf/api/dev.yaml", "provider: store\nkeys:\n  TOKEN: !secret\n");
+    await write(
+      ".keyshelf/api/environments/dev.yaml",
+      "provider: store\nkeys:\n  TOKEN: !secret\n"
+    );
     // Store seeds web/staging's secret but NOT api/dev's TOKEN.
     await seedFakeStore({ keyshelf__myapp__web__staging__DATABASE_PASSWORD: "pw" });
 

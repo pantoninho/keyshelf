@@ -15,7 +15,7 @@ import { makeTmpDir, removeDir, runKeyshelf } from "./helpers.js";
 
 const PRINT = (name: string) => ["node", "-e", `process.stdout.write(String(process.env.${name}))`];
 
-/** Write `{shelf}/schema.yaml` + `{shelf}/{stage}.yaml` under the project root. */
+/** Write `{shelf}/schema.yaml` + `{shelf}/environments/{stage}.yaml` under the project root. */
 async function writeShelf(
   cwd: string,
   shelf: string,
@@ -25,8 +25,10 @@ async function writeShelf(
   const dir = path.join(cwd, ".keyshelf", shelf);
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, "schema.yaml"), schema, "utf8");
+  const envDir = path.join(dir, "environments");
+  await mkdir(envDir, { recursive: true });
   for (const [stage, contents] of Object.entries(envs)) {
-    await writeFile(path.join(dir, `${stage}.yaml`), contents, "utf8");
+    await writeFile(path.join(envDir, `${stage}.yaml`), contents, "utf8");
   }
 }
 

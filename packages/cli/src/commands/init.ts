@@ -5,12 +5,13 @@ import path from "node:path";
 import { stringify } from "yaml";
 import { BaseCommand } from "../base-command.js";
 import { KeyshelfError } from "../errors.js";
+import { CONFIG_FILE, ENV_DIR, ROOT_DIR, SCHEMA_FILE } from "../paths.js";
 
 /**
  * Scaffold a new Keyshelf project: a `.keyshelf/` directory holding `config.yaml`
  * (project name + a default `local` sops provider) and a starter shelf with an
- * empty `schema.yaml`. Non-interactive; refuses to clobber an existing project
- * unless `--force` is given.
+ * empty `schema.yaml` and an empty reserved `environments/` folder (ADR-0011).
+ * Non-interactive; refuses to clobber an existing project unless `--force` is given.
  */
 export default class Init extends BaseCommand {
   static description = "Scaffold a new Keyshelf project in the current directory.";
@@ -39,8 +40,8 @@ export default class Init extends BaseCommand {
     const { flags } = await this.parse(Init);
 
     const cwd = process.cwd();
-    const root = path.join(cwd, ".keyshelf");
-    const configPath = path.join(root, "config.yaml");
+    const root = path.join(cwd, ROOT_DIR);
+    const configPath = path.join(root, CONFIG_FILE);
     const project = flags.project ?? path.basename(cwd);
     const { shelf } = flags;
 
@@ -53,16 +54,16 @@ export default class Init extends BaseCommand {
     }
 
     const shelfDir = path.join(root, shelf);
-    await mkdir(shelfDir, { recursive: true });
+    await mkdir(path.join(shelfDir, ENV_DIR), { recursive: true });
 
     await writeFile(
       configPath,
       stringify({ project, providers: { local: { adapter: "sops" } } }),
       "utf8"
     );
-    await writeFile(path.join(shelfDir, "schema.yaml"), stringify({ keys: {} }), "utf8");
+    await writeFile(path.join(shelfDir, SCHEMA_FILE), stringify({ keys: {} }), "utf8");
 
-    const created = ["config.yaml", `${shelf}/schema.yaml`];
+    const created = [CONFIG_FILE, `${shelf}/${SCHEMA_FILE}`, `${shelf}/${ENV_DIR}/`];
     if (!this.jsonEnabled()) {
       this.log(`Initialized Keyshelf project '${project}' with shelf '${shelf}'.`);
     }

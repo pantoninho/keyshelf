@@ -32,10 +32,10 @@ async function scaffold(): Promise<void> {
     ".keyshelf/backend/schema.yaml",
     "keys:\n  A: !required\n  B: !required\n  C: !optional\n  D: x\n  E: y\n"
   );
-  await write(".keyshelf/backend/dev.yaml", "provider: local\nkeys: {}\n");
-  await write(".keyshelf/backend/production.yaml", "provider: local\nkeys: {}\n");
+  await write(".keyshelf/backend/environments/dev.yaml", "provider: local\nkeys: {}\n");
+  await write(".keyshelf/backend/environments/production.yaml", "provider: local\nkeys: {}\n");
   await write(".keyshelf/mobile/schema.yaml", "keys:\n  X: !required\n  Y: !optional\n");
-  await write(".keyshelf/mobile/production.yaml", "provider: local\nkeys: {}\n");
+  await write(".keyshelf/mobile/environments/production.yaml", "provider: local\nkeys: {}\n");
 }
 
 // eslint-disable-next-line no-control-regex
@@ -77,10 +77,10 @@ describe("keyshelf ls (project map)", () => {
   it("sorts shelves and environment leaves alphabetically", async () => {
     await write(".keyshelf/config.yaml", CONFIG);
     await write(".keyshelf/zoo/schema.yaml", "keys:\n  K: !required\n");
-    await write(".keyshelf/zoo/beta.yaml", "provider: local\nkeys: {}\n");
-    await write(".keyshelf/zoo/alpha.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/zoo/environments/beta.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/zoo/environments/alpha.yaml", "provider: local\nkeys: {}\n");
     await write(".keyshelf/apple/schema.yaml", "keys:\n  K: !required\n");
-    await write(".keyshelf/apple/prod.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/apple/environments/prod.yaml", "provider: local\nkeys: {}\n");
 
     const { stdout } = await runKeyshelf(["ls"], { cwd });
     const lines = stdout.trimEnd().split("\n");
@@ -123,7 +123,7 @@ describe("keyshelf ls (project map)", () => {
   it("fails fast with the broken shelf's KeyshelfError (no partial render)", async () => {
     await scaffold();
     // A shelf directory with no schema.yaml — SCHEMA_NOT_FOUND, aborts the map.
-    await write(".keyshelf/broken/dev.yaml", "provider: local\nkeys: {}\n");
+    await write(".keyshelf/broken/environments/dev.yaml", "provider: local\nkeys: {}\n");
     const { code, stdout } = await runKeyshelf(["ls", "--json"], { cwd });
     expect(code).not.toBe(0);
     expect(JSON.parse(stdout).error).toMatchObject({ code: "SCHEMA_NOT_FOUND", shelf: "broken" });

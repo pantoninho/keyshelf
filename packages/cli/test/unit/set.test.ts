@@ -239,7 +239,9 @@ describe("set output round-trips through loadEnvironment", () => {
   ): Promise<void> {
     const doc = parseDocument("provider: store\nkeys:\n  REGION: eu\n");
     mutate(doc);
-    await writeFile(path.join(root, ".keyshelf", "web", "staging.yaml"), doc.toString(), "utf8");
+    const envDir = path.join(root, ".keyshelf", "web", "environments");
+    await mkdir(envDir, { recursive: true });
+    await writeFile(path.join(envDir, "staging.yaml"), doc.toString(), "utf8");
   }
 
   it("yields a config EnvironmentValue for a plaintext set", async () => {
