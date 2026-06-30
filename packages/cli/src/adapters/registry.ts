@@ -62,18 +62,21 @@ function requireStringField(provider: Provider, field: string, ctx: AdapterConte
 
 /**
  * The sops store's default layout when a provider declares no `store:` template:
- * a per-environment sibling encrypted file `.keyshelf/{shelf}/{stage}.secrets.yaml`
- * (docs/reference.md, ADR-0002). Kept as a single template so the default's base
- * directory is redirectable in one place (ADR-0011 moves it under `secrets/`).
+ * a per-environment encrypted file in the shelf's own `secrets/` directory,
+ * `.keyshelf/{shelf}/secrets/{stage}.yaml` (ADR-0011). The store lives in its own
+ * directory — outside the `environments/` folder core scans — so the disambiguating
+ * `.secrets` filename suffix (ADR-0002) is no longer needed and is dropped.
+ * `secrets/` is purely this adapter's default; it is not a core concept, and the
+ * provider's `store:` template stays configurable.
  */
-const SOPS_DEFAULT_STORE_TEMPLATE = path.join(".keyshelf", "{shelf}", "{stage}.secrets.yaml");
+const SOPS_DEFAULT_STORE_TEMPLATE = path.join(".keyshelf", "{shelf}", "secrets", "{stage}.yaml");
 
 /**
  * Resolve a sops provider's store path for an environment. A provider may override
  * the default with a `store:` template using `{shelf}` and `{stage}` placeholders,
  * resolved relative to the project root.
  */
-function sopsStorePath(provider: Provider, ctx: AdapterContext): string {
+export function sopsStorePath(provider: Provider, ctx: AdapterContext): string {
   const template =
     typeof provider.store === "string" ? provider.store : SOPS_DEFAULT_STORE_TEMPLATE;
   const rel = template.replaceAll("{shelf}", ctx.shelf).replaceAll("{stage}", ctx.stage);
@@ -104,9 +107,10 @@ export function createAdapter(provider: Provider, ctx: AdapterContext): Adapter 
     }
 
     case "sops": {
-      // The store is a per-environment encrypted sibling file; recipients come
-      // from the project's `.sops.yaml`, which sops discovers by walking up from
-      // the store path — so the adapter runs sops with the project root as cwd.
+      // The store is a per-environment encrypted file in the shelf's `secrets/`
+      // directory (ADR-0011); recipients come from the project's `.sops.yaml`,
+      // which sops discovers by walking up from the store path — so the adapter
+      // runs sops with the project root as cwd.
       // An optional `ageKeyFile` locates the decryption identity per-environment
       // (ADR-0010); a leading `~`/`~/` expands to the user's home, then it is
       // resolved relative to the project root, like `store`.
