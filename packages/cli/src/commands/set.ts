@@ -10,14 +10,15 @@ import { KeyshelfError } from "../errors.js";
 import { findProjectDir, loadEnvironment } from "../loader.js";
 import { envFilePath, ROOT_DIR } from "../paths.js";
 import {
+  type SecretRefForm,
   secretRefForm,
-  serializeEnvDoc,
+  serializeEnvEdit,
   setConfigValue,
   setKeyReference,
   setSecretRef
 } from "../set.js";
 import { parseTarget } from "../target.js";
-import type { KeyReference } from "../model.js";
+import type { EnvironmentValue, KeyReference } from "../model.js";
 
 /** The structured result of a successful `set`. */
 interface SetResult {
@@ -33,6 +34,12 @@ interface SetResult {
    * plaintext/`!ref` write.
    */
   version?: number;
+  /**
+   * The explicit stored secret name a `--secret` write went to and the binding
+   * still records (`!secret { ref: NAME }`, issue #270). Absent for a convention
+   * write (bare `!secret`) and for plaintext/`!ref` writes.
+   */
+  secretRef?: string;
 }
 
 /**
@@ -48,7 +55,10 @@ interface SetResult {
  * reference is recorded in the environment file — bare when the adapter's
  * returned reference matches the convention it resolves by, or an explicit
  * `!secret { ref: ... }` for a foreign reference. The plaintext value never
- * lands in the environment file.
+ * lands in the environment file. A key already bound to an explicit
+ * `!secret { ref: NAME }` keeps that binding and the value is written to NAME;
+ * `--rebind` moves it to the convention name instead (issue #270). Only the named
+ * key's own lines of the environment file are rewritten.
  */
 export default class Set extends BaseCommand {
   static description =
@@ -82,6 +92,12 @@ export default class Set extends BaseCommand {
       default: false,
       exclusive: ["ref", "pin-latest"]
     }),
+    rebind: Flags.boolean({
+      description:
+        "With --secret, on a key bound to an explicit !secret { ref: ... }: write the convention-named secret and drop the ref, instead of adding a version to the referenced secret.",
+      default: false,
+      exclusive: ["ref", "pin-latest"]
+    }),
     "pin-latest": Flags.boolean({
       description:
         "Pin an existing !secret to the provider's current latest version without changing the value (no stdin read, no new version written).",
@@ -104,6 +120,11 @@ export default class Set extends BaseCommand {
     const { shelf, stage } = parseTarget(args.target);
     const { key } = args;
 
+    // `secret` defaults to false, so oclif's dependsOn cannot express this.
+    if (flags.rebind && !flags.secret) {
+      this.error("--rebind requires --secret", { exit: 2 });
+    }
+
     // Three mutually-exclusive authoring modes dispatch first; the default is a
     // value write (plaintext, or --secret through the provider).
     if (flags.ref !== undefined) {
@@ -112,7 +133,11 @@ export default class Set extends BaseCommand {
     if (flags["pin-latest"]) {
       return this.pinLatest(shelf, stage, key);
     }
-    return this.writeValue(shelf, stage, key, flags.secret, flags.floating);
+    return this.writeValue(shelf, stage, key, {
+      secret: flags.secret,
+      floating: flags.floating,
+      rebind: flags.rebind
+    });
   }
 
   /**
@@ -125,33 +150,39 @@ export default class Set extends BaseCommand {
     shelf: string,
     stage: string,
     key: string,
-    secret: boolean,
-    floating: boolean
+    opts: { secret: boolean; floating: boolean; rebind: boolean }
   ): Promise<SetResult> {
+    const { secret } = opts;
     // The value is never taken from argv. A TTY prompts; otherwise stdin is read
     // raw (byte-exact), and an empty stdin is NO_INPUT.
     const value = await this.readValue(key);
-    const { loaded, projectDir, file, doc } = await this.loadForEdit(shelf, stage, key);
+    const { loaded, projectDir, file, source, doc } = await this.loadForEdit(shelf, stage, key);
 
-    let version: number | undefined;
+    let written: { version?: number; secretRef?: string } = {};
     if (secret) {
-      version = await this.writeSecret(loaded, projectDir, shelf, stage, key, value, doc, floating);
+      written = await this.writeSecret(loaded, projectDir, shelf, stage, key, value, doc, opts);
     } else {
       setConfigValue(doc, key, value);
     }
 
-    await writeFile(file, serializeEnvDoc(doc), "utf8");
+    await writeFile(file, serializeEnvEdit(source, doc, key), "utf8");
 
     const result: SetResult = {
       key,
       environment: `${shelf}/${stage}`,
       secret,
       ref: false,
-      ...(version === undefined ? {} : { version })
+      ...written
     };
     if (!this.jsonEnabled()) {
+      const { version, secretRef } = written;
+      const kind = !secret
+        ? ""
+        : secretRef === undefined
+          ? " (secret)"
+          : ` (secret -> ${secretRef})`;
       const pinNote = version === undefined ? "" : ` (pinned v${version})`;
-      this.log(`Set ${result.environment} ${key}${secret ? " (secret)" : ""}${pinNote}.`);
+      this.log(`Set ${result.environment} ${key}${kind}${pinNote}.`);
     }
 
     return result;
@@ -167,7 +198,7 @@ export default class Set extends BaseCommand {
    * (`latestVersion` absent — e.g. sops) is an `ADAPTER_ERROR` (pinning N/A).
    */
   private async pinLatest(shelf: string, stage: string, key: string): Promise<SetResult> {
-    const { loaded, projectDir, file, doc } = await this.loadForEdit(shelf, stage, key);
+    const { loaded, projectDir, file, source, doc } = await this.loadForEdit(shelf, stage, key);
     const existing = loaded.environment.keys[key];
     if (existing?.kind !== "secret") {
       throw new KeyshelfError(
@@ -195,7 +226,7 @@ export default class Set extends BaseCommand {
     );
     const name = hasExplicitName(existing.ref) ? refName("set", existing.ref) : conventionRef;
     setSecretRef(doc, key, secretRefForm(name, conventionRef, String(version)));
-    await writeFile(file, serializeEnvDoc(doc), "utf8");
+    await writeFile(file, serializeEnvEdit(source, doc, key), "utf8");
 
     const result: SetResult = {
       key,
@@ -237,9 +268,9 @@ export default class Set extends BaseCommand {
     }
 
     // No provider/config beyond what loadForEdit reads — no adapter is created.
-    const { file, doc } = await this.loadForEdit(shelf, stage, key);
+    const { file, source, doc } = await this.loadForEdit(shelf, stage, key);
     setKeyReference(doc, key, reference);
-    await writeFile(file, serializeEnvDoc(doc), "utf8");
+    await writeFile(file, serializeEnvEdit(source, doc, key), "utf8");
 
     const result: SetResult = {
       key,
@@ -271,6 +302,8 @@ export default class Set extends BaseCommand {
     loaded: Awaited<ReturnType<typeof loadEnvironment>>;
     projectDir: string;
     file: string;
+    /** The environment file's text as read, for a minimal-edit write-back. */
+    source: string;
     doc: ReturnType<typeof parseDocument>;
   }> {
     // Discover the project root by walking up from the working directory, so
@@ -281,8 +314,9 @@ export default class Set extends BaseCommand {
     this.assertDeclared(loaded.schema.keys, key, shelf, stage);
 
     const file = envFilePath(path.join(projectDir, ROOT_DIR), shelf, stage);
-    const doc = parseDocument(await readFile(file, "utf8"));
-    return { loaded, projectDir, file, doc };
+    const source = await readFile(file, "utf8");
+    const doc = parseDocument(source);
+    return { loaded, projectDir, file, source, doc };
   }
 
   /** Reject a key not declared in the consuming shelf's schema — set never declares keys. */
@@ -310,8 +344,18 @@ export default class Set extends BaseCommand {
    * returned reference (bare or explicit, floating or pinned) in the document.
    * The provider is known to exist from the loaded config; an unregistered
    * adapter surfaces `ADAPTER_UNAVAILABLE` from `createAdapter` before anything
-   * is written to the file. Returns the pinned version recorded (for the result),
-   * or `undefined` when the reference floats.
+   * is written to the file. Returns the pinned version recorded (for the result;
+   * `undefined` when the reference floats) and the explicit secret name the
+   * binding records, if any.
+   *
+   * A key already bound to an explicit `!secret { ref: NAME }` keeps that binding
+   * (issue #270): the value goes to NAME — a new version on a versioned store —
+   * which must already exist (`SECRET_NOT_FOUND` otherwise, and nothing is
+   * written), and the binding is re-pinned to the version just written. Writing
+   * the convention-named secret instead would leave NAME, and every native
+   * consumer that mounts it, on the old value while reporting success. `--rebind`
+   * opts into that move explicitly: the convention secret is written and the ref
+   * is dropped.
    */
   private async writeSecret(
     loaded: Awaited<ReturnType<typeof loadEnvironment>>,
@@ -321,10 +365,19 @@ export default class Set extends BaseCommand {
     key: string,
     value: string,
     doc: ReturnType<typeof parseDocument>,
-    floating: boolean
-  ): Promise<number | undefined> {
+    opts: { floating: boolean; rebind: boolean }
+  ): Promise<{ version?: number; secretRef?: string }> {
     const adapter = adapterForEnvironment(projectDir, loaded);
-    const { ref, version } = await adapter.write(key, value);
+    const bound = boundRef(loaded.environment.keys[key]);
+    if (opts.rebind && bound === undefined) {
+      // Not an error: the write is exactly what was asked for (a convention-named
+      // secret). But say so, rather than let a no-op flag pass silently.
+      this.warn(
+        `--rebind has no effect: '${key}' in '${shelf}/${stage}' is not bound to an explicit !secret { ref: ... }.`
+      );
+    }
+
+    const { ref, version } = await adapter.write(key, value, opts.rebind ? undefined : bound);
 
     // The fake/reference convention names a secret
     // `keyshelf__{project}__{shelf}__{stage}__{key}`; a returned ref matching that
@@ -335,9 +388,10 @@ export default class Set extends BaseCommand {
       `keyshelf__${loaded.config.project}__${shelf}__${stage}`,
       key
     );
-    const pin = floating ? undefined : version;
-    setSecretRef(doc, key, secretRefForm(ref, conventionRef, pin));
-    return pin === undefined ? undefined : Number.parseInt(pin, 10);
+    const pin = opts.floating ? undefined : version;
+    const form = secretRefForm(ref, conventionRef, pin);
+    setSecretRef(doc, key, form);
+    return { ...pinnedVersion(pin), ...explicitRef(form) };
   }
 
   /**
@@ -396,6 +450,24 @@ function malformedRef(spec: string): KeyshelfError {
     `'${spec}' is not a valid --ref target; expected '<shelf>' or '<shelf>/<stage>'.`,
     { reason: "expected '<shelf>' or '<shelf>/<stage>'", target: spec }
   );
+}
+
+/**
+ * The explicit `!secret { ref: NAME }` payload a key is already bound to, or
+ * `undefined` when it is not a secret or resolves by convention (issue #270).
+ */
+function boundRef(existing: EnvironmentValue | undefined): unknown {
+  return existing?.kind === "secret" && hasExplicitName(existing.ref) ? existing.ref : undefined;
+}
+
+/** The `version` field of a {@link SetResult} for a recorded pin, if any. */
+function pinnedVersion(pin: string | undefined): { version?: number } {
+  return pin === undefined ? {} : { version: Number.parseInt(pin, 10) };
+}
+
+/** The `secretRef` field of a {@link SetResult} for an explicit binding, if any. */
+function explicitRef(form: SecretRefForm): { secretRef?: string } {
+  return !form.bare && typeof form.ref === "string" ? { secretRef: form.ref } : {};
 }
 
 function noInput(key: string): KeyshelfError {

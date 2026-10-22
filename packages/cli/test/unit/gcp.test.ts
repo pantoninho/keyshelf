@@ -150,6 +150,65 @@ describe("GcpAdapter", () => {
     });
   });
 
+  describe("write through an explicit ref (#270)", () => {
+    it("adds a version to the referenced secret, never creating one, and reports it", async () => {
+      const { client, createCalls, seed } = fakeClient();
+      seed("keyshelf__myapp__production__api-key", Buffer.from("old", "utf8"));
+      const a = adapter(client);
+      const result = await a.write("API_KEY", "rotated", {
+        ref: "keyshelf__myapp__production__api-key",
+        version: 1
+      });
+      expect(result).toEqual({ ref: "keyshelf__myapp__production__api-key", version: "2" });
+      expect(createCalls).toEqual([]);
+      expect(await a.resolve("API_KEY", { ref: "keyshelf__myapp__production__api-key" })).toBe(
+        "rotated"
+      );
+      // The convention-named secret was not written.
+      expect((await captureError(() => a.resolve("API_KEY"))).code).toBe("SECRET_NOT_FOUND");
+    });
+
+    it("writes to a foreign full-resource ref in its own project", async () => {
+      const { client, seed } = fakeClient();
+      seed("shared-token", Buffer.from("old", "utf8"));
+      const a = adapter(client);
+      const ref = "projects/other-proj/secrets/shared-token";
+      const result = await a.write("TOKEN", "rotated", { ref });
+      expect(result).toEqual({ ref, version: "2" });
+      expect(await a.resolve("TOKEN", { ref })).toBe("rotated");
+    });
+
+    it("maps a missing referenced secret to SECRET_NOT_FOUND naming the ref", async () => {
+      const { client, createCalls } = fakeClient();
+      const error = await captureError(() =>
+        adapter(client).write("API_KEY", "rotated", { ref: "no-such-secret" })
+      );
+      expect(error.code).toBe("SECRET_NOT_FOUND");
+      expect(error.message).toContain("no-such-secret");
+      expect(createCalls).toEqual([]);
+    });
+
+    it("accepts a ref naming /versions/latest and leaves it floating", async () => {
+      const { client, seed } = fakeClient();
+      seed("shared-token", Buffer.from("old", "utf8"));
+      const a = adapter(client);
+      const ref = "projects/test-proj/secrets/shared-token/versions/latest";
+      const result = await a.write("TOKEN", "rotated", { ref });
+      // No version: the name already selects latest, so a pin would be ignored.
+      expect(result).toEqual({ ref, version: undefined });
+      expect(await a.resolve("TOKEN", { ref })).toBe("rotated");
+    });
+
+    it("refuses a ref whose name pins a version, since the new version would never be read", async () => {
+      const { client, seed } = fakeClient();
+      seed("shared-token", Buffer.from("old", "utf8"));
+      const ref = "projects/test-proj/secrets/shared-token/versions/1";
+      const error = await captureError(() => adapter(client).write("TOKEN", "rotated", { ref }));
+      expect(error.code).toBe("ADAPTER_ERROR");
+      expect(error.message).toContain(ref);
+    });
+  });
+
   describe("version pinning (ADR-0009)", () => {
     it("resolves exactly the pinned version, not latest", async () => {
       const { client } = fakeClient();

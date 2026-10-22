@@ -104,8 +104,15 @@ export class FakeAdapter implements Adapter {
     return value;
   }
 
-  async write(key: string, value: string): Promise<WriteResult> {
-    const name = conventionName(this.namespace, key);
+  async write(key: string, value: string, ref?: unknown): Promise<WriteResult> {
+    // An explicit ref writes to the secret it names, which must already exist —
+    // never silently created (issue #270), mirroring a real backend's NOT_FOUND.
+    const explicit = hasExplicitName(ref);
+    const name = explicit ? refName("fake", ref) : conventionName(this.namespace, key);
+    if (explicit && this.store.read(name) === undefined) {
+      throw secretNotFound({ key, storedName: name, explicit: true });
+    }
+
     this.store.put(name, value);
     // Return the canonical stored name so a foreign environment can reference
     // this value explicitly via `!secret { ref: <name> }`. The fake does not

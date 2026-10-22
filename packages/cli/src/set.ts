@@ -1,4 +1,15 @@
-import { type Document, isMap, Scalar, YAMLMap } from "yaml";
+import {
+  Document,
+  isMap,
+  isNode,
+  isScalar,
+  isSeq,
+  Pair,
+  Parser,
+  parseDocument,
+  Scalar,
+  YAMLMap
+} from "yaml";
 import type { KeyReference } from "./model.js";
 
 /**
@@ -127,6 +138,305 @@ export function setSecretRef(doc: Document, key: string, form: SecretRefForm): v
  */
 export function serializeEnvDoc(doc: Document): string {
   return doc.toString().replace(/(: !secret) +(?=\r?$)/gm, "$1");
+}
+
+/**
+ * Serialize a single-key edit of an environment document as a *minimal textual
+ * edit* of the file's original `source` (issue #270 b/c). `doc` is `source`
+ * parsed and then mutated for exactly one `key` by {@link setConfigValue},
+ * {@link setSecretRef} or {@link setKeyReference}.
+ *
+ * Re-serializing the whole document is lossy for text `set` was never asked to
+ * touch: the `yaml` library rewrites every other bare `!secret` as `!secret ""`
+ * and re-attaches comments that precede a key to the previous key's line. So
+ * instead only the edited key's own span (from its key to the end of its value,
+ * keeping the comments it holds, see {@link placeComments}) is replaced with a
+ * freshly rendered `KEY: value`; a key new to the file is appended as a new line
+ * after the last entry of `keys:`. Everything else — comments, blank lines,
+ * quoting, other keys — is left as it was.
+ *
+ * Safety net: when the minimal edit is not possible (no block `keys:` mapping
+ * yet, an unusual layout) or its result would not parse to the same content as
+ * the full re-serialization, the full re-serialization ({@link serializeEnvDoc})
+ * is written instead — lossy for formatting, never for content.
+ */
+export function serializeEnvEdit(source: string, doc: Document, key: string): string {
+  const full = serializeEnvDoc(doc);
+  const spliced = spliceKey(source, doc, key);
+  if (spliced === undefined || !sameContent(spliced, full)) {
+    return full;
+  }
+
+  return spliced;
+}
+
+/** The pair for `key` in a document's top-level `keys:` mapping, if any. */
+function findKeyPair(contents: unknown, key: string): Pair | undefined {
+  if (!isMap(contents)) return undefined;
+  const keys = contents.get("keys", true);
+  if (!isMap(keys)) return undefined;
+  return keys.items.find(
+    (pair) => pair.key === key || (isScalar(pair.key) && pair.key.value === key)
+  ) as Pair | undefined;
+}
+
+/** Move `end` back over trailing whitespace (spaces, tabs, line breaks), not past `floor`. */
+function trimEnd(source: string, end: number, floor: number): number {
+  let at = end;
+  while (at > floor && /[ \t\r\n]/.test(source[at - 1])) at--;
+  return at;
+}
+
+/** The run of spaces between the start of `at`'s line and `at`, or `undefined` if not all spaces. */
+function indentAt(source: string, at: number): string | undefined {
+  const lineStart = source.lastIndexOf("\n", at - 1) + 1;
+  const indent = source.slice(lineStart, at);
+  return /^ *$/.test(indent) ? indent : undefined;
+}
+
+/**
+ * Render `key: value` as a standalone block-mapping entry, its continuation lines
+ * (a block `!secret`/`!ref` payload, a block scalar) shifted right by `indent` so
+ * they nest under a key at that column. Returns the text without a trailing line
+ * break, joined with `eol`.
+ */
+function renderPair(key: string, value: unknown, indent: string, eol: string): string {
+  return renderLines(key, value, indent).join(eol);
+}
+
+/** {@link renderPair}, as its individual lines. */
+function renderLines(key: string, value: unknown, indent: string): string[] {
+  const one = new Document();
+  const map = new YAMLMap();
+  map.items.push(new Pair(new Scalar(key), value));
+  one.contents = map;
+  const lines = serializeEnvDoc(one)
+    .replace(/\r?\n$/, "")
+    .split(/\r?\n/);
+  return lines.map((line, i) => (i === 0 || line === "" ? line : indent + line));
+}
+
+/** A comment in the source: its offset and its text (from `#` to end of line). */
+interface SourceComment {
+  offset: number;
+  text: string;
+  /** The whitespace that separated a same-line comment from the value, when kept. */
+  gap?: string;
+}
+
+/**
+ * Every comment in `source`, read from the `yaml` CST — so a `#` inside a quoted
+ * string is never mistaken for one.
+ */
+function commentsIn(source: string): SourceComment[] {
+  const out: SourceComment[] = [];
+  for (const token of new Parser().parse(source)) collectComments(token, out);
+  return out;
+}
+
+/** Walk a CST token tree, collecting its `comment` tokens. */
+function collectComments(node: unknown, out: SourceComment[]): void {
+  if (node === null || typeof node !== "object") return;
+  const token = node as { type?: unknown; offset?: unknown; source?: unknown };
+  if (token.type === "comment" && typeof token.offset === "number") {
+    out.push({ offset: token.offset, text: String(token.source) });
+  }
+
+  for (const child of Object.values(node)) collectComments(child, out);
+}
+
+/** The name of the first mapping field (`name:`) on the first content line after `from`, before `end`. */
+function nextField(source: string, from: number, end: number): string | undefined {
+  const lines = source.slice(from, end).split("\n").slice(1);
+  const content = lines.find((line) => !/^\s*(#.*)?\r?$/.test(line));
+  return content?.match(/^\s*([^\s#:'"][^:]*?):(\s|$)/)?.[1];
+}
+
+/**
+ * Re-home the comments of a rewritten key so none is lost (issue #270). A comment
+ * on the key's own line (`KEY: # note`, or `KEY: !secret # note` after a one-line
+ * value) stays on the first rendered line. A full-line comment inside the value
+ * stays above the same payload field (`ref:`, `version:`) when the rendered value
+ * still has it; otherwise it moves to just above the key.
+ */
+function placeComments(
+  source: string,
+  start: number,
+  end: number,
+  comments: SourceComment[],
+  lines: string[]
+): { above: string[]; lines: string[] } {
+  const above: string[] = [];
+  const out = [...lines];
+  for (const comment of comments) {
+    if (!source.slice(start, comment.offset).includes("\n")) {
+      out[0] = `${out[0]}${comment.gap ?? " "}${comment.text}`;
+      continue;
+    }
+
+    const field = nextField(source, comment.offset, end);
+    const at =
+      field === undefined
+        ? -1
+        : out.findIndex((l, i) => i > 0 && l.trimStart().startsWith(`${field}:`));
+    if (at === -1) {
+      above.push(comment.text);
+      continue;
+    }
+
+    out.splice(at, 0, `${out[at].match(/^ */)?.[0] ?? ""}${comment.text}`);
+  }
+
+  return { above, lines: out };
+}
+
+/**
+ * The comment trailing a one-line value on its own line (`KEY: !secret # note`),
+ * which sits just past the value's span. `undefined` when there is none.
+ */
+function trailingComment(
+  source: string,
+  end: number,
+  comments: SourceComment[]
+): SourceComment | undefined {
+  return comments.find(
+    (comment) => comment.offset >= end && /^[ \t]*$/.test(source.slice(end, comment.offset))
+  );
+}
+
+/**
+ * Compute the minimal textual edit of `source` that applies the edited `key` of
+ * `doc`, or `undefined` when the layout does not allow one (the caller then
+ * falls back to a full re-serialization).
+ */
+function spliceKey(source: string, doc: Document, key: string): string | undefined {
+  const edited = findKeyPair(doc.contents, key);
+  if (edited === undefined || !isNode(edited.value)) return undefined;
+
+  const original = parseDocument(source);
+  if (original.errors.length > 0 || !isMap(original.contents)) return undefined;
+  const keys = original.contents.get("keys", true);
+  if (!isMap(keys) || keys.flow || keys.items.length === 0) return undefined;
+  const eol = source.includes("\r\n") ? "\r\n" : "\n";
+
+  const target = findKeyPair(original.contents, key);
+  return target === undefined
+    ? appendKey(source, keys.items[keys.items.length - 1], key, edited.value, eol)
+    : replaceKey(source, target, key, edited.value, eol);
+}
+
+/**
+ * Where a parsed pair sits in its source: the key's start offset, the end offset
+ * of its value, and the indentation of its line. `undefined` when a node carries
+ * no range or the key is not indented by spaces alone.
+ */
+function pairSpan(
+  source: string,
+  pair: Pair
+): { start: number; valueEnd: number; indent: string } | undefined {
+  if (!isNode(pair.key) || !isNode(pair.value)) return undefined;
+  const start = pair.key.range?.[0];
+  const valueEnd = pair.value.range?.[1];
+  if (start === undefined || valueEnd === undefined) return undefined;
+  const indent = indentAt(source, start);
+  return indent === undefined ? undefined : { start, valueEnd, indent };
+}
+
+/**
+ * Replace `target`'s span, from its key to the end of its value, with the edited
+ * pair, keeping every comment the span held or that trailed a one-line value
+ * (see {@link placeComments}). Trailing whitespace after a multi-line value is
+ * left in place.
+ */
+function replaceKey(
+  source: string,
+  target: Pair,
+  key: string,
+  edited: unknown,
+  eol: string
+): string | undefined {
+  const span = pairSpan(source, target);
+  if (span === undefined) return undefined;
+  let end = trimEnd(source, span.valueEnd, span.start);
+  const all = commentsIn(source);
+  const comments = all.filter((c) => c.offset > span.start && c.offset < end);
+  // A comment after a one-line value belongs to the key's line: carry it along,
+  // or it would land after the last line of a value rendered as a block.
+  const trailing = source.slice(span.start, end).includes("\n")
+    ? undefined
+    : trailingComment(source, end, all);
+  if (trailing !== undefined) {
+    comments.push({ ...trailing, gap: source.slice(end, trailing.offset) });
+    end = trailing.offset + trailing.text.length;
+  }
+
+  const rendered = renderLines(key, keepFlow(target.value, edited), span.indent);
+  const placed = placeComments(source, span.start, end, comments, rendered);
+  const above = placed.above.map((text) => `${text}${eol}${span.indent}`).join("");
+  return source.slice(0, span.start) + above + placed.lines.join(eol) + source.slice(end);
+}
+
+/** Keep a one-line flow payload (`!secret { ref: NAME }`) on one line when it is rewritten. */
+function keepFlow(previous: unknown, edited: unknown): unknown {
+  if (!isMap(previous) || !previous.flow || !isMap(edited)) return edited;
+  const flow = edited.clone();
+  flow.flow = true;
+  return flow;
+}
+
+/**
+ * Append a key new to the file on its own line after `last`, the final entry of
+ * `keys:`, at that entry's indentation.
+ */
+function appendKey(
+  source: string,
+  last: Pair,
+  key: string,
+  edited: unknown,
+  eol: string
+): string | undefined {
+  const span = pairSpan(source, last);
+  if (span === undefined) return undefined;
+  const line = span.indent + renderPair(key, edited, span.indent, eol);
+  const newline = source.indexOf("\n", trimEnd(source, span.valueEnd, span.start));
+  if (newline === -1) {
+    return source + eol + line;
+  }
+
+  return source.slice(0, newline + 1) + line + eol + source.slice(newline + 1);
+}
+
+/**
+ * Whether two environment texts parse to the same content: the same mappings,
+ * scalars and tags. The value of a scalar `!secret` is ignored (the loader reads
+ * any scalar `!secret` as a bare secret, so `!secret` and `!secret ""` agree).
+ */
+function sameContent(a: string, b: string): boolean {
+  const left = parseDocument(a);
+  const right = parseDocument(b);
+  if (left.errors.length > 0 || right.errors.length > 0) return false;
+  return JSON.stringify(contentOf(left.contents)) === JSON.stringify(contentOf(right.contents));
+}
+
+/** A comment- and layout-free projection of a parsed node, for {@link sameContent}. */
+function contentOf(node: unknown): unknown {
+  if (node === null || node === undefined) return null;
+  if (isScalar(node)) {
+    return { tag: node.tag ?? null, value: node.tag === "!secret" ? null : node.value };
+  }
+
+  if (isMap(node)) {
+    return {
+      tag: node.tag ?? null,
+      map: node.items.map((pair) => [contentOf(pair.key), contentOf(pair.value)])
+    };
+  }
+
+  if (isSeq(node)) {
+    return { tag: node.tag ?? null, seq: node.items.map((item) => contentOf(item)) };
+  }
+
+  return { other: String(node) };
 }
 
 /**

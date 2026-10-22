@@ -139,6 +139,32 @@ export function runAdapterContractSuite(harness: AdapterHarness): void {
         await adapter.write("PIN_ONLY_KEY", "the-value");
         expect(await adapter.resolve("PIN_ONLY_KEY", { version: 1 })).toBe("the-value");
       });
+
+      it("writes through an explicit ref to the secret it names, not the convention location (#270)", async () => {
+        // A key bound to `!secret { ref: NAME }` that is re-set must update NAME:
+        // that is the secret the binding (and any native consumer) reads.
+        const { ref } = await adapter.write("CANONICAL_KEY", "old-value");
+        const name = ref ?? "CANONICAL_KEY";
+        await adapter.write("BOUND_KEY", "new-value", { ref: name });
+        expect(await adapter.resolve("CANONICAL_KEY")).toBe("new-value");
+        expect(await adapter.resolve("BOUND_KEY", { ref: name })).toBe("new-value");
+        // Nothing was stored under the bound key's own convention location.
+        const error = await captureError(() => adapter.resolve("BOUND_KEY"));
+        expect(error.code).toBe("SECRET_NOT_FOUND");
+      });
+
+      it("refuses a write through an explicit ref to a missing secret with SECRET_NOT_FOUND (#270)", async () => {
+        // A pinned name is never silently created: a mistyped ref must fail loudly.
+        const error = await captureError(() =>
+          adapter.write("BOUND_KEY", "value", { ref: "nonexistent-foreign-name" })
+        );
+        expect(error.code).toBe("SECRET_NOT_FOUND");
+        expect(error.message).toContain("nonexistent-foreign-name");
+        const absent = await captureError(() =>
+          adapter.resolve("BOUND_KEY", { ref: "nonexistent-foreign-name" })
+        );
+        expect(absent.code).toBe("SECRET_NOT_FOUND");
+      });
     });
 
     if (harness.supportsVersionPinning ?? false) {

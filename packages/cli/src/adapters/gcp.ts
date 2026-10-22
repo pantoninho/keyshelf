@@ -161,7 +161,11 @@ export class GcpAdapter implements Adapter {
       : Buffer.from(data).toString("utf8");
   }
 
-  async write(key: string, value: string): Promise<{ ref: unknown; version?: string }> {
+  async write(
+    key: string,
+    value: string,
+    ref?: unknown
+  ): Promise<{ ref: unknown; version?: string }> {
     if (value === "") {
       // Secret Manager rejects an empty payload, and an empty secret has no form
       // a native consumer (Cloud Run mount, gcloud) could read. Rather than
@@ -173,23 +177,32 @@ export class GcpAdapter implements Adapter {
       );
     }
 
-    const name = conventionName(this.namespace, key);
-    await this.ensureSecret(name);
+    // An explicit ref writes a new version of the secret it names (issue #270).
+    // That secret is never created — a missing one maps to `SECRET_NOT_FOUND` from
+    // `addSecretVersion` — so a mistyped ref cannot spawn a stray secret. A
+    // convention write creates its secret on first use.
+    const explicit = hasExplicitName(ref);
+    const name = explicit ? writableRefName(key, ref) : conventionName(this.namespace, key);
+    if (!explicit) await this.ensureSecret(name);
     let response: VersionResponse;
     try {
       [response] = await this.client.addSecretVersion({
-        parent: this.secretResource(name),
+        parent: this.secretResource(withoutLatest(name)),
         payload: { data: Buffer.from(value, "utf8") }
       });
     } catch (error) {
-      throw mapGcpError(error, { key, ref: name });
+      throw mapGcpError(error, { key, ref: name, explicit });
     }
 
-    // The value is stored under the convention secret id, which is exactly the
-    // name `set` resolves by — returning it records a bare `!secret`, and a
+    // A convention write stores under the convention secret id, which is exactly
+    // the name `set` resolves by — returning it records a bare `!secret`, and a
     // foreign environment can reference it explicitly via `!secret { ref: name }`.
-    // The created version is surfaced so `set` can pin `version: N` (ADR-0009).
-    return { ref: name, version: versionFromResource(response.name) };
+    // An explicit write returns the ref's name, so `set` keeps the binding. The
+    // created version is surfaced so `set` can pin `version: N` (ADR-0009) —
+    // except for a ref naming `.../versions/latest`, which selects latest itself
+    // (resolution would ignore a pin), so it stays floating.
+    const version = name === withoutLatest(name) ? versionFromResource(response.name) : undefined;
+    return { ref: name, version };
   }
 
   /**
@@ -287,6 +300,32 @@ export class GcpAdapter implements Adapter {
 
     return `projects/${this.projectId}/secrets/${name}/versions/${selector}`;
   }
+}
+
+/**
+ * The secret name an explicit `!secret { ref: NAME }` writes to: a bare secret id
+ * in the configured project, or a full `projects/.../secrets/...` resource in any
+ * project. A name ending in `/versions/latest` is accepted (it reads whatever is
+ * newest, so the new version is what it resolves). A name that pins a concrete
+ * version (`.../versions/N`) is refused: resolution honors that embedded pin
+ * verbatim, so a new version would never be read (issue #270).
+ */
+function writableRefName(key: string, ref: unknown): string {
+  const name = refName("gcp", ref);
+  if (withoutLatest(name).includes("/versions/")) {
+    throw new KeyshelfError(
+      "ADAPTER_ERROR",
+      `Key '${key}' is bound to '${name}', which pins a version in its name; a new version would never be read. Edit the ref, or pass --rebind to move the key to its convention secret.`,
+      { key, ref: name }
+    );
+  }
+
+  return name;
+}
+
+/** A secret name with any trailing `/versions/latest` selector removed. */
+function withoutLatest(name: string): string {
+  return name.replace(/\/versions\/latest$/, "");
 }
 
 /** A gRPC/GoogleError, narrowed to the fields we map on. */

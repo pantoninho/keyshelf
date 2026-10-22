@@ -206,6 +206,11 @@ bare `!secret`. To advance an existing pin to the current latest version
 _without_ changing the value, use `keyshelf set --pin-latest`. The flags
 `--secret`, `--floating`, and `--pin-latest` are mutually exclusive.
 
+A key bound to an explicit `!secret { ref: NAME }` stays bound to it: `set
+--secret` adds the new value to `NAME` (which must already exist) and keeps the
+`ref`, so whatever else reads `NAME` sees the rotation. To move the key onto its
+convention-named secret instead, pass `--rebind`.
+
 ```sh
 # Pin by default: records `DATABASE_PASSWORD: !secret { version: N }`.
 echo "rotated" | keyshelf set DATABASE_PASSWORD backend/production --secret
