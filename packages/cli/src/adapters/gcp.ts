@@ -161,7 +161,11 @@ export class GcpAdapter implements Adapter {
       : Buffer.from(data).toString("utf8");
   }
 
-  async write(key: string, value: string): Promise<{ ref: unknown; version?: string }> {
+  async write(
+    key: string,
+    value: string,
+    ref?: unknown
+  ): Promise<{ ref: unknown; version?: string }> {
     if (value === "") {
       // Secret Manager rejects an empty payload, and an empty secret has no form
       // a native consumer (Cloud Run mount, gcloud) could read. Rather than
@@ -171,6 +175,10 @@ export class GcpAdapter implements Adapter {
         "The gcp adapter cannot store an empty value: Google Cloud Secret Manager rejects empty secret payloads.",
         { key }
       );
+    }
+
+    if (hasExplicitName(ref)) {
+      return this.writeExplicit(key, value, refName("gcp", ref));
     }
 
     const name = conventionName(this.namespace, key);
@@ -189,6 +197,41 @@ export class GcpAdapter implements Adapter {
     // name `set` resolves by — returning it records a bare `!secret`, and a
     // foreign environment can reference it explicitly via `!secret { ref: name }`.
     // The created version is surfaced so `set` can pin `version: N` (ADR-0009).
+    return { ref: name, version: versionFromResource(response.name) };
+  }
+
+  /**
+   * Add a version to the secret an explicit `!secret { ref: NAME }` names (issue
+   * #270): a bare secret id in the configured project, or a full
+   * `projects/.../secrets/...` resource in any project. The secret is never
+   * created — a missing one maps to `SECRET_NOT_FOUND` from `addSecretVersion` —
+   * so a mistyped ref cannot spawn a stray secret. A ref whose name already pins a
+   * version (`.../versions/N`) is refused: resolution honors that embedded pin
+   * verbatim, so the new version would never be read.
+   */
+  private async writeExplicit(
+    key: string,
+    value: string,
+    name: string
+  ): Promise<{ ref: unknown; version?: string }> {
+    if (name.includes("/versions/")) {
+      throw new KeyshelfError(
+        "ADAPTER_ERROR",
+        `Key '${key}' is bound to '${name}', which pins a version in its name; a new version would never be read. Edit the ref, or pass --rebind to move the key to its convention secret.`,
+        { key, ref: name }
+      );
+    }
+
+    let response: VersionResponse;
+    try {
+      [response] = await this.client.addSecretVersion({
+        parent: this.secretResource(name),
+        payload: { data: Buffer.from(value, "utf8") }
+      });
+    } catch (error) {
+      throw mapGcpError(error, { key, ref: name, explicit: true });
+    }
+
     return { ref: name, version: versionFromResource(response.name) };
   }
 

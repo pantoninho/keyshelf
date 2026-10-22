@@ -131,7 +131,7 @@ Reference adapters (e.g. `gcp`) name remote secrets by the **fixed** convention:
 keyshelf__{project}__{shelf}__{stage}__{key}
 ```
 
-(verified in `concierge/src/commands/set.ts` and `concierge/src/adapters/gcp.ts`). So `web/staging`'s `DATABASE_PASSWORD` in project `myapp` is stored as `keyshelf__myapp__web__staging__DATABASE_PASSWORD`. There is no configurable template — the only override is a per-key explicit reference (`!secret { ref: ... }`, e.g. to point at a foreign or pre-existing secret). Implications:
+(verified in `concierge/src/commands/set.ts` and `concierge/src/adapters/gcp.ts`). So `web/staging`'s `DATABASE_PASSWORD` in project `myapp` is stored as `keyshelf__myapp__web__staging__DATABASE_PASSWORD`. There is no configurable template — the only override is a per-key explicit reference (`!secret { ref: ... }`, e.g. to point at a foreign or pre-existing secret). `set --secret` on such a key writes the new value to the referenced secret and keeps the `ref`; pass `--rebind` only when you mean to move the key onto its convention-named secret. Implications:
 
 - The same key in two environments stays distinct in a shared backend (the `keyshelf__{project}__{shelf}__{stage}` prefix is the namespace).
 - Renaming the project, shelf, environment, or key changes the remote secret's name — the old value is **not** automatically migrated.

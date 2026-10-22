@@ -80,7 +80,31 @@ export class SopsAdapter implements Adapter {
     return store[name];
   }
 
-  async write(key: string, value: string): Promise<WriteResult> {
+  async write(key: string, value: string, ref?: unknown): Promise<WriteResult> {
+    if (hasExplicitName(ref)) {
+      // An explicit ref names another entry in this store; write there, and only
+      // if it already exists — a pinned name is never silently created (#270).
+      const name = refName("sops", ref);
+      const store = await this.decryptStore();
+      if (!Object.prototype.hasOwnProperty.call(store, name)) {
+        throw secretNotFound({
+          key,
+          storedName: name,
+          explicit: true,
+          where: `'${this.storePath}'`,
+          fields: { file: this.storePath }
+        });
+      }
+
+      await this.sops([
+        "set",
+        this.storePath,
+        `["${jsonPathSegment(name)}"]`,
+        JSON.stringify(value)
+      ]);
+      return { ref: name };
+    }
+
     await this.ensureStore();
     // `sops set` mutates the encrypted file in place, re-encrypting under the
     // recipients its `.sops.yaml` creation rules define. The value is carried as

@@ -78,12 +78,20 @@ export interface Adapter {
    *
    * @param key    the environment key name (the convention location).
    * @param value  the plaintext to store, preserved byte-exactly.
+   * @param ref    the optional explicit `!secret { ref: ... }` payload the key is
+   *   already bound to (issue #270). When it carries an explicit name, the value
+   *   is written to *that* stored secret (a new version, on a versioned store)
+   *   instead of the convention location, so rotating a pinned secret updates the
+   *   secret the binding — and any native consumer — actually reads. The named
+   *   secret must already exist: a missing one is `SECRET_NOT_FOUND`, never
+   *   silently created. `undefined` (or a name-less, version-only payload) means
+   *   a convention write.
    * @returns a {@link WriteResult}: the reference to record (the stored name, or
    *   `undefined` for a convention write), plus the concrete `version` the write
    *   created for adapters that version their store (gcp) — `undefined`
    *   otherwise. `set` records the version as a pin per ADR-0009.
    */
-  write(key: string, value: string): Promise<WriteResult>;
+  write(key: string, value: string, ref?: unknown): Promise<WriteResult>;
 
   /**
    * Read the **current latest version** of a key without writing a new one

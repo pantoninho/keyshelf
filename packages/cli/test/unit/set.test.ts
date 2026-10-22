@@ -1,12 +1,13 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { parseDocument } from "yaml";
+import { type Document, parseDocument } from "yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadEnvironment } from "../../src/loader.js";
 import {
   secretRefForm,
   serializeEnvDoc,
+  serializeEnvEdit,
   setConfigValue,
   setKeyReference,
   setSecretRef
@@ -160,6 +161,82 @@ describe("setSecretRef", () => {
     const both = parseDocument("provider: local\nkeys:\n  REGION: eu\n");
     setSecretRef(both, "DB", { bare: false, ref: "shared-db-url", version: 9 });
     expect(serializeEnvDoc(both)).toBe(both.toString());
+  });
+});
+
+describe("serializeEnvEdit (minimal textual edit, #270 b/c)", () => {
+  function edit(source: string, key: string, mutate: (doc: Document) => void): string {
+    const doc = parseDocument(source);
+    mutate(doc);
+    return serializeEnvEdit(source, doc, key);
+  }
+
+  const SOURCE = `provider: store
+keys:
+  # leading comment
+  A_KEY: !secret
+  # documents B_KEY
+  B_KEY: !secret
+    ref: shared-b
+    version: 2
+
+  C_KEY: !secret # trailing note
+  PLAIN: "quoted" # kept
+`;
+
+  it("replaces a multi-line block payload in place, leaving the rest byte-identical", () => {
+    const out = edit(SOURCE, "B_KEY", (doc) =>
+      setSecretRef(doc, "B_KEY", { bare: false, ref: "shared-b", version: 3 })
+    );
+    expect(out).toBe(SOURCE.replace("version: 2", "version: 3"));
+  });
+
+  it("keeps a same-line trailing comment when rewriting the key", () => {
+    const out = edit(SOURCE, "C_KEY", (doc) => setConfigValue(doc, "C_KEY", "plain"));
+    expect(out).toBe(
+      SOURCE.replace("C_KEY: !secret # trailing note", "C_KEY: plain # trailing note")
+    );
+  });
+
+  it("appends a new key on its own line after the last entry", () => {
+    const out = edit(SOURCE, "NEW", (doc) => setKeyReference(doc, "NEW", { shelf: "shared" }));
+    expect(out).toBe(`${SOURCE}  NEW: !ref\n    shelf: shared\n`);
+  });
+
+  it("keeps a one-line flow payload on one line when re-pinning it", () => {
+    const source = "provider: store\nkeys:\n  K: !secret { ref: shared, version: 2 } # note\n";
+    const out = edit(source, "K", (doc) =>
+      setSecretRef(doc, "K", { bare: false, ref: "shared", version: 3 })
+    );
+    expect(out).toBe("provider: store\nkeys:\n  K: !secret { ref: shared, version: 3 } # note\n");
+  });
+
+  it("appends after a final line with no trailing newline", () => {
+    const source = "provider: store\nkeys:\n  A: x";
+    const out = edit(source, "B", (doc) => setConfigValue(doc, "B", "y"));
+    expect(out).toBe("provider: store\nkeys:\n  A: x\n  B: y");
+  });
+
+  it("preserves CRLF line endings", () => {
+    const source = "provider: store\r\nkeys:\r\n  A: !secret\r\n  B: x\r\n";
+    const out = edit(source, "B", (doc) => setSecretRef(doc, "B", { bare: false, ref: "foreign" }));
+    expect(out).toBe(
+      "provider: store\r\nkeys:\r\n  A: !secret\r\n  B: !secret\r\n    ref: foreign\r\n"
+    );
+  });
+
+  it("falls back to a full re-serialization when there is no keys: mapping yet", () => {
+    const source = "provider: store\n";
+    const doc = parseDocument(source);
+    setConfigValue(doc, "A", "x");
+    expect(serializeEnvEdit(source, doc, "A")).toBe(serializeEnvDoc(doc));
+  });
+
+  it("falls back to a full re-serialization for a flow keys: mapping", () => {
+    const source = "provider: store\nkeys: { A: x }\n";
+    const doc = parseDocument(source);
+    setConfigValue(doc, "A", "y");
+    expect(serializeEnvEdit(source, doc, "A")).toBe(serializeEnvDoc(doc));
   });
 });
 
