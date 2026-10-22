@@ -226,38 +226,70 @@ function spliceKey(source: string, doc: Document, key: string): string | undefin
   const eol = source.includes("\r\n") ? "\r\n" : "\n";
 
   const target = findKeyPair(original.contents, key);
-  if (target !== undefined) {
-    // Replace from the key to the end of its value. Trailing whitespace is left
-    // in place so a same-line comment (`KEY: !secret # note`) keeps its spacing.
-    if (!isNode(target.key) || !isNode(target.value)) return undefined;
-    const start = target.key.range?.[0];
-    const valueEnd = target.value.range?.[1];
-    if (start === undefined || valueEnd === undefined) return undefined;
-    const indent = indentAt(source, start);
-    if (indent === undefined) return undefined;
-    const end = trimEnd(source, valueEnd, start);
-    // Keep a one-line flow payload (`!secret { ref: NAME }`) on one line.
-    let value: unknown = edited.value;
-    if (isMap(target.value) && target.value.flow && isMap(edited.value)) {
-      const flow = edited.value.clone();
-      flow.flow = true;
-      value = flow;
-    }
+  return target === undefined
+    ? appendKey(source, keys.items[keys.items.length - 1], key, edited.value, eol)
+    : replaceKey(source, target, key, edited.value, eol);
+}
 
-    return source.slice(0, start) + renderPair(key, value, indent, eol) + source.slice(end);
-  }
+/**
+ * Where a parsed pair sits in its source: the key's start offset, the end offset
+ * of its value, and the indentation of its line. `undefined` when a node carries
+ * no range or the key is not indented by spaces alone.
+ */
+function pairSpan(
+  source: string,
+  pair: Pair
+): { start: number; valueEnd: number; indent: string } | undefined {
+  if (!isNode(pair.key) || !isNode(pair.value)) return undefined;
+  const start = pair.key.range?.[0];
+  const valueEnd = pair.value.range?.[1];
+  if (start === undefined || valueEnd === undefined) return undefined;
+  const indent = indentAt(source, start);
+  return indent === undefined ? undefined : { start, valueEnd, indent };
+}
 
-  // A key new to the file goes on its own line after the last entry of `keys:`,
-  // at that entry's indentation.
-  const last = keys.items[keys.items.length - 1];
-  if (!isNode(last.key) || !isNode(last.value)) return undefined;
-  const lastStart = last.key.range?.[0];
-  const lastValueEnd = last.value.range?.[1];
-  if (lastStart === undefined || lastValueEnd === undefined) return undefined;
-  const indent = indentAt(source, lastStart);
-  if (indent === undefined) return undefined;
-  const line = indent + renderPair(key, edited.value, indent, eol);
-  const newline = source.indexOf("\n", trimEnd(source, lastValueEnd, lastStart));
+/**
+ * Replace `target`'s span, from its key to the end of its value, with the edited
+ * pair. Trailing whitespace is left in place so a same-line comment
+ * (`KEY: !secret # note`) keeps its spacing.
+ */
+function replaceKey(
+  source: string,
+  target: Pair,
+  key: string,
+  edited: unknown,
+  eol: string
+): string | undefined {
+  const span = pairSpan(source, target);
+  if (span === undefined) return undefined;
+  const end = trimEnd(source, span.valueEnd, span.start);
+  const rendered = renderPair(key, keepFlow(target.value, edited), span.indent, eol);
+  return source.slice(0, span.start) + rendered + source.slice(end);
+}
+
+/** Keep a one-line flow payload (`!secret { ref: NAME }`) on one line when it is rewritten. */
+function keepFlow(previous: unknown, edited: unknown): unknown {
+  if (!isMap(previous) || !previous.flow || !isMap(edited)) return edited;
+  const flow = edited.clone();
+  flow.flow = true;
+  return flow;
+}
+
+/**
+ * Append a key new to the file on its own line after `last`, the final entry of
+ * `keys:`, at that entry's indentation.
+ */
+function appendKey(
+  source: string,
+  last: Pair,
+  key: string,
+  edited: unknown,
+  eol: string
+): string | undefined {
+  const span = pairSpan(source, last);
+  if (span === undefined) return undefined;
+  const line = span.indent + renderPair(key, edited, span.indent, eol);
+  const newline = source.indexOf("\n", trimEnd(source, span.valueEnd, span.start));
   if (newline === -1) {
     return source + eol + line;
   }

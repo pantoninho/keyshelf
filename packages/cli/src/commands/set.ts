@@ -10,6 +10,7 @@ import { KeyshelfError } from "../errors.js";
 import { findProjectDir, loadEnvironment } from "../loader.js";
 import { envFilePath, ROOT_DIR } from "../paths.js";
 import {
+  type SecretRefForm,
   secretRefForm,
   serializeEnvEdit,
   setConfigValue,
@@ -17,7 +18,7 @@ import {
   setSecretRef
 } from "../set.js";
 import { parseTarget } from "../target.js";
-import type { KeyReference } from "../model.js";
+import type { EnvironmentValue, KeyReference } from "../model.js";
 
 /** The structured result of a successful `set`. */
 interface SetResult {
@@ -367,11 +368,7 @@ export default class Set extends BaseCommand {
     opts: { floating: boolean; rebind: boolean }
   ): Promise<{ version?: number; secretRef?: string }> {
     const adapter = adapterForEnvironment(projectDir, loaded);
-    const existing = loaded.environment.keys[key];
-    const pinnedRef =
-      !opts.rebind && existing?.kind === "secret" && hasExplicitName(existing.ref)
-        ? existing.ref
-        : undefined;
+    const pinnedRef = opts.rebind ? undefined : boundRef(loaded.environment.keys[key]);
     const { ref, version } = await adapter.write(key, value, pinnedRef);
 
     // The fake/reference convention names a secret
@@ -386,10 +383,7 @@ export default class Set extends BaseCommand {
     const pin = opts.floating ? undefined : version;
     const form = secretRefForm(ref, conventionRef, pin);
     setSecretRef(doc, key, form);
-    return {
-      ...(pin === undefined ? {} : { version: Number.parseInt(pin, 10) }),
-      ...(form.bare || typeof form.ref !== "string" ? {} : { secretRef: form.ref })
-    };
+    return { ...pinnedVersion(pin), ...explicitRef(form) };
   }
 
   /**
@@ -448,6 +442,24 @@ function malformedRef(spec: string): KeyshelfError {
     `'${spec}' is not a valid --ref target; expected '<shelf>' or '<shelf>/<stage>'.`,
     { reason: "expected '<shelf>' or '<shelf>/<stage>'", target: spec }
   );
+}
+
+/**
+ * The explicit `!secret { ref: NAME }` payload a key is already bound to, or
+ * `undefined` when it is not a secret or resolves by convention (issue #270).
+ */
+function boundRef(existing: EnvironmentValue | undefined): unknown {
+  return existing?.kind === "secret" && hasExplicitName(existing.ref) ? existing.ref : undefined;
+}
+
+/** The `version` field of a {@link SetResult} for a recorded pin, if any. */
+function pinnedVersion(pin: string | undefined): { version?: number } {
+  return pin === undefined ? {} : { version: Number.parseInt(pin, 10) };
+}
+
+/** The `secretRef` field of a {@link SetResult} for an explicit binding, if any. */
+function explicitRef(form: SecretRefForm): { secretRef?: string } {
+  return !form.bare && typeof form.ref === "string" ? { secretRef: form.ref } : {};
 }
 
 function noInput(key: string): KeyshelfError {

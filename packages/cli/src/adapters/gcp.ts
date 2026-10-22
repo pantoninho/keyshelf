@@ -177,12 +177,13 @@ export class GcpAdapter implements Adapter {
       );
     }
 
-    if (hasExplicitName(ref)) {
-      return this.writeExplicit(key, value, refName("gcp", ref));
-    }
-
-    const name = conventionName(this.namespace, key);
-    await this.ensureSecret(name);
+    // An explicit ref writes a new version of the secret it names (issue #270).
+    // That secret is never created — a missing one maps to `SECRET_NOT_FOUND` from
+    // `addSecretVersion` — so a mistyped ref cannot spawn a stray secret. A
+    // convention write creates its secret on first use.
+    const explicit = hasExplicitName(ref);
+    const name = explicit ? writableRefName(key, ref) : conventionName(this.namespace, key);
+    if (!explicit) await this.ensureSecret(name);
     let response: VersionResponse;
     try {
       [response] = await this.client.addSecretVersion({
@@ -190,48 +191,14 @@ export class GcpAdapter implements Adapter {
         payload: { data: Buffer.from(value, "utf8") }
       });
     } catch (error) {
-      throw mapGcpError(error, { key, ref: name });
+      throw mapGcpError(error, { key, ref: name, explicit });
     }
 
-    // The value is stored under the convention secret id, which is exactly the
-    // name `set` resolves by — returning it records a bare `!secret`, and a
+    // A convention write stores under the convention secret id, which is exactly
+    // the name `set` resolves by — returning it records a bare `!secret`, and a
     // foreign environment can reference it explicitly via `!secret { ref: name }`.
-    // The created version is surfaced so `set` can pin `version: N` (ADR-0009).
-    return { ref: name, version: versionFromResource(response.name) };
-  }
-
-  /**
-   * Add a version to the secret an explicit `!secret { ref: NAME }` names (issue
-   * #270): a bare secret id in the configured project, or a full
-   * `projects/.../secrets/...` resource in any project. The secret is never
-   * created — a missing one maps to `SECRET_NOT_FOUND` from `addSecretVersion` —
-   * so a mistyped ref cannot spawn a stray secret. A ref whose name already pins a
-   * version (`.../versions/N`) is refused: resolution honors that embedded pin
-   * verbatim, so the new version would never be read.
-   */
-  private async writeExplicit(
-    key: string,
-    value: string,
-    name: string
-  ): Promise<{ ref: unknown; version?: string }> {
-    if (name.includes("/versions/")) {
-      throw new KeyshelfError(
-        "ADAPTER_ERROR",
-        `Key '${key}' is bound to '${name}', which pins a version in its name; a new version would never be read. Edit the ref, or pass --rebind to move the key to its convention secret.`,
-        { key, ref: name }
-      );
-    }
-
-    let response: VersionResponse;
-    try {
-      [response] = await this.client.addSecretVersion({
-        parent: this.secretResource(name),
-        payload: { data: Buffer.from(value, "utf8") }
-      });
-    } catch (error) {
-      throw mapGcpError(error, { key, ref: name, explicit: true });
-    }
-
+    // An explicit write returns the ref's name, so `set` keeps the binding. The
+    // created version is surfaced so `set` can pin `version: N` (ADR-0009).
     return { ref: name, version: versionFromResource(response.name) };
   }
 
@@ -330,6 +297,26 @@ export class GcpAdapter implements Adapter {
 
     return `projects/${this.projectId}/secrets/${name}/versions/${selector}`;
   }
+}
+
+/**
+ * The secret name an explicit `!secret { ref: NAME }` writes to: a bare secret id
+ * in the configured project, or a full `projects/.../secrets/...` resource in any
+ * project. A name that already pins a version (`.../versions/N`) is refused:
+ * resolution honors that embedded pin verbatim, so a new version would never be
+ * read (issue #270).
+ */
+function writableRefName(key: string, ref: unknown): string {
+  const name = refName("gcp", ref);
+  if (name.includes("/versions/")) {
+    throw new KeyshelfError(
+      "ADAPTER_ERROR",
+      `Key '${key}' is bound to '${name}', which pins a version in its name; a new version would never be read. Edit the ref, or pass --rebind to move the key to its convention secret.`,
+      { key, ref: name }
+    );
+  }
+
+  return name;
 }
 
 /** A gRPC/GoogleError, narrowed to the fields we map on. */
