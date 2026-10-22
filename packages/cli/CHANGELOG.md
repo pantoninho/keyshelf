@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.6.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.6.0...keyshelf-v6.6.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **set:** keep a pinned !secret ref and edit only the named key ([#270](https://github.com/pantoninho/keyshelf/issues/270)) ([#272](https://github.com/pantoninho/keyshelf/issues/272)) ([89ff9e1](https://github.com/pantoninho/keyshelf/commit/89ff9e16d56e03a69181c25366dd5c594aa5608b))
+
 ## [6.6.0](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.5.1...keyshelf-v6.6.0) (2026-06-30)
 
 
