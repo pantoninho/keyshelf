@@ -188,6 +188,17 @@ describe("GcpAdapter", () => {
       expect(createCalls).toEqual([]);
     });
 
+    it("accepts a ref naming /versions/latest and leaves it floating", async () => {
+      const { client, seed } = fakeClient();
+      seed("shared-token", Buffer.from("old", "utf8"));
+      const a = adapter(client);
+      const ref = "projects/test-proj/secrets/shared-token/versions/latest";
+      const result = await a.write("TOKEN", "rotated", { ref });
+      // No version: the name already selects latest, so a pin would be ignored.
+      expect(result).toEqual({ ref, version: undefined });
+      expect(await a.resolve("TOKEN", { ref })).toBe("rotated");
+    });
+
     it("refuses a ref whose name pins a version, since the new version would never be read", async () => {
       const { client, seed } = fakeClient();
       seed("shared-token", Buffer.from("old", "utf8"));

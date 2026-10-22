@@ -187,7 +187,7 @@ export class GcpAdapter implements Adapter {
     let response: VersionResponse;
     try {
       [response] = await this.client.addSecretVersion({
-        parent: this.secretResource(name),
+        parent: this.secretResource(withoutLatest(name)),
         payload: { data: Buffer.from(value, "utf8") }
       });
     } catch (error) {
@@ -198,8 +198,11 @@ export class GcpAdapter implements Adapter {
     // the name `set` resolves by — returning it records a bare `!secret`, and a
     // foreign environment can reference it explicitly via `!secret { ref: name }`.
     // An explicit write returns the ref's name, so `set` keeps the binding. The
-    // created version is surfaced so `set` can pin `version: N` (ADR-0009).
-    return { ref: name, version: versionFromResource(response.name) };
+    // created version is surfaced so `set` can pin `version: N` (ADR-0009) —
+    // except for a ref naming `.../versions/latest`, which selects latest itself
+    // (resolution would ignore a pin), so it stays floating.
+    const version = name === withoutLatest(name) ? versionFromResource(response.name) : undefined;
+    return { ref: name, version };
   }
 
   /**
@@ -302,13 +305,14 @@ export class GcpAdapter implements Adapter {
 /**
  * The secret name an explicit `!secret { ref: NAME }` writes to: a bare secret id
  * in the configured project, or a full `projects/.../secrets/...` resource in any
- * project. A name that already pins a version (`.../versions/N`) is refused:
- * resolution honors that embedded pin verbatim, so a new version would never be
- * read (issue #270).
+ * project. A name ending in `/versions/latest` is accepted (it reads whatever is
+ * newest, so the new version is what it resolves). A name that pins a concrete
+ * version (`.../versions/N`) is refused: resolution honors that embedded pin
+ * verbatim, so a new version would never be read (issue #270).
  */
 function writableRefName(key: string, ref: unknown): string {
   const name = refName("gcp", ref);
-  if (name.includes("/versions/")) {
+  if (withoutLatest(name).includes("/versions/")) {
     throw new KeyshelfError(
       "ADAPTER_ERROR",
       `Key '${key}' is bound to '${name}', which pins a version in its name; a new version would never be read. Edit the ref, or pass --rebind to move the key to its convention secret.`,
@@ -317,6 +321,11 @@ function writableRefName(key: string, ref: unknown): string {
   }
 
   return name;
+}
+
+/** A secret name with any trailing `/versions/latest` selector removed. */
+function withoutLatest(name: string): string {
+  return name.replace(/\/versions\/latest$/, "");
 }
 
 /** A gRPC/GoogleError, narrowed to the fields we map on. */

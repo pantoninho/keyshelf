@@ -147,6 +147,17 @@ describe("set --secret on a key pinned with !secret { ref } (#270 a)", () => {
     expect(await resolved("API_KEY")).toBe("rotated-value");
   });
 
+  it("warns that --rebind has no effect on a key with no explicit ref, and still writes", async () => {
+    await scaffold("provider: store\nkeys:\n  API_KEY: !secret\n");
+    const { code, stderr } = await runKeyshelf(
+      ["set", "API_KEY", "app/production", "--secret", "--rebind"],
+      { cwd, input: "v" }
+    );
+    expect(code).toBe(0);
+    expect(stderr).toContain("--rebind has no effect");
+    expect((await store())[CONVENTION]).toBe("v");
+  });
+
   it("rejects --rebind without --secret", async () => {
     await scaffold(`provider: store\nkeys:\n  API_KEY: !secret { ref: ${PINNED} }\n`, {
       [PINNED]: "old-value"

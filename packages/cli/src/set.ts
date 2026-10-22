@@ -5,6 +5,7 @@ import {
   isScalar,
   isSeq,
   Pair,
+  Parser,
   parseDocument,
   Scalar,
   YAMLMap
@@ -149,10 +150,10 @@ export function serializeEnvDoc(doc: Document): string {
  * touch: the `yaml` library rewrites every other bare `!secret` as `!secret ""`
  * and re-attaches comments that precede a key to the previous key's line. So
  * instead only the edited key's own span (from its key to the end of its value,
- * leaving any trailing comment in place) is replaced with a freshly rendered
- * `KEY: value`; a key new to the file is appended as a new line after the last
- * entry of `keys:`. Everything else — comments, blank lines, quoting, other keys
- * — stays byte-identical.
+ * keeping the comments it holds, see {@link placeComments}) is replaced with a
+ * freshly rendered `KEY: value`; a key new to the file is appended as a new line
+ * after the last entry of `keys:`. Everything else — comments, blank lines,
+ * quoting, other keys — is left as it was.
  *
  * Safety net: when the minimal edit is not possible (no block `keys:` mapping
  * yet, an unusual layout) or its result would not parse to the same content as
@@ -200,6 +201,11 @@ function indentAt(source: string, at: number): string | undefined {
  * break, joined with `eol`.
  */
 function renderPair(key: string, value: unknown, indent: string, eol: string): string {
+  return renderLines(key, value, indent).join(eol);
+}
+
+/** {@link renderPair}, as its individual lines. */
+function renderLines(key: string, value: unknown, indent: string): string[] {
   const one = new Document();
   const map = new YAMLMap();
   map.items.push(new Pair(new Scalar(key), value));
@@ -207,7 +213,95 @@ function renderPair(key: string, value: unknown, indent: string, eol: string): s
   const lines = serializeEnvDoc(one)
     .replace(/\r?\n$/, "")
     .split(/\r?\n/);
-  return lines.map((line, i) => (i === 0 || line === "" ? line : indent + line)).join(eol);
+  return lines.map((line, i) => (i === 0 || line === "" ? line : indent + line));
+}
+
+/** A comment in the source: its offset and its text (from `#` to end of line). */
+interface SourceComment {
+  offset: number;
+  text: string;
+  /** The whitespace that separated a same-line comment from the value, when kept. */
+  gap?: string;
+}
+
+/**
+ * Every comment in `source`, read from the `yaml` CST — so a `#` inside a quoted
+ * string is never mistaken for one.
+ */
+function commentsIn(source: string): SourceComment[] {
+  const out: SourceComment[] = [];
+  for (const token of new Parser().parse(source)) collectComments(token, out);
+  return out;
+}
+
+/** Walk a CST token tree, collecting its `comment` tokens. */
+function collectComments(node: unknown, out: SourceComment[]): void {
+  if (node === null || typeof node !== "object") return;
+  const token = node as { type?: unknown; offset?: unknown; source?: unknown };
+  if (token.type === "comment" && typeof token.offset === "number") {
+    out.push({ offset: token.offset, text: String(token.source) });
+  }
+
+  for (const child of Object.values(node)) collectComments(child, out);
+}
+
+/** The name of the first mapping field (`name:`) on the first content line after `from`, before `end`. */
+function nextField(source: string, from: number, end: number): string | undefined {
+  const lines = source.slice(from, end).split("\n").slice(1);
+  const content = lines.find((line) => !/^\s*(#.*)?\r?$/.test(line));
+  return content?.match(/^\s*([^\s#:'"][^:]*?):(\s|$)/)?.[1];
+}
+
+/**
+ * Re-home the comments of a rewritten key so none is lost (issue #270). A comment
+ * on the key's own line (`KEY: # note`, or `KEY: !secret # note` after a one-line
+ * value) stays on the first rendered line. A full-line comment inside the value
+ * stays above the same payload field (`ref:`, `version:`) when the rendered value
+ * still has it; otherwise it moves to just above the key.
+ */
+function placeComments(
+  source: string,
+  start: number,
+  end: number,
+  comments: SourceComment[],
+  lines: string[]
+): { above: string[]; lines: string[] } {
+  const above: string[] = [];
+  const out = [...lines];
+  for (const comment of comments) {
+    if (!source.slice(start, comment.offset).includes("\n")) {
+      out[0] = `${out[0]}${comment.gap ?? " "}${comment.text}`;
+      continue;
+    }
+
+    const field = nextField(source, comment.offset, end);
+    const at =
+      field === undefined
+        ? -1
+        : out.findIndex((l, i) => i > 0 && l.trimStart().startsWith(`${field}:`));
+    if (at === -1) {
+      above.push(comment.text);
+      continue;
+    }
+
+    out.splice(at, 0, `${out[at].match(/^ */)?.[0] ?? ""}${comment.text}`);
+  }
+
+  return { above, lines: out };
+}
+
+/**
+ * The comment trailing a one-line value on its own line (`KEY: !secret # note`),
+ * which sits just past the value's span. `undefined` when there is none.
+ */
+function trailingComment(
+  source: string,
+  end: number,
+  comments: SourceComment[]
+): SourceComment | undefined {
+  return comments.find(
+    (comment) => comment.offset >= end && /^[ \t]*$/.test(source.slice(end, comment.offset))
+  );
 }
 
 /**
@@ -250,8 +344,9 @@ function pairSpan(
 
 /**
  * Replace `target`'s span, from its key to the end of its value, with the edited
- * pair. Trailing whitespace is left in place so a same-line comment
- * (`KEY: !secret # note`) keeps its spacing.
+ * pair, keeping every comment the span held or that trailed a one-line value
+ * (see {@link placeComments}). Trailing whitespace after a multi-line value is
+ * left in place.
  */
 function replaceKey(
   source: string,
@@ -262,9 +357,23 @@ function replaceKey(
 ): string | undefined {
   const span = pairSpan(source, target);
   if (span === undefined) return undefined;
-  const end = trimEnd(source, span.valueEnd, span.start);
-  const rendered = renderPair(key, keepFlow(target.value, edited), span.indent, eol);
-  return source.slice(0, span.start) + rendered + source.slice(end);
+  let end = trimEnd(source, span.valueEnd, span.start);
+  const all = commentsIn(source);
+  const comments = all.filter((c) => c.offset > span.start && c.offset < end);
+  // A comment after a one-line value belongs to the key's line: carry it along,
+  // or it would land after the last line of a value rendered as a block.
+  const trailing = source.slice(span.start, end).includes("\n")
+    ? undefined
+    : trailingComment(source, end, all);
+  if (trailing !== undefined) {
+    comments.push({ ...trailing, gap: source.slice(end, trailing.offset) });
+    end = trailing.offset + trailing.text.length;
+  }
+
+  const rendered = renderLines(key, keepFlow(target.value, edited), span.indent);
+  const placed = placeComments(source, span.start, end, comments, rendered);
+  const above = placed.above.map((text) => `${text}${eol}${span.indent}`).join("");
+  return source.slice(0, span.start) + above + placed.lines.join(eol) + source.slice(end);
 }
 
 /** Keep a one-line flow payload (`!secret { ref: NAME }`) on one line when it is rewritten. */

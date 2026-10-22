@@ -211,6 +211,42 @@ keys:
     expect(out).toBe("provider: store\nkeys:\n  K: !secret { ref: shared, version: 3 } # note\n");
   });
 
+  it("keeps a full-line comment inside a block payload above the same field", () => {
+    const source =
+      "provider: store\nkeys:\n  A: !secret\n    # owned by infra\n    ref: foo\n    version: 2\n  B: x\n";
+    const out = edit(source, "A", (doc) =>
+      setSecretRef(doc, "A", { bare: false, ref: "foo", version: 3 })
+    );
+    expect(out).toBe(source.replace("version: 2", "version: 3"));
+  });
+
+  it("moves an inner comment above the key when its field is gone", () => {
+    const source =
+      "provider: store\nkeys:\n  A: !secret\n    # owned by infra\n    ref: foo\n  B: x\n";
+    const out = edit(source, "A", (doc) => setConfigValue(doc, "A", "plain"));
+    expect(out).toBe("provider: store\nkeys:\n  # owned by infra\n  A: plain\n  B: x\n");
+  });
+
+  it("keeps a comment between the key and its value on the key line", () => {
+    const source = "provider: store\nkeys:\n  A: # c\n    !secret\n  B: x\n";
+    const out = edit(source, "A", (doc) => setSecretRef(doc, "A", { bare: true }));
+    expect(out).toBe("provider: store\nkeys:\n  A: !secret # c\n  B: x\n");
+  });
+
+  it("keeps a bare key's trailing comment on the key line when it becomes a block pin", () => {
+    const source = "provider: store\nkeys:\n  A: !secret # rotate quarterly\n  B: x\n";
+    const out = edit(source, "A", (doc) => setSecretRef(doc, "A", { bare: true, version: 3 }));
+    expect(out).toBe(
+      "provider: store\nkeys:\n  A: !secret # rotate quarterly\n    version: 3\n  B: x\n"
+    );
+  });
+
+  it("does not mistake a # inside a quoted value for a comment", () => {
+    const source = "provider: store\nkeys:\n  A: 'x # not a comment'\n  B: x\n";
+    const out = edit(source, "A", (doc) => setConfigValue(doc, "A", "y"));
+    expect(out).toBe("provider: store\nkeys:\n  A: y\n  B: x\n");
+  });
+
   it("appends after a final line with no trailing newline", () => {
     const source = "provider: store\nkeys:\n  A: x";
     const out = edit(source, "B", (doc) => setConfigValue(doc, "B", "y"));
@@ -230,6 +266,20 @@ keys:
     const doc = parseDocument(source);
     setConfigValue(doc, "A", "x");
     expect(serializeEnvEdit(source, doc, "A")).toBe(serializeEnvDoc(doc));
+  });
+
+  it("falls back to a full re-serialization when appending after a |+ last key", () => {
+    // A keep-chomping block scalar owns the trailing blank lines, so a line spliced
+    // in after it would change its value; the content check catches that.
+    const source = "provider: store\nkeys:\n  A: |+\n    text\n\n";
+    const doc = parseDocument(source);
+    setConfigValue(doc, "B", "y");
+    const out = serializeEnvEdit(source, doc, "B");
+    expect(out).toBe(serializeEnvDoc(doc));
+    expect(parseDocument(out).toJS()).toEqual({
+      provider: "store",
+      keys: { A: "text\n\n", B: "y" }
+    });
   });
 
   it("falls back to a full re-serialization for a flow keys: mapping", () => {

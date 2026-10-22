@@ -368,8 +368,16 @@ export default class Set extends BaseCommand {
     opts: { floating: boolean; rebind: boolean }
   ): Promise<{ version?: number; secretRef?: string }> {
     const adapter = adapterForEnvironment(projectDir, loaded);
-    const pinnedRef = opts.rebind ? undefined : boundRef(loaded.environment.keys[key]);
-    const { ref, version } = await adapter.write(key, value, pinnedRef);
+    const bound = boundRef(loaded.environment.keys[key]);
+    if (opts.rebind && bound === undefined) {
+      // Not an error: the write is exactly what was asked for (a convention-named
+      // secret). But say so, rather than let a no-op flag pass silently.
+      this.warn(
+        `--rebind has no effect: '${key}' in '${shelf}/${stage}' is not bound to an explicit !secret { ref: ... }.`
+      );
+    }
+
+    const { ref, version } = await adapter.write(key, value, opts.rebind ? undefined : bound);
 
     // The fake/reference convention names a secret
     // `keyshelf__{project}__{shelf}__{stage}__{key}`; a returned ref matching that

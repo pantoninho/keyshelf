@@ -129,9 +129,17 @@ keys:
   name embeds `/versions/N` is refused (`ADAPTER_ERROR`): a new version would never
   be read. `set --secret --rebind` opts out: it writes the convention-named secret
   and drops the `ref`.
-- `set` edits only the named key's own lines in the environment file; comments,
-  blank lines and every other key stay byte-identical. A key new to the file is
-  appended after the last entry of `keys:`.
+- `set` normally edits only the named key's own lines in the environment file,
+  leaving comments, blank lines and the other keys as they were. Comments inside
+  the key's own lines are kept: on the key's line, above the same payload field,
+  or just above the key. A key new to the file is appended after the last entry
+  of `keys:`. **Fallback:** when that minimal edit is not possible, `set` rewrites
+  the whole file instead. That happens for a flow `keys: { ... }`, an empty or
+  missing `keys:`, a last key whose value is a keep-chomping block scalar (`|+`),
+  and any layout whose minimal edit would not parse to the same content. The
+  rewrite keeps every value but not the formatting: it can move comments and turn
+  other keys' bare `!secret` into `!secret ""` (which still loads as a bare
+  secret).
 - **Version pinning (ADR-0009).** On a versioned backend (gcp), a `!secret` may pin
   a concrete backend version with `{ version: N }` (or `{ ref: NAME, version: N }`
   for a foreign secret). A **bare `!secret` floats** — it resolves the backend's
