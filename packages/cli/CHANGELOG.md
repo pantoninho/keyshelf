@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.6.2](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.6.1...keyshelf-v6.6.2) (2026-10-23)
+
+
+### Build System
+
+* **cli:** set publishConfig.provenance on keyshelf ([#275](https://github.com/pantoninho/keyshelf/issues/275)) ([a719f49](https://github.com/pantoninho/keyshelf/commit/a719f49bb03f78445685ee72040f40984d0805d3))
+
 ## [6.6.1](https://github.com/pantoninho/keyshelf/compare/keyshelf-v6.6.0...keyshelf-v6.6.1) (2026-10-22)
 
 
