@@ -6,13 +6,18 @@ name: Publish
 #      `keyshelf-v6.0.0`, the scheme release-please emits via
 #      include-component-in-tag). A merge to `main`, or any pull_request, cannot
 #      start this workflow at all.
-#   2. Step guard: the publish step is skipped unless an npm credential is present
-#      (`secrets.NPM_TOKEN`). `NPM_TOKEN` IS now configured for the `@keyshelf`
-#      scope, so a tag push (or a `workflow_dispatch` run on a `keyshelf-v*` tag
-#      ref) performs a real publish.
+#   2. Step guard: the publish step is skipped unless the ref is a `keyshelf-v*`
+#      tag, so a `workflow_dispatch` run on a branch ref only builds + verifies.
 # A reviewer can confirm by inspection that an ordinary PR publishes nothing:
 # there is no `push: branches` / `pull_request` trigger, so this workflow cannot
 # even start from a PR merge.
+#
+# AUTH: npm trusted publishing (OIDC) — there is NO long-lived npm token secret.
+# Each of the six packages (keyshelf + @keyshelf/sops-*) has a GitHub Actions
+# trusted publisher configured on npmjs.com (owner `pantoninho`, repo `keyshelf`,
+# workflow `publish.yml`, no environment). `npm publish` exchanges this run's
+# GitHub OIDC token (`id-token: write`) for a short-lived publish credential.
+# Requires npm >= 11.5.1, installed explicitly below.
 #
 # NOTE: publishing is now AUTOMATIC on release. release-please creates the
 # `keyshelf-v*` tag using the default `GITHUB_TOKEN`, and GitHub suppresses
@@ -53,6 +58,13 @@ jobs:
           cache: npm
           registry-url: "https://registry.npmjs.org"
 
+      # Trusted publishing needs npm >= 11.5.1; Node 20 bundles npm 10. Install it
+      # explicitly rather than depending on whatever npm a Node release ships.
+      - name: Install npm >= 11.5.1 (trusted publishing)
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
+
       - run: npm ci
 
       - run: npm run build -w keyshelf
@@ -73,31 +85,14 @@ jobs:
         run: npm audit signatures
         working-directory: packages/cli
 
-      # Decide whether a real publish may proceed. `NPM_TOKEN` is configured for
-      # the @keyshelf scope, so this is `enabled=true` on tag runs and the publish
-      # step below runs. If the token is ever removed, this falls back to
-      # enabled=false and the run only builds + verifies (no publish).
-      - name: Determine whether publishing is configured
-        id: gate
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -n "${NPM_TOKEN}" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No NPM_TOKEN configured for the @keyshelf scope — skipping publish. This run only built and verified the packages."
-          fi
-
       # Publish the five platform packages, then keyshelf. `--provenance` attaches
-      # a signed provenance statement via OIDC. GUARDED: only runs on a `keyshelf-v*`
-      # tag ref AND only when the npm credential exists. An ordinary PR satisfies
-      # neither (this workflow can't even start from a PR), so nothing is published
-      # on merge; a tag run satisfies both and publishes for real.
+      # a signed provenance statement; auth is the OIDC trusted publisher (no token).
+      # GUARDED: only runs on a `keyshelf-v*` tag ref. An ordinary PR can't even
+      # start this workflow, so nothing is published on merge; a tag run publishes
+      # for real.
       - name: Publish platform packages + keyshelf (provenance, OIDC)
-        if: steps.gate.outputs.enabled == 'true' && startsWith(github.ref, 'refs/tags/keyshelf-v')
+        if: startsWith(github.ref, 'refs/tags/keyshelf-v')
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
         run: |
           set -euo pipefail
