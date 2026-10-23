@@ -115,10 +115,8 @@ jobs:
           if npm view "keyshelf@${CLI_VERSION}" version >/dev/null 2>&1; then
             echo "keyshelf@${CLI_VERSION} already published — skipping"
           else
-            # v6 ships under the `next` dist-tag — `latest` stays on 5.x until a
-            # deliberate promotion (`npm dist-tag add keyshelf@<ver> latest`).
-            # npm publish defaults to `latest` regardless of version, so `--tag
-            # next` is explicit. Flip it when promoting v6 to `latest`.
-            echo "Publishing keyshelf@${CLI_VERSION} (dist-tag: next) …"
-            npm publish "./packages/cli" --provenance --access public --tag next
+            # v6 is the `latest` line. `npm publish` defaults to the `latest`
+            # dist-tag, so no `--tag` is passed.
+            echo "Publishing keyshelf@${CLI_VERSION} (dist-tag: latest) …"
+            npm publish "./packages/cli" --provenance --access public
           fi

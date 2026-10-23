@@ -30,12 +30,12 @@ merely the sops adapter's _default_ store directory, and the provider's `store:`
 template stays configurable (ADR-0011). The store may live anywhere under the
 shelf **except inside `environments/`**.
 
-### Migrating a `next`-channel layout (6.x)
+### Migrating a pre-6.6.0 layout (6.x)
 
-This folder layout (ADR-0011) lands as a `feat` on the 6.x `next` pre-release
-line; the stable 5.x `latest` line is unaffected, so it is **non-breaking** and
-there is **no automated migration**. If you adopted an earlier 6.x `next` build
-with the previous flat layout, move two sets of files by hand, per shelf:
+This folder layout (ADR-0011) shipped in 6.6.0 as a `feat`, so it is
+**non-breaking** and there is **no automated migration**. If you adopted a 6.x
+build from before 6.6.0, which used the previous flat layout, move two sets of
+files by hand, per shelf:
 
 - **Environment files** — move `{shelf}/{stage}.yaml` into
   `{shelf}/environments/{stage}.yaml`.

@@ -108,7 +108,9 @@ after `setup-node`.
 Each of the six packages (`keyshelf` and `@keyshelf/sops-{linux-x64,linux-arm64,darwin-x64,darwin-arm64,win32-x64}`)
 must have a **GitHub Actions** trusted publisher configured on npmjs.com
 (package Settings -> Trusted Publisher): owner `pantoninho`, repository
-`keyshelf`, workflow `publish.yml`, no environment.
+`keyshelf`, workflow `publish.yml`, no environment. Tick "Allow npm publish" on the
+connection: by default npm only allows `npm stage publish`, and the workflow
+publishes directly.
 
 ### Human-only handoff (out of scope here)
 
