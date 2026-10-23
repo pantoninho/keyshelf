@@ -89,19 +89,30 @@ Nothing is published to npmjs.com. Two tiers (`test/platforms/`):
 ## Publishing (authored, gated, not yet fired)
 
 `.github/workflows/publish.yml` builds all five packages, runs the checksum +
-smoke-test gates, and publishes with `npm publish --provenance` via OIDC — but is
+smoke-test gates, and publishes with `npm publish --provenance` using **npm
+trusted publishing (OIDC)** — there is no long-lived `NPM_TOKEN` secret. It is
 **gated so merging a PR publishes nothing**:
 
-1. it triggers **only on a `v*` release tag** (no `push: branches` / `pull_request`
-   trigger), and
-2. the publish step is **skipped unless `secrets.NPM_TOKEN` is present** — and the
-   `@keyshelf` scope has no token/OIDC trusted publisher configured yet.
+1. it triggers **only on a `keyshelf-v*` release tag** (or a manual
+   `workflow_dispatch`; no `push: branches` / `pull_request` trigger), and
+2. the publish step is **skipped unless the ref is a `keyshelf-v*` tag**, so a
+   dispatch on a branch only builds + verifies.
 
 A reviewer can confirm by inspection that no publish happens on merge or PR.
 
+Trusted publishing needs npm >= 11.5.1; the workflow installs it explicitly
+after `setup-node`.
+
+### Trusted publisher setup (npmjs.com, per package)
+
+Each of the six packages (`keyshelf` and `@keyshelf/sops-{linux-x64,linux-arm64,darwin-x64,darwin-arm64,win32-x64}`)
+must have a **GitHub Actions** trusted publisher configured on npmjs.com
+(package Settings -> Trusted Publisher): owner `pantoninho`, repository
+`keyshelf`, workflow `publish.yml`, no environment.
+
 ### Human-only handoff (out of scope here)
 
-- Configure the npm **trusted publisher (OIDC)** / `NPM_TOKEN` for `@keyshelf`.
-- The first live `npm publish` (by pushing a `v*` tag) and verifying a clean
+- Configure the npm trusted publisher (above) for all six packages.
+- The first live `npm publish` (by pushing a `keyshelf-v*` tag) and verifying a clean
   `npm i -g keyshelf` pulls exactly one platform package.
 - After that lands: remove the now-redundant CI `sops` install.
