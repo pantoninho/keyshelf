@@ -9,6 +9,9 @@
     "url": "https://github.com/pantoninho/keyshelf",
     "directory": "packages/cli"
   },
+  "publishConfig": {
+    "provenance": true
+  },
   "bin": {
     "keyshelf": "./bin/run.js"
   },
